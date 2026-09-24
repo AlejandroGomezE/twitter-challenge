@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Run the frontend locally (foreground): npm run dev (Vite, default port 5173).
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+FRONTEND_DIR="$REPO_ROOT/frontend"
+
+[ -d "$FRONTEND_DIR" ] || { echo "frontend/ not found at $FRONTEND_DIR" >&2; exit 1; }
+[ -d "$FRONTEND_DIR/node_modules" ] || echo "! frontend/node_modules missing — run: (cd frontend && npm install)" >&2
+
+echo "Starting frontend — npm run dev (Vite, default port :5173)"
+echo "Talks to the backend at VITE_API_URL (frontend/.env) — make sure it's running: scripts/be-local"
+echo
+cd "$FRONTEND_DIR"
+exec npm run dev

@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# Environment check for twitter-challenge (backend/ + frontend/). Read-only.
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BACKEND_DIR="$REPO_ROOT/backend"
+FRONTEND_DIR="$REPO_ROOT/frontend"
+
+info() { printf '\033[1m%s\033[0m\n' "$1"; }
+ok()   { printf '  \033[32m\xe2\x9c\x93\033[0m %s\n' "$1"; }
+warn() { printf '  \033[33m!\033[0m %s\n' "$1"; }
+err()  { printf '  \033[31m\xe2\x9c\x97\033[0m %s\n' "$1"; }
+
+info "twitter-challenge environment check"
+echo
+
+# --- Toolchain ---
+info "Toolchain"
+if command -v node >/dev/null; then
+  node_version="$(node --version)"
+  major="${node_version#v}"; major="${major%%.*}"
+  rest="${node_version#v*.}"; minor="${rest%%.*}"
+  if [ "${major:-0}" -gt 20 ] 2>/dev/null || { [ "${major:-0}" -eq 20 ] && [ "${minor:-0}" -ge 11 ]; }; then
+    ok "node $node_version"
+  else
+    warn "node $node_version — frontend/vite.config.js uses import.meta.dirname, which needs >=20.11"
+  fi
+else
+  err "node missing"
+fi
+
+command -v npm >/dev/null && ok "npm $(npm --version)" || err "npm missing"
+echo
+
+# --- Dependencies installed ---
+info "Dependencies"
+if [ -d "$BACKEND_DIR/node_modules" ]; then
+  ok "backend deps installed"
+else
+  warn "backend deps not installed → (cd backend && npm install)"
+fi
+if [ -d "$FRONTEND_DIR/node_modules" ]; then
+  ok "frontend deps installed"
+else
+  warn "frontend deps not installed → (cd frontend && npm install)"
+fi
+echo
+
+# --- Backend env ---
+info "Backend env (backend/.env)"
+if [ -f "$BACKEND_DIR/.env" ]; then
+  ok "backend/.env present"
+  if grep -qE '^OBSERVE_APP_KEY=.+' "$BACKEND_DIR/.env" 2>/dev/null \
+    && grep -qE '^OBSERVE_APP_SECRET=.+' "$BACKEND_DIR/.env" 2>/dev/null; then
+    ok "OBSERVE_APP_KEY / OBSERVE_APP_SECRET set — Observe APM will initialize"
+  else
+    warn "OBSERVE_APP_KEY / OBSERVE_APP_SECRET blank — Observe APM stays disabled (optional, app runs fine without it)"
+  fi
+  port_line="$(grep -E '^PORT=' "$BACKEND_DIR/.env" 2>/dev/null | tail -1 || true)"
+  [ -n "$port_line" ] && ok "$port_line" || warn "no PORT= in backend/.env — src/main.ts falls back to 3000"
+else
+  warn "backend/.env missing — app still boots fine (PORT defaults to 3000, Observe stays disabled)."
+  warn "  Copy backend/.env.example to backend/.env to set Observe credentials."
+fi
+echo
