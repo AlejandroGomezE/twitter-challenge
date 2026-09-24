@@ -136,6 +136,9 @@ rebuild it with our tools (Vite + React JSX, react-router, TanStack Query, shadc
   own `onClick` still runs (Radix Slot calls it before `preventDefault`). Harmless today — no disabled
   item has a handler — but it should swallow child handlers too so a future one can't fire.
 
+## PRs
+- https://github.com/AlejandroGomezE/twitter-challenge/pull/7
+
 ## Log
 - 2026-09-24 · framed
 - 2026-09-24 · built — Pulse theme (light + OS dark), app shell (side/mobile nav, right rail,
