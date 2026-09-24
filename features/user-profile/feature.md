@@ -1,8 +1,8 @@
 ---
 slug: user-profile
-status: building
+status: verifying
 scope: full-stack
-next: /implement user-profile
+next: /review-feature user-profile
 ---
 # Basic user profile (username, bio, avatar placeholder)
 
@@ -75,7 +75,7 @@ next: /implement user-profile
 - [x] Frontend edit page: `EditProfile.jsx` at `/settings/profile` (react-hook-form + zod, bio
   counter, server errors, cache updates, navigate to new profile URL).
 - [x] Docs: Runbook (new endpoints, db reset note), backend/frontend architecture docs.
-- [ ] Verify fix (Alejandro): sign-out race. On a fresh page load of `/sign-out`, the in-flight
+- [x] Verify fix (Alejandro): sign-out race. On a fresh page load of `/sign-out`, the in-flight
   `GET /auth/me` (sent before the sign-out request) resolves 200 after `signOut` set me to `null`,
   restoring the user in the cache → `/sign-in` bounces to `/` showing the user as signed in, while
   the server session is already revoked. Also `POST /auth/sign-out` fires twice (both paths).
@@ -112,6 +112,10 @@ next: /implement user-profile
   load of `/sign-out` leaves the UI signed in (me-refetch race; server session is revoked). Surfaced
   now because the removed `GET /` health check on Home used to 401 and reset the state. Clicking
   "Sign out" in-app works. Iterating (Alejandro).
+- 2026-09-24 · building · Sign-out fix: `signOut` cancels in-flight `['auth','me']` queries before
+  the POST and again before writing `null`; `SignOut` redirects only once `!isAuthenticated`
+  (removed a transient `/sign-in → / → /sign-in` bounce). The "second sign-out" in the verify trace
+  was the CORS preflight (`OPTIONS`), not a second POST — the verify probe miscounted it.
 
 ## Follow-ups
 - `frontend-architecture.md`'s `hooks/` comment lists only `use-profile.js` (also has the stock
@@ -121,6 +125,8 @@ next: /implement user-profile
   `modules/users/__tests__/`, `modules/users/dto/__tests__/`, `pages/__tests__/`,
   `lib/auth/__tests__/`); e2e stays in `backend/test/`. Make it a rule in `review-contract.md`
   §B/§C, the `implementer` agent, `/close-feature` Step 2, and the architecture docs.
+- Every JSON request sends `Content-Type: application/json`, so even body-less `POST /auth/sign-out`
+  triggers a CORS preflight. Harmless; `apiClient` could omit the header without a body.
 
 ## Log
 - 2026-09-24 · framed
@@ -128,3 +134,5 @@ next: /implement user-profile
   `User`; `GET /users/:username` (no email) + `PATCH /users/me`; `/u/:username` profile page with
   avatar placeholder and `/settings/profile` edit page. BE 10 suites / 123 unit + 36 e2e, FE 10 / 71,
   lint/build green.
+- 2026-09-24 · built — sign-out race fixed (cancel in-flight `me`, redirect after signed-out state);
+  race reproduced in a test that fails on the old code. FE 10 suites / 73.
