@@ -1,8 +1,8 @@
 ---
 slug: migrate-to-sqlite
-status: framed
+status: verifying
 scope: backend
-next: /implement migrate-to-sqlite
+next: /review-feature migrate-to-sqlite
 ---
 # Migrate from PostgreSQL to SQLite
 
@@ -26,16 +26,16 @@ next: /implement migrate-to-sqlite
   there) and the `test:e2e` / `test` scripts.
 
 ## Tasks
-- [ ] Update `backend/prisma/schema.prisma` datasource to `provider = "sqlite"`.
-- [ ] Swap Prisma dependencies in `backend/package.json`: remove `pg` + `@prisma/adapter-pg` (+
+- [x] Update `backend/prisma/schema.prisma` datasource to `provider = "sqlite"`.
+- [x] Swap Prisma dependencies in `backend/package.json`: remove `pg` + `@prisma/adapter-pg` (+
   `@types/pg`), add the SQLite driver adapter package(s); `npm install`.
-- [ ] Rewire `backend/src/database/prisma.service.ts` to use the new SQLite adapter.
-- [ ] Update `DATABASE_URL` in `backend/.env` and `backend/.env.example` to a `file:` SQLite
+- [x] Rewire `backend/src/database/prisma.service.ts` to use the new SQLite adapter.
+- [x] Update `DATABASE_URL` in `backend/.env` and `backend/.env.example` to a `file:` SQLite
   path, with a comment matching the new reality (no more "syntactically valid Postgres URL").
-- [ ] Add the local `.db`/`.db-journal` file(s) to `backend/.gitignore`.
-- [ ] Run `npx prisma generate` and `npx prisma db push` (or equivalent) from `backend/` to
+- [x] Add the local `.db`/`.db-journal` file(s) to `backend/.gitignore`.
+- [x] Run `npx prisma generate` and `npx prisma db push` (or equivalent) from `backend/` to
   create the actual SQLite database file, and confirm the backend boots.
-- [ ] Update the Postgres-specific mentions in `runbook.md` (Database section) and
+- [x] Update the Postgres-specific mentions in `runbook.md` (Database section) and
   `.claude/ROADMAP.md` ("No database provisioned" bullet) to reflect SQLite.
 
 ## Decisions
@@ -44,8 +44,20 @@ next: /implement migrate-to-sqlite
 - 2026-09-24 · framed · Picked `@prisma/adapter-better-sqlite3` as the default SQLite driver
   adapter (matches the existing driver-adapter pattern used for `@prisma/adapter-pg`); confirm
   exact package/version compatibility with `prisma@7.10.0` during `/implement`.
+- 2026-09-24 · building · A first-round implementation used a bare `DATABASE_URL=file:./dev.db`.
+  Review caught a real bug: the Prisma CLI and the `@prisma/adapter-better-sqlite3` runtime
+  adapter both resolve relative `file:` paths against `process.cwd()`, which differs between CLI
+  invocation and app runtime invocation — so they silently opened two different SQLite files.
+  Fixed by anchoring the relative path explicitly in code (module-location-based, not
+  cwd-based) in both `prisma.service.ts` and `prisma7.config.ts`, verified empirically (CLI
+  `db push` and a runtime probe from a different cwd both converge on the same
+  `backend/prisma/dev.db`). A stray, unrelated edit to `knowledge/infra/code-quality.md`
+  (implementer debris) was found during orchestrator verification and reverted.
 
 ## Follow-ups
 
 ## Log
 - 2026-09-24 · framed
+- 2026-09-24 · built — datasource swapped to SQLite (`@prisma/adapter-better-sqlite3`), a real
+  path-resolution bug caught by review and fixed, docs updated, backend builds/tests/boots
+  clean against a real local `backend/prisma/dev.db`.
