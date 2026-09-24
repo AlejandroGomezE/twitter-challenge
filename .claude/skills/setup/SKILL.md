@@ -25,8 +25,9 @@ Add, read-only, what the script doesn't:
 - `(cd backend && npm run build)` actually succeeds.
 - `(cd frontend && npm run build)` actually succeeds.
 
-**No database check blocks anything** — the backend boots without a reachable Postgres (Prisma
-connects lazily). If `DATABASE_URL` isn't set, that's worth noting, not a hard failure.
+**No database check blocks anything** — the database is a local SQLite file
+(`backend/prisma/dev.db`, created by `npx prisma db push`) and the backend boots even before it
+exists. If `DATABASE_URL` isn't set, that's worth noting, not a hard failure.
 
 ## Step 2. Present the checklist
 

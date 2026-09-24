@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Stop the frontend started by scripts/fe-local (the Vite dev server running out of frontend/).
+# Kills the whole process tree (incl. Vite's esbuild service), then checks :5173 is free.
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+FRONTEND_DIR="$REPO_ROOT/frontend"
+# shellcheck source=lib/stop-dev.sh
+. "$REPO_ROOT/scripts/lib/stop-dev.sh"
+
+stop_dev frontend "$FRONTEND_DIR" 5173

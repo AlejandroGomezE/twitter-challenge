@@ -16,7 +16,7 @@ phases.
 └── agents/                # implementer · reviewer · installer
 
 features/<slug>/feature.md  # per-feature state (one file)
-scripts/                    # be-local · fe-local · check-env
+scripts/                    # be-local · fe-local · down-be · down-fe · check-env
 Runbook.md                  # the real commands for both stacks
 ```
 

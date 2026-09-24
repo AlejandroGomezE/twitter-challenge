@@ -60,6 +60,9 @@ For each task still unchecked in `## Tasks` (a few independent ones may run in p
 
 Report failures; don't silently work around them — let Alejandro steer.
 
+If you booted the app to check it (`scripts/be-local`, `npm run start:dev`, `npm run dev`, …), stop
+it with `scripts/down-be` / `scripts/down-fe` before summarizing (`CONVENTIONS.md` §10).
+
 ## Step 5. Summarize and iterate
 
 After each round, summarize in behavior terms: what's implemented, what's pending, anything blocked.

@@ -24,7 +24,7 @@ tell Alejandro to finish `/review-feature <slug>` first.
 Not a full coverage sweep — just what this change actually touched:
 
 - **`backend/`** — a unit spec for the changed service/logic, at
-  `backend/src/<module>/*.spec.ts`, dependencies mocked (no real Postgres in a unit spec).
+  `backend/src/<module>/*.spec.ts`, dependencies mocked (no real database in a unit spec).
 - **`frontend/`** — `npm run build` + `npm run lint`. No test runner installed yet
   (`ROADMAP.md`) — don't write a test file against nothing.
 
@@ -77,6 +77,9 @@ No auto-deploy is configured for this project (`ROADMAP.md`) — say so, don't d
 2. Set `status: done`, `next: —` in `feature.md`.
 3. Add `## Log`: `- <date> · closed — PR #<n>, merged`.
 4. Commit `features/<slug>/` only as `chore(<slug>): closed` (`CONVENTIONS.md` §9), push.
+5. Run `scripts/down-be` and `scripts/down-fe` — always, even if you don't think anything is
+   running — and confirm both ports are free (`CONVENTIONS.md` §10). Report anything they couldn't
+   stop.
 
 Tell Alejandro it's done. Stop.
 
@@ -85,6 +88,7 @@ Tell Alejandro it's done. Stop.
 ## Rules
 
 - **Test the touched surface, not everything.**
+- **Leave nothing running.** A closed feature ends with `scripts/down-be` + `scripts/down-fe`.
 - **One PR, Alejandro decides the merge.**
 - **Never `gh pr review --approve`** on this solo repo.
 - Follow-ups get resolved or explicitly carried forward — never silently forgotten.
