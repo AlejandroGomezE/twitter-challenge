@@ -49,7 +49,8 @@ description when they disagree.
 
 Nothing sensitive committed. `.env` files are gitignored — a value moved from one into source is a
 **Blocker**. A secret anywhere in the branch history (not just the final diff) is a **Blocker**;
-requires a history rewrite or squash-merge plus rotating the credential.
+PRs merge with a merge commit (every branch commit lands in `main`), so the fix is rewriting the
+branch history to drop it before merge, plus rotating the credential.
 
 ---
 
