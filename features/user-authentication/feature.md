@@ -113,15 +113,15 @@ next: /implement user-authentication
   stays fully non-enumerating.
 - 2026-09-24 · framed · Prisma access goes through repositories (`users.repository.ts`,
   `sessions.repository.ts`), per `knowledge/infra/code-quality.md` ("Services that access Prisma
-  directly" is on its avoid list). `review-contract.md` §B still says services are the only layer
-  touching `PrismaService` — the two disagree; see Follow-ups.
+  directly" is on its avoid list). Alejandro confirmed; `review-contract.md` §B and the `implementer`
+  agent were updated to match before Build.
 - 2026-09-24 · framed · `:5173` and `:3000` on `localhost` are the same *site*, so a `SameSite=Lax`
   cookie works in local dev without `SameSite=None`.
 
 ## Follow-ups
-- `review-contract.md` §B ("Services own business logic and are the only layer touching
-  `PrismaService`") contradicts `knowledge/infra/code-quality.md` (Controller → Service → Repository
-  → ORM). Reconcile the contract to the repository layer before this feature's PR review.
+- [x] ~~`review-contract.md` §B contradicted `knowledge/infra/code-quality.md` on where Prisma access
+  lives~~ — fixed: repositories are the only layer injecting `PrismaService` (contract §B,
+  `implementer` agent, backend-architecture doc).
 
 ## Log
 - 2026-09-24 · framed
