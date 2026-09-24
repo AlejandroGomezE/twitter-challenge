@@ -53,6 +53,12 @@ Follow without being told; see `knowledge/infra/backend-architecture.md` and
   fails at boot, not compile.
 - **DTOs carry `class-validator` decorators** on every request field. Declare a concrete return type
   on every handler (`Promise<XDto>`, not `Promise<any>`).
+- **Every endpoint returns a response DTO** (`dto/<name>-response.dto.ts`, `@Expose()` on every
+  field that may leave the API — nothing else), declared with `@SerializeOptions({ type: XResponseDto })`
+  on the handler plus a matching return type. The global `ResponseSerializerInterceptor`
+  (`src/app.setup.ts`) drops anything not exposed and returns 500 for a body with no declared type.
+  Never return a Prisma model or a service-internal type from a controller. 204 endpoints return
+  nothing.
 - **Prisma.** A schema change (`prisma/schema.prisma`) needs `npx prisma generate` run afterward (from
   `backend/`) — the generated client lives in `src/generated/prisma/` (gitignored). Reuse
   `PrismaService` (injected) — never construct a second `PrismaClient`.
@@ -68,10 +74,13 @@ Follow without being told; see `knowledge/infra/backend-architecture.md` and
 See `knowledge/infra/frontend-architecture.md` and
 `knowledge/decisions/shadcn-component-preference.md`.
 
-- **Structure.** `src/app/` (App/router/providers), `src/components/ui/` (shadcn), `src/hooks/`,
-  `src/lib/api/` (the HTTP client), `src/pages/`. Don't create `src/features/`, `src/lib/auth/`,
-  `src/lib/validation/`, or `src/routes/` unless the task explicitly calls for them — they don't
-  exist yet for a reason (no auth module, no concrete feature needing them).
+- **Structure.** `src/app/` (App/router/providers/query-client), `src/components/ui/` (shadcn),
+  `src/hooks/`, `src/lib/api/` (the HTTP client), `src/lib/auth/` (`useAuth()`), `src/lib/validation/`
+  (zod schemas), `src/routes/` (`ProtectedRoute`/`PublicOnlyRoute`), `src/pages/`, `src/test/`.
+  Don't create `src/features/` unless the task explicitly calls for it.
+- **Auth.** Every route is behind `ProtectedRoute` except `/sign-in`, `/sign-up`, `/sign-out`. Read
+  the current user with `useAuth()`; the session is an httpOnly cookie — never store or read a token
+  in JS.
 - **API calls go through `src/lib/api/client.js`'s `apiClient`** — never a raw `fetch` in a
   component.
 - **Server state via TanStack Query** (`useQuery`/`useMutation`), not a hand-rolled
@@ -91,8 +100,10 @@ See `knowledge/infra/frontend-architecture.md` and
 
 ## Rules
 
-- **No auth module exists yet.** Don't invent a login flow, a guard, or a token check unless the task
-  is explicitly about building one.
+- **Auth exists — every endpoint and route is gated by default.** Backend: the global `AuthGuard`
+  (`src/auth/`) requires a session; mark a handler `@Public()` only when the task says it's public,
+  and read the user with `@CurrentUser()`. Never add per-controller auth guards or a second auth
+  mechanism.
 - **No generated API-contract pipeline exists** (no OpenAPI codegen) — don't reference one or assume
   one.
 - Never touch `.claude/` or `features/<slug>/` — that's the orchestrating skill's job, not yours.

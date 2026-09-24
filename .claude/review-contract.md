@@ -68,10 +68,18 @@ branch history to drop it before merge, plus rotating the credential.
 - **DTOs.** Request DTOs carry `class-validator` decorators on every field (a field with none accepts
   anything — **Blocker** on a new field). A handler with no concrete return type (`Promise<any>`) is a
   **Warning**.
+- **Response DTOs — every endpoint.** Every handler that returns a body returns a response DTO (a
+  class in the module's `dto/` with `@Expose()` on each emitted field) declared on the handler with
+  `@SerializeOptions({ type: XResponseDto })` and as its return type. The global
+  `ResponseSerializerInterceptor` (`src/app.setup.ts`) whitelists exposed fields and fails closed —
+  a body without a declared type is a 500 — so only exposed fields can leave the API. A handler returning a Prisma model/entity, a service-internal type, or an untyped plain object
+  is a **Blocker**, as is a response DTO exposing sensitive fields (`passwordHash`, token hashes,
+  internal flags). 204 endpoints return nothing. Follow the pattern documented in `app.setup.ts`.
 - **Prisma.** A change to `prisma/schema.prisma` needs `npx prisma generate` run and the generated
   client's output committed-ignored per `.gitignore` (it already is) — a schema change with no
-  regenerated client is a **Blocker**. Queries over user-owned data (once there's an auth model) must
-  scope by the current user — **Blocker** if they don't, once that model exists.
+  regenerated client is a **Blocker**. Queries over user-owned data must scope by the current user (`@CurrentUser()`
+  → service → repository `where: { userId }`) — **Blocker** if they don't. A new endpoint marked
+  `@Public()` that the task didn't call public is a **Blocker** (everything is gated by default).
 - **Errors.** Throw Nest's HTTP exceptions, not an ad-hoc `{ error }` with a 200 — **Blocker**. The
   global `AllExceptionsFilter` already normalizes the response shape; don't hand-roll another one.
 - **Declared-but-unused symbols** — always a **Blocker**, never a Nit.
