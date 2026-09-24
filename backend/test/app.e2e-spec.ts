@@ -2,6 +2,7 @@ import { INestApplication } from '@nestjs/common';
 import type { Response } from 'supertest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { randomUUID } from 'node:crypto';
+import path from 'node:path';
 import request from 'supertest';
 import { AppModule } from './../src/app.module.js';
 import { configureApp } from './../src/app.setup.js';
@@ -42,6 +43,15 @@ describe('App (e2e)', () => {
   function uniqueUsername(): string {
     return `e2e_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
   }
+
+  // Guard: e2e must never touch the dev DB. vitest.config.e2e.ts points DATABASE_URL at a fresh
+  // backend/prisma/e2e.db built by test/global-setup.ts.
+  it('runs against the dedicated e2e database, not the dev DB', async () => {
+    const [main] = await app
+      .get(PrismaService)
+      .$queryRawUnsafe<{ file: string }[]>('PRAGMA database_list');
+    expect(path.basename(main.file)).toBe('e2e.db');
+  });
 
   async function createUserWithSession(): Promise<{
     userId: string;
