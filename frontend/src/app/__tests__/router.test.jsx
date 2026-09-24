@@ -33,7 +33,7 @@ describe('AppRouter', () => {
 
       expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
       expect(screen.getByTestId('location')).toHaveTextContent('/sign-in')
-      expect(screen.queryByText(/Signed in as/)).not.toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: 'Home' })).not.toBeInTheDocument()
     })
 
     it('shows the sign-up page at /sign-up', async () => {
@@ -60,7 +60,7 @@ describe('AppRouter', () => {
       renderApp('/')
 
       expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument()
-      expect(screen.queryByText(/Signed in as/)).not.toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: 'Home' })).not.toBeInTheDocument()
       expect(screen.queryByRole('heading', { name: 'Sign in' })).not.toBeInTheDocument()
 
       release()
@@ -105,7 +105,7 @@ describe('AppRouter', () => {
       me.status = 200
       await user.click(retry)
 
-      expect(await screen.findByText('Signed in as ada@example.com')).toBeInTheDocument()
+      expect(await screen.findByRole('heading', { name: 'Home' })).toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
       expect(me.requests).toBe(2)
     })
@@ -171,7 +171,7 @@ describe('AppRouter', () => {
     it.each(['/sign-in', '/sign-up'])('redirects %s to Home', async (route) => {
       renderApp(route)
 
-      expect(await screen.findByText('Signed in as ada@example.com')).toBeInTheDocument()
+      expect(await screen.findByRole('heading', { name: 'Home' })).toBeInTheDocument()
       expect(screen.getByTestId('location')).toHaveTextContent(/^\/$/)
       expect(screen.queryByRole('heading', { name: 'Sign in' })).not.toBeInTheDocument()
       expect(screen.queryByRole('heading', { name: 'Create an account' })).not.toBeInTheDocument()
@@ -180,7 +180,7 @@ describe('AppRouter', () => {
     it('shows Home at /', async () => {
       renderApp('/')
 
-      expect(await screen.findByText('Signed in as ada@example.com')).toBeInTheDocument()
+      expect(await screen.findByRole('heading', { name: 'Home' })).toBeInTheDocument()
     })
   })
 })

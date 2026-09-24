@@ -161,7 +161,7 @@ describe('SignUp', () => {
       confirmPassword: GOOD_PASSWORD,
     })
 
-    expect(await screen.findByText('Signed in as ada@example.com')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Home' })).toBeInTheDocument()
     expect(requests).toEqual([
       { email: 'ada@example.com', password: GOOD_PASSWORD, username: 'ada_lovelace' },
     ])

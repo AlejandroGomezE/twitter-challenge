@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { Navigate } from 'react-router'
+import { AuthLayout } from '@/components/AuthLayout'
 import { Spinner } from '@/components/ui/spinner'
 import { useAuth } from '@/lib/auth/use-auth'
 
@@ -26,9 +27,11 @@ export function SignOut() {
   }
 
   return (
-    <div className="flex min-h-svh items-center justify-center gap-2 text-muted-foreground">
-      <Spinner />
-      <p>Signing out…</p>
-    </div>
+    <AuthLayout title="Signing out">
+      <div className="flex w-full items-center justify-center gap-2 rounded-2xl border bg-card p-6 text-muted-foreground shadow-sm">
+        <Spinner className="text-primary" />
+        <p>Signing out…</p>
+      </div>
+    </AuthLayout>
   )
 }

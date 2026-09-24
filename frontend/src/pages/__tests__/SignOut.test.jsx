@@ -1,6 +1,6 @@
 import { StrictMode } from 'react'
 import { http, HttpResponse } from 'msw'
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import { useLocation } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import { AppRouter } from '@/app/router'
@@ -105,7 +105,7 @@ describe('SignOut', () => {
 
     expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
     // Give the late response time to (wrongly) restore the user and bounce to Home.
-    await expect(screen.findByText(/Signed in as/, {}, { timeout: 300 })).rejects.toThrow()
+    await expect(screen.findByRole('heading', { name: 'Home' }, { timeout: 300 })).rejects.toThrow()
     expect(screen.getByTestId('location')).toHaveTextContent('/sign-in')
     expect(queryClient.getQueryData(AUTH_ME_QUERY_KEY)).toBeNull()
     expect(signOutCalls.count).toBe(1)
@@ -129,14 +129,15 @@ describe('SignOut', () => {
       { route: '/' },
     )
 
-    await screen.findByText('Signed in as ada@example.com')
+    await screen.findByRole('heading', { name: 'Home' })
     visited.length = 0
-    await user.click(screen.getByRole('link', { name: 'Sign out' }))
+    // The app shell's left rail (the `banner` landmark) holds the in-app Sign out link.
+    await user.click(within(screen.getByRole('banner')).getByRole('link', { name: 'Sign out' }))
 
     expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
     expect(screen.getByTestId('location')).toHaveTextContent('/sign-in')
     // Nothing fires a second request once the page has settled.
-    await expect(screen.findByText(/Signed in as/, {}, { timeout: 300 })).rejects.toThrow()
+    await expect(screen.findByRole('heading', { name: 'Home' }, { timeout: 300 })).rejects.toThrow()
     expect(signOutCalls.count).toBe(1)
     expect(queryClient.getQueryData(AUTH_ME_QUERY_KEY)).toBeNull()
     // Straight to /sign-in: no bounce back through Home on a stale signed-in state.

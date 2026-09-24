@@ -12,6 +12,12 @@ export const handlers = [
   http.get(apiUrl('/auth/me'), () =>
     HttpResponse.json({ id: 'u1', email: 'ada@example.com', username: 'ada' }),
   ),
+  // The signed-in app shell loads ada's profile (right rail card); other usernames are unknown.
+  http.get(apiUrl('/users/:username'), ({ params }) =>
+    params.username.toLowerCase() === 'ada'
+      ? HttpResponse.json({ username: 'ada', bio: null, createdAt: '2026-09-15T12:00:00.000Z' })
+      : HttpResponse.json({ message: 'User not found' }, { status: 404 }),
+  ),
 ]
 
 export const server = setupServer(...handlers)
