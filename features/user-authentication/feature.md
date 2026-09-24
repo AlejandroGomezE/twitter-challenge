@@ -104,6 +104,12 @@ next: /close-feature user-authentication
   `excludeExtraneousValues`, so only explicitly exposed fields can leave the API — `UserResponseDto`
   for sign-up/sign-in/me, `MessageResponseDto` for `GET /`; sign-out stays 204 with no body. Docs
   and review contract updated to require it for every future endpoint.
+- [x] Close-phase fixes (found by Close tests, Alejandro chose to fix now): (a) after sign-in the
+  user always lands on `/` — `PublicOnlyRoute`'s `<Navigate to="/">` beats `SignIn`'s navigate to
+  `state.from`; make `PublicOnlyRoute` redirect to the guarded `from` target (shared guard fn).
+  (b) a non-401 failure of `/auth/me` (500/network) is treated as signed out → redirect to
+  `/sign-in`; instead gated routes show a "Couldn't reach the server" error with Retry — only a 401
+  means signed out.
 
 ## Decisions
 - 2026-09-24 · framed · Public sign-up included (Alejandro), in addition to the sign-in/sign-out
@@ -147,6 +153,12 @@ next: /close-feature user-authentication
   handler didn't declare `@SerializeOptions({ type: XResponseDto })` — the stock interceptor passes
   plain objects through unfiltered when no type is declared, so a forgotten decorator would have
   leaked data silently.
+- 2026-09-24 · closing · Close-phase frontend tests found that AC7's "back to the originally
+  requested route" was broken (always `/`). Verify had marked it passing: the probe saw a navigation
+  to the target but misattributed the follow-up `/` to the catch-all (only `/` exists today). Fixed
+  in a short Build round rather than shipped (Alejandro).
+- 2026-09-24 · closing · `/auth/me` failing with 500/network must not look like "signed out";
+  gated routes show an error + Retry instead (Alejandro). Only 401 → signed out.
 
 ## Follow-ups
 - [x] ~~`review-contract.md` §B contradicted `knowledge/infra/code-quality.md` on where Prisma access
@@ -179,3 +191,7 @@ next: /close-feature user-authentication
   lint/build green.
 - 2026-09-24 · verified — all 9 acceptance criteria exercised against the running app (curl on the
   API, headless Chrome for the UI: 19/19 UI checks, argon2id/SHA-256/expiry confirmed in the DB).
+- 2026-09-24 · built — close-phase fixes: sign-in returns to the requested route (redirect target in
+  `PublicOnlyRoute`), `/auth/me` server errors show an error + Retry instead of "signed out".
+- 2026-09-24 · verified — re-ran the UI checks (19/19) plus the new error state (4/4: backend down →
+  error + Retry, sign-in still usable, Retry → correct route) against the running app.
