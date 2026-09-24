@@ -42,9 +42,11 @@ stacks.
 Follow without being told; see `knowledge/infra/backend-architecture.md` and
 `knowledge/infra/code-quality.md` for the full picture.
 
-- **Layering.** Controllers are thin — bind + validate + call one service method + shape the
-  response. Business logic and Prisma access live in the service. Never reach for `PrismaService`
-  from a controller.
+- **Layering.** Controller → Service → Repository → Prisma. Controllers are thin — bind + validate +
+  call one service method + shape the response. Business logic lives in the service, which calls a
+  repository. Prisma access lives **only** in `<name>.repository.ts` (a plain `@Injectable()` that
+  injects `PrismaService` — no interface, no injection token, no business rules). Never reach for
+  `PrismaService` from a controller or service.
 - **Everything injected**, never `new SomeService(...)`.
 - **Registration.** A new provider/controller goes in its `@Module`'s `providers:`/`controllers:`
   (and `exports:` if reused elsewhere); a new module is imported by `app.module.ts`. Unregistered
