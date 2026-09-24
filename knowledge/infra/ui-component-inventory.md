@@ -1,7 +1,7 @@
 ---
 title: UI component inventory
 type: infra
-summary: Inventory of frontend/src/components/ui — all stock shadcn/ui, installed via `shadcn add --all`. Grounds the shadcn-first convention in knowledge/decisions/shadcn-component-preference.md.
+summary: Inventory of frontend/src/components/ui — all stock shadcn/ui, installed via `shadcn add --all` — plus the app compositions built on them (UserAvatar). Grounds the shadcn-first convention in knowledge/decisions/shadcn-component-preference.md.
 status: active
 last-verified: 2026-09-24
 tags: [frontend, shadcn, ui, design-system]
@@ -15,7 +15,7 @@ imported via the `@/components/ui/*` alias (`frontend/components.json`: style
 JS project, not TypeScript).
 
 All 61 files were installed via `npx shadcn@latest add --all` and are currently
-**unmodified stock shadcn/ui** — there is no custom-built component yet, and no
+**unmodified stock shadcn/ui** — no custom primitive has been added, and no
 twitter-clone-domain widget (a tweet card, a feed list, a compose box, etc.) exists in
 this folder yet. Per [[Shadcn component preference]], default to one of these over
 hand-rolling an equivalent; build a new one only when nothing here fits, and it needs
@@ -37,7 +37,12 @@ Alejandro's review before being accepted.
 
 ## Custom-built components
 
-None yet.
+No new primitive. App-level compositions of stock primitives live in
+`frontend/src/components/` (outside `ui/`):
+
+- `UserAvatar.jsx` — `UserAvatar({ username, size, className, fallbackClassName })`, the
+  avatar placeholder: shadcn `Avatar` + `AvatarFallback` showing the username's initial on
+  a colour derived from the username (`lib/avatar-color.js`). Used by the profile page.
 
 ## Shared hooks / utils
 
