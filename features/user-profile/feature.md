@@ -1,8 +1,8 @@
 ---
 slug: user-profile
-status: framed
+status: verifying
 scope: full-stack
-next: /implement user-profile
+next: /review-feature user-profile
 ---
 # Basic user profile (username, bio, avatar placeholder)
 
@@ -58,23 +58,23 @@ next: /implement user-profile
   sign-up now needs a username).
 
 ## Tasks
-- [ ] Prisma: `username` (unique, required) + `bio` (optional) on `User`; reset the dev DB
+- [x] Prisma: `username` (unique, required) + `bio` (optional) on `User`; reset the dev DB
   (`npx prisma db push --force-reset`) and `generate`.
-- [ ] Backend users: username/bio rules (shared reserved list + normalizer), repository methods
+- [x] Backend users: username/bio rules (shared reserved list + normalizer), repository methods
   (`findByUsername`, `updateProfile`), service (`getProfile`, `updateProfile`, P2002 on username →
   409), `UserResponseDto` + `username`, new `ProfileResponseDto` / `MyProfileResponseDto`.
-- [ ] Backend endpoints: `users.controller.ts` — `GET /users/:username`, `PATCH /users/me` (DTO
+- [x] Backend endpoints: `users.controller.ts` — `GET /users/:username`, `PATCH /users/me` (DTO
   validation, `@CurrentUser()`, response DTOs); register in `UsersModule`/`AppModule`.
-- [ ] Backend sign-up: `SignUpDto` + `AuthService.signUp` take `username` (distinct 409 messages for
+- [x] Backend sign-up: `SignUpDto` + `AuthService.signUp` take `username` (distinct 409 messages for
   email vs username); update e2e for the new sign-up body and add profile e2e cases.
-- [ ] Frontend sign-up: username field + schema (shared rules/reserved list in
+- [x] Frontend sign-up: username field + schema (shared rules/reserved list in
   `lib/validation/profile-schemas.js`), error display; update test harness default `me` to include
   `username`.
-- [ ] Frontend profile page: `Profile.jsx` at `/u/:username` (TanStack Query, avatar placeholder,
+- [x] Frontend profile page: `Profile.jsx` at `/u/:username` (TanStack Query, avatar placeholder,
   loading/not-found/error states, "Edit profile" on own profile); Home link to own profile.
-- [ ] Frontend edit page: `EditProfile.jsx` at `/settings/profile` (react-hook-form + zod, bio
+- [x] Frontend edit page: `EditProfile.jsx` at `/settings/profile` (react-hook-form + zod, bio
   counter, server errors, cache updates, navigate to new profile URL).
-- [ ] Docs: Runbook (new endpoints, db reset note), backend/frontend architecture docs.
+- [x] Docs: Runbook (new endpoints, db reset note), backend/frontend architecture docs.
 
 ## Decisions
 - 2026-09-24 · framed · Username required at sign-up (Alejandro) — no half-finished accounts, no
@@ -89,8 +89,28 @@ next: /implement user-profile
   case-insensitive uniqueness on SQLite without a custom collation.
 - 2026-09-24 · framed · Avatar is a placeholder only (initial + deterministic colour); real image
   upload is out of scope.
+- 2026-09-24 · building · The reserved-username list is duplicated in
+  `backend/src/modules/users/username.rules.ts` and `frontend/src/lib/validation/profile-schemas.js`,
+  each pointing at the other: the repo-root `shared/` folder is empty and wired into neither build
+  (backend is TS/nodenext, frontend plain JS). The backend copy is authoritative.
+- 2026-09-24 · building · The dev-DB `--force-reset` was run by Alejandro himself: Prisma blocks
+  AI-initiated destructive resets and requires the user's own consent, so the implementer stopped
+  there instead of setting the consent variable. Until then, task 4's e2e ran against a throwaway
+  `prisma/e2e-verify.db` (fresh file, plain `db push`, deleted after); re-run green on the reset
+  dev DB afterwards.
+- 2026-09-24 · building · `UserAvatar.jsx` (a thin composition of shadcn `Avatar`/`AvatarFallback`)
+  signed off by Alejandro; listed in `knowledge/infra/ui-component-inventory.md`.
+- 2026-09-24 · building · Prisma 7 + better-sqlite3 reports the colliding unique field under
+  `meta.driverAdapterError.cause.constraint.fields` (no `meta.target`); `UsersService` reads that,
+  then `meta.target`, then falls back to an email lookup to pick the 409 message.
 
 ## Follow-ups
+- `frontend-architecture.md`'s `hooks/` comment lists only `use-profile.js` (also has the stock
+  `use-mobile.js`) — incomplete, not wrong.
 
 ## Log
 - 2026-09-24 · framed
+- 2026-09-24 · built — usernames (required at sign-up, lowercase-unique, reserved list) and bios on
+  `User`; `GET /users/:username` (no email) + `PATCH /users/me`; `/u/:username` profile page with
+  avatar placeholder and `/settings/profile` edit page. BE 10 suites / 123 unit + 36 e2e, FE 10 / 71,
+  lint/build green.
