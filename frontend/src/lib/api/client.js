@@ -9,12 +9,13 @@ export class ApiError extends Error {
   }
 }
 
-// No auth module yet — once one exists, attach its token here (e.g. an
-// Authorization header) rather than in individual call sites.
+// The session lives in an httpOnly cookie the JS never reads; `credentials: 'include'` makes the
+// browser send it cross-origin (the Vite dev server and the API run on different ports).
 async function request(path, { method = 'GET', body, headers, ...rest } = {}) {
   const res = await fetch(`${API_URL}${path}`, {
     ...rest,
     method,
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...headers,
@@ -22,8 +23,10 @@ async function request(path, { method = 'GET', body, headers, ...rest } = {}) {
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
+  // Empty bodies (e.g. 204 No Content) resolve to `null` rather than `''`.
   const contentType = res.headers.get('content-type') ?? '';
-  const payload = contentType.includes('application/json') ? await res.json() : await res.text();
+  const text = await res.text();
+  const payload = !text ? null : contentType.includes('application/json') ? JSON.parse(text) : text;
 
   if (!res.ok) {
     const message = (payload && payload.message) || res.statusText;

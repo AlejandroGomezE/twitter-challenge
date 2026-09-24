@@ -52,7 +52,8 @@ If (and only if) explicitly asked to run something: `npm run build`/`test` in `b
 
 - **Needs changes/discussion** → one PR comment with the blockers (`gh pr comment <n> --body "…"`).
   English, numbered, blockers only.
-- **Ready** → ask whether to merge. On yes: `gh pr merge <n> --squash --delete-branch`. Don't attempt
+- **Ready** → ask whether to merge. On yes: `gh pr merge <n> --merge --delete-branch` (merge commit, never
+  squash — `WORKFLOW.md` "Merging"). Don't attempt
   `gh pr review --approve` first (solo repo, GitHub rejects self-approval).
 
 Confirm the PR number resolves to what you think it is (`gh pr view`) before any write action —
