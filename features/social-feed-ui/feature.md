@@ -132,6 +132,9 @@ rebuild it with our tools (Vite + React JSX, react-router, TanStack Query, shadc
   visible "Soon" hint on mobile. Also `RightRail.jsx`: the search icon isn't dimmed with its input.
 - [ ] (open, dev only) The TanStack Query devtools bubble covers the mobile bottom bar's Sign out
   icon in dev; move it (`buttonPosition`) or hide it on small screens. Not in production builds.
+- [ ] (open) Harden `ComingSoon`: it prevents the default action (navigation/submit) but a child's
+  own `onClick` still runs (Radix Slot calls it before `preventDefault`). Harmless today — no disabled
+  item has a handler — but it should swallow child handlers too so a future one can't fire.
 
 ## Log
 - 2026-09-24 · framed
