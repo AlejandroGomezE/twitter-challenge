@@ -1,7 +1,7 @@
 import { screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { renderWithProviders } from '@/test/render'
-import { Home } from './Home'
+import { Home } from '../Home'
 
 describe('Home', () => {
   it('shows the signed-in user and a Sign out link to /sign-out', async () => {

@@ -1,6 +1,6 @@
 import { instanceToPlain, plainToInstance } from 'class-transformer';
-import { MyProfileResponseDto } from './my-profile-response.dto.js';
-import { ProfileResponseDto } from './profile-response.dto.js';
+import { MyProfileResponseDto } from '../my-profile-response.dto.js';
+import { ProfileResponseDto } from '../profile-response.dto.js';
 
 // Same transform path the global ResponseSerializerInterceptor uses, followed
 // by the JSON encoding Express applies to the body.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bioSchema, RESERVED_USERNAMES, usernameSchema } from './profile-schemas'
+import { bioSchema, RESERVED_USERNAMES, usernameSchema } from '../profile-schemas'
 
 const messagesOf = (result) => result.error.issues.map((issue) => issue.message)
 
