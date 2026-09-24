@@ -128,6 +128,9 @@ next: /close-feature user-profile
 - Every JSON request sends `Content-Type: application/json`, so even body-less `POST /auth/sign-out`
   triggers a CORS preflight. Harmless; `apiClient` could omit the header without a body.
 
+## PRs
+- https://github.com/AlejandroGomezE/twitter-challenge/pull/4
+
 ## Log
 - 2026-09-24 · framed
 - 2026-09-24 · built — usernames (required at sign-up, lowercase-unique, reserved list) and bios on
