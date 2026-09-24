@@ -1,8 +1,8 @@
 ---
 slug: user-profile
-status: verifying
+status: done
 scope: full-stack
-next: /close-feature user-profile
+next: —
 ---
 # Basic user profile (username, bio, avatar placeholder)
 
@@ -118,15 +118,18 @@ next: /close-feature user-profile
   was the CORS preflight (`OPTIONS`), not a second POST — the verify probe miscounted it.
 
 ## Follow-ups
-- `frontend-architecture.md`'s `hooks/` comment lists only `use-profile.js` (also has the stock
+- [ ] (open) `frontend-architecture.md`'s `hooks/` comment lists only `use-profile.js` (also has the stock
   `use-mobile.js`) — incomplete, not wrong.
 - [ ] (next, separate refactor after this feature closes — Alejandro) Move unit tests into a
   `__tests__/` folder per module/feature folder, backend AND frontend (e.g. `auth/__tests__/`,
   `modules/users/__tests__/`, `modules/users/dto/__tests__/`, `pages/__tests__/`,
   `lib/auth/__tests__/`); e2e stays in `backend/test/`. Make it a rule in `review-contract.md`
   §B/§C, the `implementer` agent, `/close-feature` Step 2, and the architecture docs.
-- Every JSON request sends `Content-Type: application/json`, so even body-less `POST /auth/sign-out`
+- [ ] (open) Every JSON request sends `Content-Type: application/json`, so even body-less `POST /auth/sign-out`
   triggers a CORS preflight. Harmless; `apiClient` could omit the header without a body.
+- [ ] (open, from the PR review) The e2e suite runs against the dev DB (`backend/prisma/dev.db`); it
+  cleans up after itself, but a dedicated test DB (e.g. `DATABASE_URL=file:./e2e.db` + `db push` in
+  the e2e setup) would keep dev data out of reach.
 
 ## PRs
 - https://github.com/AlejandroGomezE/twitter-challenge/pull/4
@@ -141,3 +144,4 @@ next: /close-feature user-profile
   race reproduced in a test that fails on the old code. FE 10 suites / 73.
 - 2026-09-24 · verified — all 8 acceptance criteria + must-not-break exercised against the running app
   (curl on the API, headless Chrome 22/22 for the UI, both sign-out paths with one POST each).
+- 2026-09-24 · closed — PR #4, merged (merge commit `f796067`)
