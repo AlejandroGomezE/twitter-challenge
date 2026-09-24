@@ -83,7 +83,9 @@ branch history to drop it before merge, plus rotating the credential.
 - **Errors.** Throw Nest's HTTP exceptions, not an ad-hoc `{ error }` with a 200 — **Blocker**. The
   global `AllExceptionsFilter` already normalizes the response shape; don't hand-roll another one.
 - **Declared-but-unused symbols** — always a **Blocker**, never a Nit.
-- **Tests.** New business logic in a service with no unit test is a **Warning**. Service specs mock the
+- **Tests.** Unit specs live in a `__tests__/` folder next to the code they cover
+  (`src/auth/__tests__/auth.service.spec.ts`); a new spec placed loose beside its source file is a
+  **Warning**. E2e stays in `backend/test/`. New business logic in a service with no unit test is a **Warning**. Service specs mock the
   repository (not `PrismaService`) through `Test.createTestingModule`; never a real database in a
   unit spec — **Blocker** if it does.
 
@@ -102,8 +104,10 @@ branch history to drop it before merge, plus rotating the credential.
   in source — **Warning**.
 - **Console/dead code.** `console.log` left in shipped code — **Warning** (`console.error`/`warn` on a
   real failure path is fine). An exported component/hook never referenced — **Warning**.
-- **Tests.** Vitest + React Testing Library + MSW. A new or changed page/component/hook with no
-  colocated `*.test.jsx` covering the change is a **Warning** (same bar as a backend service without
+- **Tests.** Vitest + React Testing Library + MSW. Tests live in a `__tests__/` folder next to
+  the code they cover (`src/pages/__tests__/Home.test.jsx`); a new test placed loose beside its
+  source file is a **Warning**. A new or changed page/component/hook with no test covering the
+  change is a **Warning** (same bar as a backend service without
   a spec). A test that mocks `apiClient`/`fetch` instead of using MSW handlers (`src/test/server.js`),
   or that hits a real backend, is a **Blocker**. Tests for shadcn primitives in `src/components/ui/*`
   are not expected.

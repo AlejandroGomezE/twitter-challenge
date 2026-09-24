@@ -64,8 +64,9 @@ Follow without being told; see `knowledge/infra/backend-architecture.md` and
   `PrismaService` (injected) — never construct a second `PrismaClient`.
 - **Errors.** Throw Nest's HTTP exceptions (`BadRequestException`, `NotFoundException`, etc.) — never
   an ad-hoc `{ error }` with a 200. The global `AllExceptionsFilter` already normalizes the shape.
-- **Tests** — Vitest, at `backend/src/<module>/*.spec.ts` (or alongside, matching existing
-  precedent). Mock dependencies through Nest's `Test.createTestingModule`; never hit a real database
+- **Tests** — Vitest. Unit specs live in a `__tests__/` folder next to the code it covers — `src/auth/auth.service.ts` →
+  `src/auth/__tests__/auth.service.spec.ts`, `src/modules/users/dto/x.ts` → `…/dto/__tests__/x.spec.ts` (never loose next to the source file; import the code under test with `../`). E2e stays in
+  `backend/test/`. Mock dependencies through Nest's `Test.createTestingModule`; never hit a real database
   in a unit spec.
 - **Verify:** `npm run build` (type-checks) and `npm test`, from `backend/`.
 
@@ -90,8 +91,9 @@ See `knowledge/infra/frontend-architecture.md` and
   say so in your output rather than treating it as auto-approved.
 - **Path alias `@/*`** resolves to `src/*` (`jsconfig.json` + `vite.config.js`).
 - **This is a plain JS project** — no TypeScript, no `.tsx`/`.ts` files.
-- **Tests:** Vitest + React Testing Library + MSW (`npm test`). Tests are colocated `*.test.jsx` next
-  to the file; render with `renderWithProviders` (`src/test/render.jsx`), fake the API with MSW
+- **Tests:** Vitest + React Testing Library + MSW (`npm test`). Tests live in a `__tests__/` folder next to
+  the code they cover (`src/pages/Home.jsx` → `src/pages/__tests__/Home.test.jsx`), never loose
+  beside the source file; render with `renderWithProviders` (`src/test/render.jsx`), fake the API with MSW
   handlers (`src/test/server.js`) — never mock `apiClient`/`fetch`. Write/update a test when the
   task asks for one or when your change breaks an existing one.
 - **Verify:** `npm run build`, `npm test` and `npm run lint`, from `frontend/`.
