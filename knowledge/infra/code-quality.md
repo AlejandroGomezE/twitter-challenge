@@ -182,4 +182,6 @@ How the "Configure" list above maps onto the actual two apps — see
   only).
 * **Tests** — backend: Vitest (`npm test`, `test:cov`, `test:e2e`). Frontend: Vitest
   + jsdom + React Testing Library + MSW (`npm test`, `test:watch`, `test:cov`) —
-  colocated `*.test.jsx`, API faked with MSW handlers, never by mocking `apiClient`.
+  tests in a `__tests__/` folder next to the code, API faked with MSW handlers, never by
+  mocking `apiClient`. Backend unit specs follow the same `__tests__/` rule; e2e lives in
+  `backend/test/`.

@@ -7,7 +7,7 @@ import { ProtectedRoute } from '@/routes/ProtectedRoute'
 import { PublicOnlyRoute } from '@/routes/PublicOnlyRoute'
 import { renderWithProviders } from '@/test/render'
 import { apiUrl, server } from '@/test/server'
-import { SignIn } from './SignIn'
+import { SignIn } from '../SignIn'
 
 const ADA = { id: 'u1', email: 'ada@example.com' }
 

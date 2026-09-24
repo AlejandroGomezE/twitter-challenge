@@ -24,9 +24,10 @@ tell Alejandro to finish `/review-feature <slug>` first.
 Not a full coverage sweep — just what this change actually touched:
 
 - **`backend/`** — a unit spec for the changed service/logic, at
-  `backend/src/<module>/*.spec.ts`, dependencies mocked (no real database in a unit spec).
-- **`frontend/`** — a colocated `*.test.jsx`/`*.test.js` next to each changed page, component or
-  hook (`src/pages/Home.test.jsx` is the reference). Render with `renderWithProviders` from
+  `backend/src/<module>/__tests__/*.spec.ts` (a `__tests__/` folder next to the code it covers),
+  dependencies mocked (no real database in a unit spec). E2e cases go in `backend/test/`.
+- **`frontend/`** — a `*.test.jsx`/`*.test.js` in a `__tests__/` folder next to each changed page,
+  component or hook (`src/pages/__tests__/Home.test.jsx` is the reference). Render with `renderWithProviders` from
   `src/test/render.jsx`, query by role/text, drive interactions with its `user`. Fake the backend
   with MSW (`server.use(http.get(apiUrl('/path'), …))` from `src/test/server.js`) — never mock
   `apiClient`/`fetch`, never hit a real backend. Cover the states the change has

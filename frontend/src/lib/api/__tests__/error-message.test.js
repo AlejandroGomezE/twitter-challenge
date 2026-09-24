@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { ApiError } from './client'
-import { getApiErrorMessage } from './error-message'
+import { ApiError } from '../client'
+import { getApiErrorMessage } from '../error-message'
 
 const FALLBACK = 'Something went wrong. Please try again.'
 

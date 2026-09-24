@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { ApiError, apiClient } from '@/lib/api/client'
 import { AUTH_ME_QUERY_KEY } from '@/lib/auth/auth-context'
 import { apiUrl, server } from '@/test/server'
-import { createQueryClient } from './query-client'
+import { createQueryClient } from '../query-client'
 
 const ADA = { id: 'u1', email: 'ada@example.com' }
 

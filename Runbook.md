@@ -130,7 +130,8 @@ from `backend/.env` (create it from `backend/.env.example`; it's git-ignored).
 - **Run**: `start:dev` (watch mode, what `scripts/be-local` uses), `start` (no watch),
   `start:debug`, `start:prod` (runs the compiled `dist/`).
 - **Test**: `test` (Vitest unit), `test:watch`, `test:cov` (coverage), `test:debug`,
-  `test:e2e` (`vitest.config.e2e.ts`).
+  `test:e2e` (`vitest.config.e2e.ts`). Unit specs live in a `__tests__/` folder next to the code
+  they cover (`src/auth/__tests__/auth.service.spec.ts`); e2e lives in `test/`.
 - **Build**: `build` (`nest build`), `deploy` (`nest deploy`, via `@nestjs/mau`).
 - **Lint/format**: `lint` (`oxlint src/ test/`), `format` (`prettier --write`).
 
@@ -146,8 +147,8 @@ shadcn/ui (Radix base, Nova preset), and `react-router` for client-side routing.
 - **Build**: `build` (`vite build`).
 - **Lint**: `lint` (`eslint .`).
 - **Test**: `test` (`vitest run`), `test:watch`, `test:cov`. Vitest + jsdom + React
-  Testing Library, config in `vite.config.js`'s `test` block. Tests are colocated
-  `src/**/*.test.{js,jsx}`. Shared helpers live in `src/test/`: `setup.js`
+  Testing Library, config in `vite.config.js`'s `test` block. Tests live in a
+  `__tests__/` folder next to the code they cover (`src/**/__tests__/*.test.{js,jsx}`). Shared helpers live in `src/test/`: `setup.js`
   (jest-dom matchers, MSW lifecycle), `server.js` (MSW server + default handlers;
   `VITE_API_URL` is pinned to `http://api.test` in tests, build URLs with
   `apiUrl()`), `render.jsx` (`renderWithProviders` — QueryClient from the app's

@@ -6,7 +6,7 @@ import { createQueryClient } from '@/app/query-client'
 import { ApiError } from '@/lib/api/client'
 import { fetchProfile, profileQueryKey } from '@/lib/api/users'
 import { apiUrl, server } from '@/test/server'
-import { useProfile } from './use-profile'
+import { useProfile } from '../use-profile'
 
 const PROFILE = { username: 'ada', bio: 'Hi', createdAt: '2026-09-01T12:00:00.000Z' }
 

@@ -179,8 +179,8 @@ boundary).
 ## Tests
 
 Vitest + jsdom + React Testing Library + MSW (`npm test`; config in `vite.config.js`'s
-`test` block). Tests are colocated next to the file they cover (`Home.jsx` →
-`Home.test.jsx`). Render through `renderWithProviders(ui, { route })`
+`test` block). Tests live in a `__tests__/` folder next to the file they cover
+(`pages/Home.jsx` → `pages/__tests__/Home.test.jsx`). Render through `renderWithProviders(ui, { route })`
 (`src/test/render.jsx` — a fresh `createQueryClient()` with no retries, so the central
 401 handling applies, plus `AuthProvider` and a `MemoryRouter`) and fake the backend
 with MSW handlers from `src/test/server.js` (`server.use(http.get(apiUrl('/path'), …))`)
@@ -188,7 +188,7 @@ with MSW handlers from `src/test/server.js` (`server.use(http.get(apiUrl('/path'
 `ApiError`) is exercised. Unhandled requests fail the test. Tests render **signed in**
 by default (the default `GET /auth/me` handler returns a user); override it with a 401
 to render signed out. `src/components/ui/*` (shadcn) isn't tested. Reference tests:
-`src/pages/Home.test.jsx`, `src/lib/api/client.test.js`.
+`src/pages/__tests__/Home.test.jsx`, `src/lib/api/__tests__/client.test.js`.
 
 ## Current state vs. this doc
 

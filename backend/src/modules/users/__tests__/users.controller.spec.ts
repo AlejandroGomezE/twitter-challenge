@@ -1,10 +1,10 @@
 import { Reflector } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
-import { IS_PUBLIC_KEY } from '../../auth/public.decorator.js';
-import { MyProfileResponseDto } from './dto/my-profile-response.dto.js';
-import { ProfileResponseDto } from './dto/profile-response.dto.js';
-import { UsersController } from './users.controller.js';
-import { UsersService } from './users.service.js';
+import { IS_PUBLIC_KEY } from '../../../auth/public.decorator.js';
+import { MyProfileResponseDto } from '../dto/my-profile-response.dto.js';
+import { ProfileResponseDto } from '../dto/profile-response.dto.js';
+import { UsersController } from '../users.controller.js';
+import { UsersService } from '../users.service.js';
 
 // Metadata key set by @SerializeOptions(). Nest does not export it from the
 // @nestjs/common entry point (CLASS_SERIALIZER_OPTIONS), so it is mirrored.
