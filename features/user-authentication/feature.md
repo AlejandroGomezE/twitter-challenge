@@ -180,6 +180,13 @@ next: /close-feature user-authentication
 - File-download endpoints (`StreamableFile`) and raw string bodies would get a 500 from the
   fail-closed serializer unless they declare a type; add a `StreamableFile` passthrough (+ doc line)
   when the first download endpoint is built. None exists today.
+- Retry on the server-unreachable screen: after a first-load 500 (no cached user) TanStack Query
+  puts the me query back to `pending`, so `ProtectedRoute` shows the full-page spinner instead of the
+  disabled Retry button + spinner; that branch only runs when a user was cached. Harmless (a loading
+  state is shown), cosmetic mismatch with the design — check `isError` before `isLoading` if wanted.
+
+## PRs
+- https://github.com/AlejandroGomezE/twitter-challenge/pull/2
 
 ## Log
 - 2026-09-24 · framed
