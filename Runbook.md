@@ -25,6 +25,10 @@ their own.
 | Stop the **backend** (incl. orphaned watchers) | `scripts/down-be` |
 | Stop the **frontend** | `scripts/down-fe` |
 
+**Try it locally:** run `scripts/be-local` and `scripts/fe-local`, open
+http://localhost:5173 — you land on `/sign-in`; use "Create an account" (`/sign-up`). First time
+after pulling the auth change, run `npx prisma db push` from `backend/` (see Backend → Auth).
+
 ---
 
 ## Scripts index
@@ -54,11 +58,16 @@ from `backend/.env` (create it from `backend/.env.example`; it's git-ignored).
 - **Env vars** (validated at boot by `src/config/environment.validation.ts`, a Zod
   schema — an invalid/missing required var throws on startup rather than failing
   silently later): `PORT` (optional, defaults to 3000), `DATABASE_URL` (required —
-  see Database below), `OBSERVE_APP_KEY` / `OBSERVE_APP_SECRET` (optional —
+  see Database below), `NODE_ENV` (optional, `development` | `production` | `test`,
+  default `development`; `production` makes the session cookie `Secure`),
+  `FRONTEND_ORIGIN` (optional, default `http://localhost:5173` — the exact frontend
+  origin, no path or trailing slash; it's the only origin CORS allows and the one the
+  auth guard's Origin check accepts), `OBSERVE_APP_KEY` / `OBSERVE_APP_SECRET` (optional —
   [NestJS Observe](https://observe.nestjs.com) APM; the `ObserveModule` only
   registers itself in `src/app.module.ts` when **both** are set to a non-empty
   value, so leaving them blank is a normal, supported way to run without APM).
-- **Database**: Prisma (`prisma/schema.prisma`, config in `prisma7.config.ts`),
+- **Database**: Prisma (`prisma/schema.prisma` — models `User` and `Session`; config
+  in `prisma7.config.ts`),
   driver-adapter based (Prisma 7 requires one — `@prisma/adapter-better-sqlite3` +
   `better-sqlite3`, wired in `src/database/prisma.service.ts`). SQLite is a local
   file, not a server — `DATABASE_URL` in `.env`/`.env.example` is a `file:` URL
@@ -76,11 +85,31 @@ from `backend/.env` (create it from `backend/.env.example`; it's git-ignored).
 - **Config**: `@nestjs/config` (`ConfigModule.forRoot({ isGlobal: true, ... })` in
   `app.module.ts`), loading `src/config/configuration.ts` and validating through
   `src/config/environment.validation.ts`.
-- **Cross-cutting**: a single global `AllExceptionsFilter`
-  (`src/common/filters/`) normalizes every error response to
-  `{ statusCode, message, timestamp, path }`; a global `ValidationPipe`
-  (`whitelist: true, transform: true`) and `app.enableCors()` are set in
-  `main.ts`.
+- **Cross-cutting**: the HTTP pipeline lives in `src/app.setup.ts`
+  (`configureApp(app)`), shared by `main.ts` and the e2e suite so tests run the same
+  stack: `helmet()`, `cookie-parser`, CORS restricted to `FRONTEND_ORIGIN` with
+  `credentials: true`, a global `ValidationPipe` (`whitelist: true, transform: true`),
+  and a single global `AllExceptionsFilter` (`src/common/filters/`) that normalizes
+  every error response to `{ statusCode, message, timestamp, path }`.
+- **Response serialization**: a global `ResponseSerializerInterceptor`
+  (`src/common/interceptors/`, in `configureApp`) emits only `@Expose()`d fields of the
+  response DTO each handler declares via `@SerializeOptions({ type: XResponseDto })`
+  (e.g. `UserResponseDto`); a body without a declared DTO is a 500 (fails closed). Never
+  return Prisma models. 204 endpoints return no body.
+- **Auth** (`src/auth/`, users in `src/modules/users/`) — email + password, server-side
+  sessions in an httpOnly `sid` cookie:
+  - `POST /auth/sign-up` `{ email, password }` → 201 + cookie, `{ id, email }` (409 if the
+    email is taken; password 12–128 chars).
+  - `POST /auth/sign-in` `{ email, password }` → 200 + cookie, `{ id, email }`; generic 401
+    `Invalid email or password` otherwise.
+  - `POST /auth/sign-out` → 204, revokes the session and clears the cookie (idempotent).
+  - `GET /auth/me` → `{ id, email }` or 401.
+  - **Every other endpoint (incl. `GET /`) requires a valid `sid` cookie** — a global
+    `AuthGuard` (`APP_GUARD`); opt a route out with `@Public()`. POST/PUT/PATCH/DELETE with
+    an `Origin` other than `FRONTEND_ORIGIN` get 403, public routes included.
+  - Sign-up and sign-in are rate limited to 5 requests/minute per IP (429 beyond).
+  - **After pulling this change, run `npx prisma db push` from `backend/`** to create the
+    `User`/`Session` tables (and `npx prisma generate` if the client is stale).
 - **Run**: `start:dev` (watch mode, what `scripts/be-local` uses), `start` (no watch),
   `start:debug`, `start:prod` (runs the compiled `dist/`).
 - **Test**: `test` (Vitest unit), `test:watch`, `test:cov` (coverage), `test:debug`,
@@ -104,22 +133,35 @@ shadcn/ui (Radix base, Nova preset), and `react-router` for client-side routing.
   `src/**/*.test.{js,jsx}`. Shared helpers live in `src/test/`: `setup.js`
   (jest-dom matchers, MSW lifecycle), `server.js` (MSW server + default handlers;
   `VITE_API_URL` is pinned to `http://api.test` in tests, build URLs with
-  `apiUrl()`), `render.jsx` (`renderWithProviders` — fresh QueryClient +
-  MemoryRouter). Unhandled requests fail the test.
-- **Structure** (`src/`): `app/` (`App.jsx`, `router.jsx`, `providers.jsx`),
-  `components/ui/` (shadcn), `hooks/`, `lib/api/` (HTTP client), `pages/`.
-  `features/`, `lib/auth/`, `lib/validation/`, and `routes/` (a `ProtectedRoute`)
-  aren't created yet — there's no auth module and no concrete feature to hang them
-  on; add them when one exists rather than scaffolding empty folders.
+  `apiUrl()`), `render.jsx` (`renderWithProviders` — QueryClient from the app's
+  `createQueryClient` + `AuthProvider` + MemoryRouter). Unhandled requests fail the
+  test. Tests render **signed in** by default (the default MSW `GET /auth/me` handler
+  returns a user); override it with a 401 (`server.use(...)`) to render signed out.
+- **Structure** (`src/`): `app/` (`App.jsx`, `router.jsx`, `providers.jsx`,
+  `query-client.js`), `components/ui/` (shadcn), `hooks/`, `lib/api/` (HTTP client),
+  `lib/auth/` (`AuthProvider`, `useAuth()`), `lib/validation/` (Zod form schemas),
+  `routes/` (`ProtectedRoute`, `PublicOnlyRoute`), `pages/`. `features/` isn't created
+  yet — no concrete feature to hang it on.
 - **API client** (`src/lib/api/client.js`) — reads `VITE_API_URL` from
   `frontend/.env` (defaults to `http://localhost:3000`; Vite only exposes
-  `VITE_`-prefixed vars to client code). No auth token is attached yet (no auth
-  module) — that's a single, clearly-commented extension point in that file once
-  one exists.
-- **TanStack Query** — `QueryClientProvider` lives in `src/app/providers.jsx`,
-  wrapping `<App>` in `main.jsx`. React Query Devtools are mounted in dev only.
-- **Forms** — `react-hook-form`, `zod`, and `@hookform/resolvers` are installed and
-  ready, but no form exists yet to wire them into.
+  `VITE_`-prefixed vars to client code). Sends `credentials: 'include'` so the
+  browser attaches the httpOnly session cookie; no token is ever handled in JS.
+- **Auth** — `useAuth()` (`src/lib/auth/use-auth.js`) gives `{ user, isAuthenticated,
+  isLoading, isError, isFetching, refetch, signIn, signUp, signOut }`, backed by a
+  `GET /auth/me` query. Public routes: `/sign-in`, `/sign-up` (wrapped in
+  `PublicOnlyRoute` — signed-in users go back to the originally requested in-app route
+  via `src/lib/auth/redirect-target.js`, else `/`) and `/sign-out`; everything else is
+  behind `ProtectedRoute` (redirects to `/sign-in`, then back to the requested route
+  after signing in). Only a 401 from `/auth/me` means signed out; any other failure
+  (500, network) makes `ProtectedRoute` show a "Couldn't reach the server" alert with a
+  Retry button instead of redirecting. A 401 from any other
+  query/mutation is handled centrally in `src/app/query-client.js` (user reset to
+  signed out, other cached queries dropped).
+- **TanStack Query** — `QueryClientProvider` (+ `AuthProvider`) lives in
+  `src/app/providers.jsx`, wrapping `<App>` in `main.jsx`. React Query Devtools are
+  mounted in dev only.
+- **Forms** — `react-hook-form` + `zod` (`@hookform/resolvers`), used by the sign-in
+  and sign-up pages; schemas in `src/lib/validation/auth-schemas.js`.
 
 ---
 

@@ -14,6 +14,13 @@ describe('Home', () => {
     expect(screen.queryByText('Checking backend…')).not.toBeInTheDocument()
   })
 
+  it('shows the signed-in user and a Sign out link to /sign-out', async () => {
+    renderWithProviders(<Home />)
+
+    expect(await screen.findByText('Signed in as ada@example.com')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Sign out' })).toHaveAttribute('href', '/sign-out')
+  })
+
   it('shows an error when the backend fails', async () => {
     server.use(http.get(apiUrl('/'), () => HttpResponse.json({ message: 'Down' }, { status: 503 })))
 
