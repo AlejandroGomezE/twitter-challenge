@@ -1,8 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ObserveModule } from './observe.js';
-import { AppController } from './app.controller.js';
-import { AppService } from './app.service.js';
 import { AuthModule } from './auth/auth.module.js';
 import configuration from './config/configuration.js';
 import { validate } from './config/environment.validation.js';
@@ -29,7 +27,5 @@ const { OBSERVE_APP_KEY, OBSERVE_APP_SECRET } = process.env;
         ]
       : []),
   ],
-  controllers: [AppController],
-  providers: [AppService],
 })
 export class AppModule {}
