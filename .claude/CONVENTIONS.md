@@ -83,3 +83,26 @@ A review (`/review-pr`, or the `reviewer` agent) reads the diff and reports; it 
 builds, tests, or migrations, and does **not** touch the branch (no checkout, merge, rebase, push,
 commit) unless explicitly asked to. The rules for what counts as a finding live in
 `review-contract.md` — this file only says a review doesn't execute or mutate by default.
+
+## 9. Commit messages
+
+Conventional-commit style, one line, imperative mood: `<type>(<slug>): <summary>`.
+
+| Type | For |
+|---|---|
+| `feat` | A new feature or capability |
+| `fix` | A bug fix |
+| `docs` | Documentation only |
+| `style` | Formatting only (whitespace, semicolons) — no logic change |
+| `refactor` | Rewrites code cleaner without adding a feature or fixing a bug |
+| `test` | Adds or updates tests |
+| `chore` | Maintenance — deps, build tools, and this flow's own feature-state bookkeeping |
+
+**Feature-state commits** (`features/<slug>/feature.md` and nothing else — §7 above) are always
+`chore(<slug>): <what happened>`, e.g. `chore(user-timeline): frame feature`,
+`chore(user-timeline): build complete`, `chore(user-timeline): closed`.
+
+**Product-code commits** (the actual diff, at Close) use whichever type genuinely describes the
+change — usually `feat` or `fix`; reach for `refactor`/`test`/`style`/`docs` only when that's really
+all the commit does. Pick the type from what the diff does, not by default. PR titles follow the same
+format.

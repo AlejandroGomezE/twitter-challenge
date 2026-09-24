@@ -57,7 +57,8 @@ happened), and ask for the verdict — **approve** or **iterate**.
 Any out-of-scope thing you notice while driving the feature goes under `## Follow-ups`, not fixed
 silently and not forgotten.
 
-Commit `features/<slug>/` only, push.
+Commit `features/<slug>/` only, push — `chore(<slug>): verified` if approved,
+`chore(<slug>): iterate — <short reason>` if not (`CONVENTIONS.md` §9).
 
 > Next: `/close-feature <slug>` (if approved) or back to `/implement <slug>` (if iterating).
 
