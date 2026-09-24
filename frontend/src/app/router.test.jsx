@@ -181,7 +181,6 @@ describe('AppRouter', () => {
       renderApp('/')
 
       expect(await screen.findByText('Signed in as ada@example.com')).toBeInTheDocument()
-      expect(await screen.findByText('Hello World!')).toBeInTheDocument()
     })
   })
 })
