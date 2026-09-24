@@ -62,6 +62,9 @@ next: /close-feature migrate-to-sqlite
   processes + a stale `dist/main` on :3000, 2 Vite servers). Addressed outside this feature by the
   new `scripts/down-be`/`scripts/down-fe` + `CONVENTIONS.md` §10, committed separately.
 
+## PRs
+- https://github.com/AlejandroGomezE/twitter-challenge/pull/1
+
 ## Log
 - 2026-09-24 · framed
 - 2026-09-24 · built — datasource swapped to SQLite (`@prisma/adapter-better-sqlite3`), a real
