@@ -76,7 +76,7 @@ Frontend:
 # Conventions for future modules
 
 Shapes to reuse once these get built, so they aren't reinvented per-module or
-re-litigated from scratch each session. None of this exists yet — see
+re-litigated from scratch each session. Only the auth shapes exist so far — see
 [[Backend architecture]] / [[Frontend architecture]] for current state.
 
 ## Backend — `common/` taxonomy
@@ -85,7 +85,7 @@ Only `common/filters/` exists today (`all-exceptions.filter.ts`). When something
 cross-cutting is actually needed, this is where it goes — don't invent a different
 home for it:
 
-* `decorators/` — custom param/method decorators (e.g. a future `@CurrentUser()`)
+* `decorators/` — custom param/method decorators (`@CurrentUser()` and `@Public()` live in `auth/`, next to the guard)
 * `exceptions/` — custom domain exceptions (thrown by services, caught by the global
   filter)
 * `filters/` — exception filters
@@ -93,7 +93,10 @@ home for it:
 * `interceptors/` — response shaping, logging, etc.
 * `pipes/` — custom validation/transformation pipes
 
-## Backend — auth module shape (provider not decided yet)
+## Backend — auth module shape
+
+> **Implemented** (email + password, own server-side sessions in an httpOnly cookie — no
+> third-party provider) in `backend/src/auth/`; see [[Backend architecture]].
 
 ```text
 auth/
@@ -106,8 +109,7 @@ auth/
 
 Prefer a single global guard (`APP_GUARD`) protecting every route by default, with an
 explicit `@Public()` decorator to opt individual routes out — don't gate routes
-one-by-one with per-controller guards. Which auth provider (Firebase, Clerk, roll your
-own JWT, etc.) is an open decision — don't assume one when this actually gets built.
+one-by-one with per-controller guards.
 
 ## Backend — generic domain module shape
 
@@ -124,7 +126,16 @@ modules/<name>/
 This is the same Controller → Service → Repository → ORM shape from above, just
 spelled out per-file for the first real module to copy.
 
+`dto/` holds both request DTOs (`class-validator`) and response DTOs (`@Expose()`
+whitelist, declared per handler with `@SerializeOptions({ type })`) — every endpoint
+that returns a body has a response DTO; a body without one is a 500 (fails closed; see
+[[Backend architecture]] → Responses).
+
 ## Frontend — auth context shape
+
+> **Implemented** (email + password, cookie sessions) in `frontend/src/lib/auth/` — without
+> `getAccessToken()`, since the httpOnly cookie leaves no token for JS; see
+> [[Frontend architecture]].
 
 ```typescript
 interface AuthContextValue {
@@ -138,8 +149,8 @@ interface AuthContextValue {
 ```
 
 Expose it through a `useAuth()` hook — components and `ProtectedRoute` consume the
-hook, never the context directly. `apiClient` (see [[Frontend architecture]]) attaches
-the token via `getAccessToken()` once this exists.
+hook, never the context directly. (As built, the session is an httpOnly cookie, so there's
+no `getAccessToken()` — `apiClient` just sends `credentials: 'include'`.)
 
 ## Frontend — routes checklist
 

@@ -49,29 +49,43 @@ description when they disagree.
 
 Nothing sensitive committed. `.env` files are gitignored — a value moved from one into source is a
 **Blocker**. A secret anywhere in the branch history (not just the final diff) is a **Blocker**;
-requires a history rewrite or squash-merge plus rotating the credential.
+PRs merge with a merge commit (every branch commit lands in `main`), so the fix is rewriting the
+branch history to drop it before merge, plus rotating the credential.
 
 ---
 
 ## §B. `backend/` — NestJS · Prisma
 
-- **Layering.** Controllers thin (bind, validate, call one service method, shape the response).
-  Services own business logic and are the only layer touching `PrismaService`. A controller reaching
-  into Prisma directly, or a service instantiated with `new` instead of injected, is a **Blocker**.
+- **Layering.** Controller → Service → Repository → Prisma (`knowledge/infra/code-quality.md`).
+  Controllers thin (bind, validate, call one service method, shape the response). Services own
+  business logic and call repositories. Repositories (`<name>.repository.ts`) are the **only** layer
+  injecting `PrismaService` — plain `@Injectable()` classes, no repository interface or injection
+  token, no business rules. A controller or service touching `PrismaService` directly, or anything
+  instantiated with `new` instead of injected, is a **Blocker**. A repository making business
+  decisions (validation, authorization, branching on domain rules) is a **Warning**.
 - **Registration.** A new provider/controller must be listed in its `@Module`; a new module must be
   imported by `app.module.ts`. Unregistered = fails at boot, not compile — **Blocker**.
 - **DTOs.** Request DTOs carry `class-validator` decorators on every field (a field with none accepts
   anything — **Blocker** on a new field). A handler with no concrete return type (`Promise<any>`) is a
   **Warning**.
+- **Response DTOs — every endpoint.** Every handler that returns a body returns a response DTO (a
+  class in the module's `dto/` with `@Expose()` on each emitted field) declared on the handler with
+  `@SerializeOptions({ type: XResponseDto })` and as its return type. The global
+  `ResponseSerializerInterceptor` (`src/app.setup.ts`) whitelists exposed fields and fails closed —
+  a body without a declared type is a 500 — so only exposed fields can leave the API. A handler returning a Prisma model/entity, a service-internal type, or an untyped plain object
+  is a **Blocker**, as is a response DTO exposing sensitive fields (`passwordHash`, token hashes,
+  internal flags). 204 endpoints return nothing. Follow the pattern documented in `app.setup.ts`.
 - **Prisma.** A change to `prisma/schema.prisma` needs `npx prisma generate` run and the generated
   client's output committed-ignored per `.gitignore` (it already is) — a schema change with no
-  regenerated client is a **Blocker**. Queries over user-owned data (once there's an auth model) must
-  scope by the current user — **Blocker** if they don't, once that model exists.
+  regenerated client is a **Blocker**. Queries over user-owned data must scope by the current user (`@CurrentUser()`
+  → service → repository `where: { userId }`) — **Blocker** if they don't. A new endpoint marked
+  `@Public()` that the task didn't call public is a **Blocker** (everything is gated by default).
 - **Errors.** Throw Nest's HTTP exceptions, not an ad-hoc `{ error }` with a 200 — **Blocker**. The
   global `AllExceptionsFilter` already normalizes the response shape; don't hand-roll another one.
 - **Declared-but-unused symbols** — always a **Blocker**, never a Nit.
-- **Tests.** New business logic in a service with no unit test is a **Warning**. Dependencies mocked
-  through `Test.createTestingModule`, never a real database in a unit spec — **Blocker** if it does.
+- **Tests.** New business logic in a service with no unit test is a **Warning**. Service specs mock the
+  repository (not `PrismaService`) through `Test.createTestingModule`; never a real database in a
+  unit spec — **Blocker** if it does.
 
 ## §C. `frontend/` — Vite · React · TanStack Query · shadcn
 
