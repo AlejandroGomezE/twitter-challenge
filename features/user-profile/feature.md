@@ -2,7 +2,7 @@
 slug: user-profile
 status: verifying
 scope: full-stack
-next: /review-feature user-profile
+next: /close-feature user-profile
 ---
 # Basic user profile (username, bio, avatar placeholder)
 
@@ -136,3 +136,5 @@ next: /review-feature user-profile
   lint/build green.
 - 2026-09-24 · built — sign-out race fixed (cancel in-flight `me`, redirect after signed-out state);
   race reproduced in a test that fails on the old code. FE 10 suites / 73.
+- 2026-09-24 · verified — all 8 acceptance criteria + must-not-break exercised against the running app
+  (curl on the API, headless Chrome 22/22 for the UI, both sign-out paths with one POST each).
