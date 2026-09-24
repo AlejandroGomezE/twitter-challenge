@@ -5,7 +5,7 @@ import { AppRouter } from '@/app/router'
 import { renderWithProviders } from '@/test/render'
 import { apiUrl, server } from '@/test/server'
 
-const ADA = { id: 'u1', email: 'ada@example.com' }
+const ADA = { id: 'u1', email: 'ada@example.com', username: 'ada' }
 const GOOD_PASSWORD = 'correct horse battery'
 
 const signedOut = () =>
@@ -30,8 +30,10 @@ async function renderSignUp() {
   return result
 }
 
-async function fillAndSubmit(user, { email, password, confirmPassword }) {
+// `username` defaults to a valid one so tests about other fields stay focused; pass '' to skip it.
+async function fillAndSubmit(user, { username = 'ada', email, password, confirmPassword }) {
   for (const [label, value] of [
+    ['Username', username],
     ['Email', email],
     ['Password', password],
     ['Confirm password', confirmPassword],
@@ -105,20 +107,80 @@ describe('SignUp', () => {
       expect(screen.getByLabelText('Password')).toHaveAttribute('aria-invalid', 'false')
       expect(requests).toHaveLength(0)
     })
+
+    it('requires a username', async () => {
+      const requests = mockSignUp()
+      const { user } = await renderSignUp()
+
+      await fillAndSubmit(user, {
+        username: '',
+        email: 'ada@example.com',
+        password: GOOD_PASSWORD,
+        confirmPassword: GOOD_PASSWORD,
+      })
+
+      expect(await screen.findByText('Username must be at least 3 characters')).toBeInTheDocument()
+      expect(screen.getByLabelText('Username')).toHaveAttribute('aria-invalid', 'true')
+      expect(requests).toHaveLength(0)
+    })
+
+    it.each([
+      ['ab', 'Username must be at least 3 characters'],
+      ['a'.repeat(21), 'Username must be at most 20 characters'],
+      ['ada lovelace', 'Only letters, numbers and underscores'],
+      ['ada-l', 'Only letters, numbers and underscores'],
+      ['Settings', "This username isn't available"],
+      [' ADMIN ', "This username isn't available"],
+    ])('rejects the username %j', async (username, message) => {
+      const requests = mockSignUp()
+      const { user } = await renderSignUp()
+
+      await fillAndSubmit(user, {
+        username,
+        email: 'ada@example.com',
+        password: GOOD_PASSWORD,
+        confirmPassword: GOOD_PASSWORD,
+      })
+
+      expect(await screen.findByText(message)).toBeInTheDocument()
+      const input = screen.getByLabelText('Username')
+      expect(input).toHaveAttribute('aria-invalid', 'true')
+      expect(input.getAttribute('aria-describedby')).toContain('sign-up-username-error')
+      expect(requests).toHaveLength(0)
+    })
   })
 
-  it('posts only { email, password } and lands on Home', async () => {
+  it('posts { email, password, username } (normalized, never confirmPassword) and lands on Home', async () => {
     const requests = mockSignUp()
     const { user } = await renderSignUp()
 
     await fillAndSubmit(user, {
+      username: '  Ada_Lovelace ',
       email: '  ada@example.com ',
       password: GOOD_PASSWORD,
       confirmPassword: GOOD_PASSWORD,
     })
 
     expect(await screen.findByText('Signed in as ada@example.com')).toBeInTheDocument()
-    expect(requests).toEqual([{ email: 'ada@example.com', password: GOOD_PASSWORD }])
+    expect(requests).toEqual([
+      { email: 'ada@example.com', password: GOOD_PASSWORD, username: 'ada_lovelace' },
+    ])
+  })
+
+  it('shows a 409 username-taken message as-is', async () => {
+    mockSignUp(() =>
+      HttpResponse.json({ message: 'Username is already taken', statusCode: 409 }, { status: 409 }),
+    )
+    const { user } = await renderSignUp()
+
+    await fillAndSubmit(user, {
+      email: 'ada@example.com',
+      password: GOOD_PASSWORD,
+      confirmPassword: GOOD_PASSWORD,
+    })
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Username is already taken')
+    expect(screen.getByRole('heading', { name: 'Create an account' })).toBeInTheDocument()
   })
 
   it('shows a 409 message as-is', async () => {

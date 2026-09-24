@@ -38,16 +38,26 @@ describe('App (e2e)', () => {
     }
   });
 
+  // A valid, unique username: `e2e_` + 12 hex chars (16 chars, within 3-20).
+  function uniqueUsername(): string {
+    return `e2e_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
+  }
+
   async function createUserWithSession(): Promise<{
     userId: string;
+    username: string;
     token: string;
   }> {
     const user = await app
       .get(UsersService)
-      .create(`e2e-${randomUUID()}@example.test`, 'correct-horse-battery');
+      .create(
+        `e2e-${randomUUID()}@example.test`,
+        uniqueUsername(),
+        'correct-horse-battery',
+      );
     createdUserIds.push(user.id);
     const { token } = await app.get(AuthService).createSession(user.id);
-    return { userId: user.id, token };
+    return { userId: user.id, username: user.username, token };
   }
 
   // GET /auth/me is the probe for the global guard: it's gated like every
@@ -108,18 +118,26 @@ describe('App (e2e)', () => {
         .slice(SESSION_COOKIE.length + 1);
     }
 
-    async function signUp(
-      email: string,
-      password = PASSWORD,
+    // Raw sign-up with an arbitrary body; tracks created users for cleanup.
+    async function signUpWith(
+      body: Record<string, unknown>,
     ): Promise<Response> {
       const res = await request(app.getHttpServer())
         .post('/auth/sign-up')
         .set('Origin', FRONTEND_ORIGIN)
-        .send({ email, password });
+        .send(body);
       if (res.status === 201) {
         createdUserIds.push((res.body as { id: string }).id);
       }
       return res;
+    }
+
+    function signUp(
+      email: string,
+      password = PASSWORD,
+      username = uniqueUsername(),
+    ): Promise<Response> {
+      return signUpWith({ email, username, password });
     }
 
     function signIn(email: string, password: string): request.Test {
@@ -129,13 +147,18 @@ describe('App (e2e)', () => {
         .send({ email, password });
     }
 
-    it('POST /auth/sign-up creates the user, sets the session cookie and returns only { id, email }', async () => {
+    it('POST /auth/sign-up creates the user, sets the session cookie and returns only { id, email, username }', async () => {
       const email = uniqueEmail();
-      const res = await signUp(email);
+      const username = uniqueUsername();
+      const res = await signUp(email, PASSWORD, username);
 
       expect(res.status).toBe(201);
-      expect(res.body).toEqual({ id: expect.any(String), email });
-      expect(Object.keys(res.body as object).sort()).toEqual(['email', 'id']);
+      expect(res.body).toEqual({ id: expect.any(String), email, username });
+      expect(Object.keys(res.body as object).sort()).toEqual([
+        'email',
+        'id',
+        'username',
+      ]);
 
       const cookie = sessionSetCookie(res);
       expect(sessionToken(res).length).toBeGreaterThan(0);
@@ -172,6 +195,62 @@ describe('App (e2e)', () => {
 
       const res = await signUp(`  ${email.toUpperCase()}  `);
       expect(res.status).toBe(409);
+      expect(res.body.message).toBe('Email is already registered');
+    });
+
+    it('POST /auth/sign-up without a username returns 400', async () => {
+      const res = await signUpWith({
+        email: uniqueEmail(),
+        password: PASSWORD,
+      });
+      expect(res.status).toBe(400);
+    });
+
+    it.each([
+      ['too short', 'ab'],
+      ['too long', 'a'.repeat(21)],
+      ['with a hyphen', 'bad-name'],
+      ['with a space', 'Bad Name'],
+      ['reserved', 'admin'],
+      ['reserved after normalization', ' ME '],
+    ])(
+      'POST /auth/sign-up rejects a username %s with 400',
+      async (_label, username) => {
+        const res = await signUp(uniqueEmail(), PASSWORD, username);
+        expect(res.status).toBe(400);
+      },
+    );
+
+    it('POST /auth/sign-up with a taken username (any case/whitespace) returns 409', async () => {
+      const username = uniqueUsername();
+      expect((await signUp(uniqueEmail(), PASSWORD, username)).status).toBe(
+        201,
+      );
+
+      const res = await signUp(
+        uniqueEmail(),
+        PASSWORD,
+        `  ${username.toUpperCase()} `,
+      );
+      expect(res.status).toBe(409);
+      expect(res.body.message).toBe('Username is already taken');
+    });
+
+    it('POST /auth/sign-up stores the username trimmed and lowercased', async () => {
+      // `  New_<HEX> ` -> `new_<hex>`; the hex suffix keeps it unique.
+      const suffix = uniqueUsername().slice(4);
+      const res = await signUp(
+        uniqueEmail(),
+        PASSWORD,
+        `  New_${suffix.toUpperCase()} `,
+      );
+
+      expect(res.status).toBe(201);
+      expect(res.body.username).toBe(`new_${suffix}`);
+      const row = await app.get(PrismaService).user.findUniqueOrThrow({
+        where: { id: (res.body as { id: string }).id },
+      });
+      expect(row.username).toBe(`new_${suffix}`);
     });
 
     it('POST /auth/sign-up rejects an invalid email and out-of-range passwords with 400', async () => {
@@ -182,12 +261,17 @@ describe('App (e2e)', () => {
 
     it('POST /auth/sign-in issues a fresh session; bad credentials fail identically', async () => {
       const email = uniqueEmail();
-      const signUpRes = await signUp(email);
+      const username = uniqueUsername();
+      const signUpRes = await signUp(email, PASSWORD, username);
       expect(signUpRes.status).toBe(201);
 
       const ok = await signIn(email, PASSWORD).expect(200);
-      expect(ok.body).toEqual({ id: expect.any(String), email });
-      expect(Object.keys(ok.body as object).sort()).toEqual(['email', 'id']);
+      expect(ok.body).toEqual({ id: expect.any(String), email, username });
+      expect(Object.keys(ok.body as object).sort()).toEqual([
+        'email',
+        'id',
+        'username',
+      ]);
       expect(sessionToken(ok)).not.toBe(sessionToken(signUpRes));
 
       const wrongPassword = await signIn(email, 'wrong-password-123').expect(
@@ -204,15 +288,20 @@ describe('App (e2e)', () => {
       await request(app.getHttpServer()).get('/auth/me').expect(401);
 
       const email = uniqueEmail();
-      const signUpRes = await signUp(email);
+      const username = uniqueUsername();
+      const signUpRes = await signUp(email, PASSWORD, username);
       const cookie = `${SESSION_COOKIE}=${sessionToken(signUpRes)}`;
 
       const me = await request(app.getHttpServer())
         .get('/auth/me')
         .set('Cookie', cookie)
         .expect(200);
-      expect(me.body).toEqual({ id: expect.any(String), email });
-      expect(Object.keys(me.body as object).sort()).toEqual(['email', 'id']);
+      expect(me.body).toEqual({ id: expect.any(String), email, username });
+      expect(Object.keys(me.body as object).sort()).toEqual([
+        'email',
+        'id',
+        'username',
+      ]);
 
       const signOut = await request(app.getHttpServer())
         .post('/auth/sign-out')
@@ -242,6 +331,7 @@ describe('App (e2e)', () => {
       const leakyUser = {
         id: 'user-1',
         email: 'leaky@example.test',
+        username: 'leaky',
         passwordHash: '$argon2id$secret',
         createdAt: new Date(),
       };
@@ -253,8 +343,16 @@ describe('App (e2e)', () => {
         .get('/auth/me')
         .set('Cookie', `${SESSION_COOKIE}=any-token`)
         .expect(200);
-      expect(res.body).toEqual({ id: 'user-1', email: 'leaky@example.test' });
-      expect(Object.keys(res.body as object).sort()).toEqual(['email', 'id']);
+      expect(res.body).toEqual({
+        id: 'user-1',
+        email: 'leaky@example.test',
+        username: 'leaky',
+      });
+      expect(Object.keys(res.body as object).sort()).toEqual([
+        'email',
+        'id',
+        'username',
+      ]);
     });
 
     it('POST /auth/sign-in from a foreign Origin returns 403', async () => {
@@ -278,6 +376,203 @@ describe('App (e2e)', () => {
         message: expect.any(String),
         timestamp: expect.any(String),
         path: '/auth/sign-in',
+      });
+    });
+  });
+
+  describe('users endpoints', () => {
+    const FRONTEND_ORIGIN = 'http://localhost:5173';
+
+    function cookieFor(token: string): string {
+      return `${SESSION_COOKIE}=${token}`;
+    }
+
+    function getProfile(username: string, token?: string): request.Test {
+      const req = request(app.getHttpServer()).get(
+        `/users/${encodeURIComponent(username)}`,
+      );
+      return token ? req.set('Cookie', cookieFor(token)) : req;
+    }
+
+    function patchMe(
+      body: Record<string, unknown>,
+      token?: string,
+      origin = FRONTEND_ORIGIN,
+    ): request.Test {
+      const req = request(app.getHttpServer())
+        .patch('/users/me')
+        .set('Origin', origin);
+      return (token ? req.set('Cookie', cookieFor(token)) : req).send(body);
+    }
+
+    describe('GET /users/:username', () => {
+      it('without a session returns 401', async () => {
+        const { username } = await createUserWithSession();
+        await getProfile(username).expect(401);
+      });
+
+      it("returns another user's public profile only: { username, bio, createdAt }", async () => {
+        const viewer = await createUserWithSession();
+        const target = await createUserWithSession();
+
+        const res = await getProfile(target.username, viewer.token).expect(200);
+        expect(Object.keys(res.body as object).sort()).toEqual([
+          'bio',
+          'createdAt',
+          'username',
+        ]);
+        expect(res.body).toEqual({
+          username: target.username,
+          bio: null,
+          createdAt: expect.any(String),
+        });
+        const createdAt = (res.body as { createdAt: string }).createdAt;
+        expect(new Date(createdAt).toISOString()).toBe(createdAt);
+      });
+
+      it('looks the username up case-insensitively', async () => {
+        const viewer = await createUserWithSession();
+        const target = await createUserWithSession();
+
+        const res = await getProfile(
+          target.username.toUpperCase(),
+          viewer.token,
+        ).expect(200);
+        expect(res.body.username).toBe(target.username);
+      });
+
+      it('an unknown username returns 404', async () => {
+        const viewer = await createUserWithSession();
+        const res = await getProfile(uniqueUsername(), viewer.token).expect(
+          404,
+        );
+        expect(res.body.message).toBe('User not found');
+      });
+
+      it('GET /users/me returns 404 (reserved, never a profile)', async () => {
+        const viewer = await createUserWithSession();
+        await getProfile('me', viewer.token).expect(404);
+      });
+    });
+
+    describe('PATCH /users/me', () => {
+      it('without a session returns 401', async () => {
+        await patchMe({ bio: 'hello' }).expect(401);
+      });
+
+      it('from a foreign Origin returns 403', async () => {
+        const me = await createUserWithSession();
+        await patchMe({ bio: 'hello' }, me.token, 'http://evil.test').expect(
+          403,
+        );
+      });
+
+      it("sets the bio, returns the caller's own profile and the change is visible to others", async () => {
+        const me = await createUserWithSession();
+        const viewer = await createUserWithSession();
+
+        const res = await patchMe({ bio: '  Hello there  ' }, me.token).expect(
+          200,
+        );
+        expect(Object.keys(res.body as object).sort()).toEqual([
+          'bio',
+          'createdAt',
+          'email',
+          'id',
+          'username',
+        ]);
+        expect(res.body).toEqual({
+          id: me.userId,
+          email: expect.any(String),
+          username: me.username,
+          bio: 'Hello there',
+          createdAt: expect.any(String),
+        });
+
+        const profile = await getProfile(me.username, viewer.token).expect(200);
+        expect(profile.body.bio).toBe('Hello there');
+      });
+
+      it('an empty bio clears it to null', async () => {
+        const me = await createUserWithSession();
+        await patchMe({ bio: 'something' }, me.token).expect(200);
+
+        const res = await patchMe({ bio: '' }, me.token).expect(200);
+        expect(res.body.bio).toBeNull();
+        const profile = await getProfile(me.username, me.token).expect(200);
+        expect(profile.body.bio).toBeNull();
+      });
+
+      it('a bio over 160 characters returns 400', async () => {
+        const me = await createUserWithSession();
+        await patchMe({ bio: 'a'.repeat(161) }, me.token).expect(400);
+      });
+
+      it('changes the username: the old one 404s, the new one resolves and /auth/me reflects it', async () => {
+        const me = await createUserWithSession();
+        const newUsername = uniqueUsername();
+
+        const res = await patchMe({ username: newUsername }, me.token).expect(
+          200,
+        );
+        expect(res.body.username).toBe(newUsername);
+
+        await getProfile(me.username, me.token).expect(404);
+        const profile = await getProfile(newUsername, me.token).expect(200);
+        expect(profile.body.username).toBe(newUsername);
+
+        const authMe = await request(app.getHttpServer())
+          .get('/auth/me')
+          .set('Cookie', cookieFor(me.token))
+          .expect(200);
+        expect(authMe.body.username).toBe(newUsername);
+      });
+
+      it('a username taken by someone else (any case) returns 409', async () => {
+        const me = await createUserWithSession();
+        const other = await createUserWithSession();
+
+        const res = await patchMe(
+          { username: other.username.toUpperCase() },
+          me.token,
+        ).expect(409);
+        expect(res.body.message).toBe('Username is already taken');
+      });
+
+      it('re-setting your own current username is a 200 no-op', async () => {
+        const me = await createUserWithSession();
+        const res = await patchMe({ username: me.username }, me.token).expect(
+          200,
+        );
+        expect(res.body.username).toBe(me.username);
+      });
+
+      it("only ever changes the caller's profile, even with another user's id in the body", async () => {
+        const me = await createUserWithSession();
+        const other = await createUserWithSession();
+
+        const res = await patchMe(
+          { id: other.userId, bio: 'x' },
+          me.token,
+        ).expect(200);
+        expect(res.body.id).toBe(me.userId);
+        expect(res.body.bio).toBe('x');
+
+        const otherProfile = await getProfile(other.username, me.token).expect(
+          200,
+        );
+        expect(otherProfile.body.bio).toBeNull();
+      });
+
+      it('strips unknown fields instead of rejecting them', async () => {
+        const me = await createUserWithSession();
+        const res = await patchMe(
+          { bio: 'hi', isAdmin: true, email: 'hijack@example.test' },
+          me.token,
+        ).expect(200);
+        expect(res.body.bio).toBe('hi');
+        expect(res.body.email).not.toBe('hijack@example.test');
+        expect(res.body).not.toHaveProperty('isAdmin');
       });
     });
   });

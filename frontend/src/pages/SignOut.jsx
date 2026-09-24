@@ -7,7 +7,7 @@ import { useAuth } from '@/lib/auth/use-auth'
 // The app's single sign-out path. Fires `signOut()` once on mount, then sends the user to /sign-in
 // whether the request succeeded or failed (AuthProvider clears local auth state either way).
 export function SignOut() {
-  const { signOut } = useAuth()
+  const { signOut, isAuthenticated } = useAuth()
   const { mutate, isSuccess, isError } = useMutation({ mutationFn: signOut })
   // StrictMode runs mount effects twice in development; the ref keeps it to one request.
   const startedRef = useRef(false)
@@ -18,7 +18,10 @@ export function SignOut() {
     mutate()
   }, [mutate])
 
-  if (isSuccess || isError) {
+  // Wait until AuthProvider has re-rendered with the signed-out user too: the mutation can settle a
+  // render before the `me` = null update reaches the context, and redirecting then would let
+  // PublicOnlyRoute see a stale signed-in user and bounce /sign-in → / → /sign-in.
+  if ((isSuccess || isError) && !isAuthenticated) {
     return <Navigate to="/sign-in" replace />
   }
 
