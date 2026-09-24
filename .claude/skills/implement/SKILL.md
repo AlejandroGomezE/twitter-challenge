@@ -71,8 +71,9 @@ satisfied.
 Once the task list is done and checks are green:
 1. Set `status: verifying` in `feature.md`, set `next: /review-feature <slug>`.
 2. Add a `## Log` line: `- <date> · built — <one line>`.
-3. Commit **only** `features/<slug>/` in this commit — product code changes get their own commit(s)
-   on the same branch, never bundled into the feature-state commit. Push.
+3. Commit **only** `features/<slug>/` as `chore(<slug>): build complete` (`CONVENTIONS.md` §9) —
+   product code stays uncommitted in the working tree; `/close-feature` makes the one product-code
+   commit. Push.
 
 > Next: `/review-feature <slug>`
 

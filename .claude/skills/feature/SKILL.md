@@ -99,8 +99,9 @@ Tell Alejandro the plan, in his language, and the next command:
 
 > Next: `/implement <slug>`
 
-Commit `features/<slug>/feature.md` (that path only — never `.claude/` or product code), push, and
-stop. The human advances — no auto-chaining into `/implement`.
+Commit `features/<slug>/feature.md` (that path only — never `.claude/` or product code) as
+`chore(<slug>): frame feature` (`CONVENTIONS.md` §9), push, and stop. The human advances — no
+auto-chaining into `/implement`.
 
 ---
 

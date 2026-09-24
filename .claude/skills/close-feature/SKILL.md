@@ -32,11 +32,15 @@ Run them until green — "N suites / M tests", not a bare number.
 
 ## Step 3. Commit and open the PR
 
+Pick the commit type from what the diff actually does (`CONVENTIONS.md` §9) — usually `feat` or
+`fix`; `refactor`/`test`/`docs`/`style` only when that's genuinely all it is. The PR title follows
+the same format.
+
 ```bash
 git add <changed files>            # never .env* or anything with a secret
-git commit -m "<slug>: <summary>"
+git commit -m "<type>(<slug>): <summary>"
 git push origin <branch>
-gh pr create --base main --title "<slug>: <summary>" \
+gh pr create --base main --title "<type>(<slug>): <summary>" \
   --body "<what changed · acceptance criteria met · test results>"
 ```
 
@@ -72,7 +76,7 @@ No auto-deploy is configured for this project (`ROADMAP.md`) — say so, don't d
 1. Tick any `## Follow-ups` items this closed, or leave them as open items — never silently drop one.
 2. Set `status: done`, `next: —` in `feature.md`.
 3. Add `## Log`: `- <date> · closed — PR #<n>, merged`.
-4. Commit `features/<slug>/` only, push.
+4. Commit `features/<slug>/` only as `chore(<slug>): closed` (`CONVENTIONS.md` §9), push.
 
 Tell Alejandro it's done. Stop.
 
