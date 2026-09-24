@@ -38,6 +38,7 @@ Avoid:
 
 I do not want:
 
+* You to write function(arg: string | undefined) prefer function(arg?: string) instead
 * Ports and adapters
 * Separate use case classes
 * Unnecessary repository interfaces
