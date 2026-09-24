@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getAvatarColor, getAvatarInitial } from './avatar-color'
+import { getAvatarColor, getAvatarInitial } from '../avatar-color'
 
 // Mirrors the (private) palette in avatar-color.js.
 const PALETTE = [

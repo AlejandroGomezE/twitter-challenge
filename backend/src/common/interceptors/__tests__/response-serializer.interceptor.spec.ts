@@ -8,7 +8,7 @@ import { Reflector } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
 import { Expose } from 'class-transformer';
 import { lastValueFrom, of } from 'rxjs';
-import { ResponseSerializerInterceptor } from './response-serializer.interceptor.js';
+import { ResponseSerializerInterceptor } from '../response-serializer.interceptor.js';
 
 class ItemResponseDto {
   @Expose()

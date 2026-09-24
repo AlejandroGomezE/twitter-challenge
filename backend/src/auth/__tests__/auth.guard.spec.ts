@@ -6,10 +6,10 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
-import { AuthGuard } from './auth.guard.js';
-import { AuthService } from './auth.service.js';
-import type { AuthenticatedRequest } from './authenticated-user.interface.js';
-import { Public } from './public.decorator.js';
+import { AuthGuard } from '../auth.guard.js';
+import { AuthService } from '../auth.service.js';
+import type { AuthenticatedRequest } from '../authenticated-user.interface.js';
+import { Public } from '../public.decorator.js';
 
 const FRONTEND_ORIGIN = 'http://localhost:5173';
 const USER = { id: 'user-1', email: 'user@example.test' };

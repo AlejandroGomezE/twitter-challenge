@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { getAvatarColor } from '@/lib/avatar-color'
-import { UserAvatar } from './UserAvatar'
+import { UserAvatar } from '../UserAvatar'
 
 const bgClassOf = (element) => [...element.classList].find((cls) => cls.startsWith('bg-'))
 

@@ -14,15 +14,15 @@ vi.mock('@prisma/adapter-better-sqlite3', () => ({
   },
 }));
 
-vi.mock('../generated/prisma/client.js', () => ({
+vi.mock('../../generated/prisma/client.js', () => ({
   PrismaClient: class {
     $disconnect = disconnect;
   },
 }));
 
-const { PrismaService } = await import('./prisma.service.js');
+const { PrismaService } = await import('../prisma.service.js');
 
-const PRISMA_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'prisma');
+const PRISMA_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'prisma');
 
 describe('PrismaService', () => {
   const originalUrl = process.env.DATABASE_URL;

@@ -3,10 +3,10 @@ import { Reflector } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
-import { UserResponseDto } from '../modules/users/dto/user-response.dto.js';
-import { AuthController } from './auth.controller.js';
-import { AuthService } from './auth.service.js';
-import { IS_PUBLIC_KEY } from './public.decorator.js';
+import { UserResponseDto } from '../../modules/users/dto/user-response.dto.js';
+import { AuthController } from '../auth.controller.js';
+import { AuthService } from '../auth.service.js';
+import { IS_PUBLIC_KEY } from '../public.decorator.js';
 
 // Metadata keys set by @SerializeOptions() and @UseGuards(). Nest does not
 // export them from the @nestjs/common entry point, so they are mirrored here

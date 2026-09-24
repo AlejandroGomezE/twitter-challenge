@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getRedirectTarget } from './redirect-target'
+import { getRedirectTarget } from '../redirect-target'
 
 describe('getRedirectTarget', () => {
   it('keeps an in-app path and its search', () => {

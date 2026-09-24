@@ -2,14 +2,14 @@ import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as argon2 from 'argon2';
 import { createHash } from 'node:crypto';
-import type { User } from '../generated/prisma/client.js';
+import type { User } from '../../generated/prisma/client.js';
 import {
   ARGON2_OPTIONS,
   UsersService,
-} from '../modules/users/users.service.js';
-import { AuthService } from './auth.service.js';
-import { SESSION_TTL_MS } from './session.constants.js';
-import { SessionsRepository } from './sessions.repository.js';
+} from '../../modules/users/users.service.js';
+import { AuthService } from '../auth.service.js';
+import { SESSION_TTL_MS } from '../session.constants.js';
+import { SessionsRepository } from '../sessions.repository.js';
 
 // The ESM namespace of `argon2` is not spy-able with vi.spyOn, so the module
 // is replaced by pass-through spies: real hashing/verification still runs,
