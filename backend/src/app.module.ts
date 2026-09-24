@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { ObserveModule } from './observe.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
+import { AuthModule } from './auth/auth.module.js';
 import configuration from './config/configuration.js';
 import { validate } from './config/environment.validation.js';
 import { PrismaModule } from './database/prisma.module.js';
@@ -17,6 +18,7 @@ const { OBSERVE_APP_KEY, OBSERVE_APP_SECRET } = process.env;
       validate,
     }),
     PrismaModule,
+    AuthModule,
     ...(OBSERVE_APP_KEY && OBSERVE_APP_SECRET
       ? [
           ObserveModule.forRoot({
