@@ -1,8 +1,8 @@
 ---
 slug: user-authentication
-status: framed
+status: verifying
 scope: full-stack
-next: /implement user-authentication
+next: /review-feature user-authentication
 ---
 # User authentication (email + password)
 
@@ -77,27 +77,27 @@ next: /implement user-authentication
   `:5173` → `:3000`).
 
 ## Tasks
-- [ ] Prisma: add `User` + `Session` models, `npx prisma db push` + `generate`.
-- [ ] Backend deps + bootstrap: `argon2`, `cookie-parser`, `helmet`, `@nestjs/throttler`; `main.ts`
+- [x] Prisma: add `User` + `Session` models, `npx prisma db push` + `generate`.
+- [x] Backend deps + bootstrap: `argon2`, `cookie-parser`, `helmet`, `@nestjs/throttler`; `main.ts`
   (helmet, cookie-parser, CORS allowlist w/ credentials); env vars `FRONTEND_ORIGIN` (default
   `http://localhost:5173`), `NODE_ENV` in `environment.validation.ts`/`configuration.ts`/
   `.env.example`.
-- [ ] `modules/users/`: `users.repository.ts` + `users.service.ts` (create with argon2id hash, find by
+- [x] `modules/users/`: `users.repository.ts` + `users.service.ts` (create with argon2id hash, find by
   email, find by id; never expose `passwordHash`).
-- [ ] `auth/` sessions: `sessions.repository.ts` + session create/validate/revoke in `auth.service.ts`
+- [x] `auth/` sessions: `sessions.repository.ts` + session create/validate/revoke in `auth.service.ts`
   (token generation, SHA-256 at rest, expiry), cookie helpers.
-- [ ] `auth/` endpoints: `auth.controller.ts` with sign-up/sign-in/sign-out/me, DTOs with
+- [x] `auth/` endpoints: `auth.controller.ts` with sign-up/sign-in/sign-out/me, DTOs with
   class-validator, generic sign-in error + dummy-hash timing guard, throttling on sign-up/sign-in.
-- [ ] `auth/` gating: global `AuthGuard` (`APP_GUARD`) + `@Public()` + `@CurrentUser()` + Origin
+- [x] `auth/` gating: global `AuthGuard` (`APP_GUARD`) + `@Public()` + `@CurrentUser()` + Origin
   check on state-changing requests; register in `app.module.ts`; update `test/app.e2e-spec.ts` to
   authenticate.
-- [ ] Frontend auth core: `apiClient` `credentials: 'include'`; `lib/auth/` `AuthProvider` +
+- [x] Frontend auth core: `apiClient` `credentials: 'include'`; `lib/auth/` `AuthProvider` +
   `useAuth()` (backed by a `['auth','me']` query, sign-in/sign-up/sign-out mutations);
   `routes/ProtectedRoute.jsx`; router with public `/sign-in`, `/sign-up`, `/sign-out` and everything
   else behind `ProtectedRoute`.
-- [ ] Frontend pages: `SignIn.jsx`, `SignUp.jsx` (react-hook-form + zod + shadcn `field`/`input`/
+- [x] Frontend pages: `SignIn.jsx`, `SignUp.jsx` (react-hook-form + zod + shadcn `field`/`input`/
   `button`/`card`), `SignOut.jsx`; Home shows the user's email + sign-out button.
-- [ ] Docs: Runbook (auth section, new env vars), backend/frontend architecture knowledge docs,
+- [x] Docs: Runbook (auth section, new env vars), backend/frontend architecture knowledge docs,
   ROADMAP.
 
 ## Decisions
@@ -117,11 +117,43 @@ next: /implement user-authentication
   agent were updated to match before Build.
 - 2026-09-24 · framed · `:5173` and `:3000` on `localhost` are the same *site*, so a `SameSite=Lax`
   cookie works in local dev without `SameSite=None`.
+- 2026-09-24 · building · Task 6 (guard) was built before task 5 (endpoints) so the controller
+  could use `@Public()`/`@CurrentUser()` directly instead of being rewritten.
+- 2026-09-24 · building · Additions beyond the task list, each reviewed: `backend/src/app.setup.ts`
+  (`configureApp`, shared by `main.ts` and e2e so e2e exercises the real HTTP pipeline);
+  `frontend/src/app/query-client.js` (`createQueryClient` with central 401 handling — on a
+  session-expired 401 it nulls `me` and drops all other cached queries);
+  `frontend/src/lib/auth/auth-error-message.js`; `ARGON2_OPTIONS` exported from `users.service.ts`
+  so the sign-in dummy hash uses identical params.
+- 2026-09-24 · building · Review-driven hardening: CORS origin passed as a one-element array (a
+  plain string made `cors` reflect the allowed origin to foreign origins too); `FRONTEND_ORIGIN`
+  must be an exact origin (no path/trailing slash) and fails boot with the formatted error; dummy
+  hash precomputed in `onModuleInit` (no first-request timing difference); sign-in redirect rejects
+  `//` and `/\` paths (no open redirect).
+- 2026-09-24 · building · Flow docs updated to match: `implementer` agent (auth exists, gated by
+  default, new frontend folders) and `review-contract.md` §B (queries scoped by current user; an
+  unrequested `@Public()` is a Blocker).
 
 ## Follow-ups
 - [x] ~~`review-contract.md` §B contradicted `knowledge/infra/code-quality.md` on where Prisma access
   lives~~ — fixed: repositories are the only layer injecting `PrismaService` (contract §B,
   `implementer` agent, backend-architecture doc).
 
+- `argon2`'s install script (`node-gyp-build`) is blocked by npm's install-scripts policy; it works
+  because a prebuilt binary exists for this platform (Windows x64). On a platform without one, run
+  `npm install-scripts approve argon2` in `backend/` (or add it to `allowScripts`).
+- For Close — tests still to write: `AuthService` unit spec (call `onModuleInit()` before
+  `signIn`, since the dummy hash is computed there); `UsersService` spec (argon2id params, P2002 →
+  409, `toPublicUser` never includes `passwordHash`); frontend `*.test.jsx` for `SignIn` (incl. the
+  `from` redirect guard), `SignUp` (validation, 409/429 messages), `SignOut` (redirects on success
+  AND failure — reviewer noted `signOut` clears the mutation cache while that mutation is in
+  flight; confirm it still settles), `ProtectedRoute`/`PublicOnlyRoute`, `AuthProvider`, and the
+  401 handling in `query-client.js`. Already covered: `auth.guard.spec.ts` (13) + e2e (11).
+- `knowledge/infra/code-quality.md` still describes auth shapes as guidance; they now point to the
+  architecture docs. Fine as-is.
+
 ## Log
 - 2026-09-24 · framed
+- 2026-09-24 · built — email+password auth end to end: argon2id users, hashed cookie sessions,
+  global guard + `@Public()`, Origin/CSRF check, 5/min/IP throttling, helmet + CORS allowlist; React
+  auth context, gated routes, sign-in/up/out pages. BE 19 unit + 11 e2e, FE 9 tests, lint/build green.
