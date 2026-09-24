@@ -1,8 +1,8 @@
 ---
 slug: user-profile
-status: verifying
+status: building
 scope: full-stack
-next: /review-feature user-profile
+next: /implement user-profile
 ---
 # Basic user profile (username, bio, avatar placeholder)
 
@@ -75,7 +75,12 @@ next: /review-feature user-profile
 - [x] Frontend edit page: `EditProfile.jsx` at `/settings/profile` (react-hook-form + zod, bio
   counter, server errors, cache updates, navigate to new profile URL).
 - [x] Docs: Runbook (new endpoints, db reset note), backend/frontend architecture docs.
-
+- [ ] Verify fix (Alejandro): sign-out race. On a fresh page load of `/sign-out`, the in-flight
+  `GET /auth/me` (sent before the sign-out request) resolves 200 after `signOut` set me to `null`,
+  restoring the user in the cache → `/sign-in` bounces to `/` showing the user as signed in, while
+  the server session is already revoked. Also `POST /auth/sign-out` fires twice (both paths).
+  Fix: cancel in-flight `['auth','me']` queries before clearing, so a late response can't restore
+  the user; single sign-out request. Add a test that reproduces the race.
 ## Decisions
 - 2026-09-24 · framed · Username required at sign-up (Alejandro) — no half-finished accounts, no
   onboarding step.
@@ -103,6 +108,10 @@ next: /review-feature user-profile
 - 2026-09-24 · building · Prisma 7 + better-sqlite3 reports the colliding unique field under
   `meta.driverAdapterError.cause.constraint.fields` (no `meta.target`); `UsersService` reads that,
   then `meta.target`, then falls back to an email lookup to pick the 409 message.
+- 2026-09-24 · verify · 21/22 checks passed against the running app; failed must-not-break: direct
+  load of `/sign-out` leaves the UI signed in (me-refetch race; server session is revoked). Surfaced
+  now because the removed `GET /` health check on Home used to 401 and reset the state. Clicking
+  "Sign out" in-app works. Iterating (Alejandro).
 
 ## Follow-ups
 - `frontend-architecture.md`'s `hooks/` comment lists only `use-profile.js` (also has the stock
