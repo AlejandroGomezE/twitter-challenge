@@ -2,7 +2,7 @@
 slug: social-feed-ui
 status: verifying
 scope: frontend
-next: /review-feature social-feed-ui
+next: /close-feature social-feed-ui
 ---
 # Social feed UI (migrated from the "Pulse" prototype, branded "The Flock Twitter")
 
@@ -103,7 +103,7 @@ rebuild it with our tools (Vite + React JSX, react-router, TanStack Query, shadc
   instead of Pulse's `text-background`, which was ~2.7:1 on the amber tint.
 - 2026-09-24 · building · Auth pages share a new `AuthLayout` (centering + BrandMark + name +
   per-page `document.title`, restored on unmount) and `BrandMark` (also used by SideNav). AuthLayout
-  sign-off: **pending Alejandro** (thin composition, no new primitive). Close: test its title
+  sign-off: **approved by Alejandro** (2026-09-24, at Verify). Close: test its title
   set/restore.
 - 2026-09-24 · building · Home tabs use Pulse's markup with real tab semantics instead of shadcn
   `Tabs`: Radix triggers activate on focus/mousedown, which `ComingSoon` can't block for the disabled
@@ -113,6 +113,8 @@ rebuild it with our tools (Vite + React JSX, react-router, TanStack Query, shadc
   `size="lg"|"sm"` together with a `size-*` class loses: shadcn Avatar's `data-[size=lg]:size-10`
   (class + attribute) out-ranks the class (reviewer caught a 40px profile avatar; fixed there and in
   RightRail).
+- 2026-09-24 · verify · Home's header trailing slot shows "created by Alejandro Gomez" instead of the
+  Sparkles icon — Alejandro's own edit after the build commit; kept.
 
 ## Follow-ups
 - [ ] **Posts (next feature):** create and list posts end to end — `Post` model + `POST /posts`
@@ -128,9 +130,13 @@ rebuild it with our tools (Vite + React JSX, react-router, TanStack Query, shadc
 - [ ] (open, minor) Disabled "Coming soon" items only explain themselves via a hover/focus tooltip;
   on touch screens a tap shows nothing (they're just muted). Consider a tap-to-toggle tooltip or a
   visible "Soon" hint on mobile. Also `RightRail.jsx`: the search icon isn't dimmed with its input.
+- [ ] (open, dev only) The TanStack Query devtools bubble covers the mobile bottom bar's Sign out
+  icon in dev; move it (`buttonPosition`) or hide it on small screens. Not in production builds.
 
 ## Log
 - 2026-09-24 · framed
 - 2026-09-24 · built — Pulse theme (light + OS dark), app shell (side/mobile nav, right rail,
   "Coming soon" items), Home feed (tabs, disabled composer, empty state), Pulse profile + edit
   layouts, branded auth pages, docs. FE 17 suites / 194, build + lint green.
+- 2026-09-24 · verified — all 7 acceptance criteria + must-not-break in headless Chrome at 1400 /
+  1100 / 390 px, light and OS-dark (37/37); AuthLayout and the Pulse UI approved by Alejandro.
