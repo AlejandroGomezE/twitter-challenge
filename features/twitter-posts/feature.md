@@ -1,8 +1,8 @@
 ---
 slug: twitter-posts
-status: framed
+status: verifying
 scope: full-stack
-next: /implement twitter-posts
+next: /review-feature twitter-posts
 ---
 # Posts: create, delete, feed, profile posts, likes, post detail + comments
 
@@ -76,26 +76,26 @@ next: /implement twitter-posts
   `e2e.db`.
 
 ## Tasks
-- [ ] Prisma: `Post`, `Like`, `Comment` with indexes and cascades; `db push` (dev) + `generate`.
-- [ ] Backend posts core: `modules/posts` repository/service/controller; create, get, delete (own
+- [x] Prisma: `Post`, `Like`, `Comment` with indexes and cascades; `db push` (dev) + `generate`.
+- [x] Backend posts core: `modules/posts` repository/service/controller; create, get, delete (own
   only); body rules (code-point length); cursor helper; response DTOs (nested author) through the
   fail-closed serializer; post throttling.
-- [ ] Backend listings: `GET /feed` (author set = me + followed, one extension point), `GET
+- [x] Backend listings: `GET /feed` (author set = me + followed, one extension point), `GET
   /users/:username/posts`, `postCount` on the profile response; `likeCount`/`commentCount`/
   `likedByMe` computed without N+1 queries.
-- [ ] Backend likes: idempotent like/unlike endpoints returning `{ liked, likeCount }`.
-- [ ] Backend comments: list (oldest first, paged), create (throttled), delete own.
-- [ ] Backend e2e: every endpoint and rule above (incl. 403s, pagination boundaries, idempotency,
+- [x] Backend likes: idempotent like/unlike endpoints returning `{ liked, likeCount }`.
+- [x] Backend comments: list (oldest first, paged), create (throttled), delete own.
+- [x] Backend e2e: every endpoint and rule above (incl. 403s, pagination boundaries, idempotency,
   cascades, code-point length).
-- [ ] Frontend data layer + PostCard: `lib/api/posts.js` + hooks (infinite queries, mutations with
+- [x] Frontend data layer + PostCard: `lib/api/posts.js` + hooks (infinite queries, mutations with
   cache updates, optimistic like), `PostCard` (Pulse layout: avatar, @username → profile, relative
   time, body, action row: comments → detail, like toggle + count; repost/bookmark/share disabled
   "Coming soon"; own-post "…" menu → Delete with `AlertDialog`), whole card clickable to detail.
-- [ ] Frontend feed + composer: enable `Composer` (counter, validation, submit, errors, shortcut),
+- [x] Frontend feed + composer: enable `Composer` (counter, validation, submit, errors, shortcut),
   Home feed with infinite scroll + "Load more" + states; "New post" buttons → Home + focus composer.
-- [ ] Frontend profile posts + detail: Profile Posts tab + post count; `PostDetail` page (post,
+- [x] Frontend profile posts + detail: Profile Posts tab + post count; `PostDetail` page (post,
   comment composer, comments list, delete own comment), canonical-URL redirect, not-found; router.
-- [ ] Docs: Runbook (endpoints, rules), backend + frontend architecture, UI inventory.
+- [x] Docs: Runbook (endpoints, rules), backend + frontend architecture, UI inventory.
 
 ## Decisions
 - 2026-09-24 · framed · Feed = your posts + followed users' posts (Alejandro). No follows yet, so
@@ -117,11 +117,57 @@ next: /implement twitter-posts
   pulling — no dev-DB reset this time.
 - 2026-09-24 · framed · Rate limits on writes (posts 10/min, comments 20/min per user) reuse the
   throttler pattern from auth; likes aren't throttled (idempotent, cheap).
+- 2026-09-24 · building · `Post` also has `@@index([createdAt])`: unused while the feed's author set
+  is just you, but it lets SQLite walk time order once follows make the author list large.
+  `Comment.authorId` is deliberately unindexed (no query filters by it; only a user-delete cascade
+  scans it).
+- 2026-09-24 · building · Throttling: one global ThrottlerModule with two named throttlers
+  (`src/auth/throttlers.ts`) — `auth` (5/min per IP, only when there's no session user, i.e. the
+  @Public sign-in/up routes; AuthGuard never sets `req.user` there, so a signed-in caller can't skip
+  it) and `user` (keyed `user:<id>`, per-route limits via `@Throttle`). Rejected (400) requests count.
+- 2026-09-24 · building · Nested response DTOs need `@Type(() => …)`: without it
+  `excludeExtraneousValues` copies the nested object whole (the author's email/passwordHash leaked in
+  a probe). Guarded by `posts/dto/__tests__/post-response.dto.spec.ts` through the real interceptor.
+- 2026-09-24 · building · The Pulse prototype (`temp/`) was removed from disk after the UI migration;
+  PostCard follows this spec and the already-ported Pulse styling.
+- 2026-09-24 · building · The feed's author set lives only in `PostsService.feedAuthorIds(viewerId)`
+  (`[viewerId]` today) — the follows feature extends it there. `GET /users/:username/posts` is owned by
+  `UsersController`; `UsersModule` → `PostsModule` one way (no cycle). An empty `cursor=` is a 400: the
+  frontend omits the param for the first page.
+- 2026-09-24 · building · Cache races: every write after a server change goes through
+  `writeAfterServerChange` (cancel in-flight fetches of the touched queries → write → restart cancelled
+  first loads); optimistic likes cancel loaded fetches first. Like bursts roll back to the last
+  server-confirmed state by click order. Trade-off: an in-flight "load more" is cancelled by a write
+  and re-requested on the next scroll. Keyboard "open post" = the timestamp link; the card click is a
+  mouse shortcut. Close: tests for the first-load restart branch and the comment write paths.
+- 2026-09-24 · building · Composer counts the trimmed body in code points (matches the backend),
+  no `maxLength` (UTF-16) so over-limit is visible; textarea `readOnly` while posting; Cmd/Ctrl+Enter
+  ignored during IME composition. `InfiniteListFooter` arms its IntersectionObserver only while the
+  query is idle, unobserves on fire and re-observes when `fetchNextPage` resolves — so a background
+  refetch can't stall scroll-loading. "New post" → Home via `state.focusComposer`. Like bursts are
+  reset on sign-out.
+- 2026-09-24 · building · PostDetail's Back only goes back when the app itself pushed the entry
+  behind it (`lib/navigation-history.js` + `NavigationDepthTracker`: PUSH +1, REPLACE same, POP keeps,
+  unknown → 0); otherwise it goes to the author's profile. Redirects (sign-in return, canonical URL)
+  can never make Back leave the app; after a reload it conservatively goes to the profile.
+- 2026-09-24 · building · A reply posted while older comment pages aren't loaded shows "Reply posted.
+  Load more comments to see it." (the cache only appends when the list is fully loaded).
+- 2026-09-24 · building · New shared components outside the plan: `CharacterCounter`,
+  `PostListSkeleton` — sign-off **pending Alejandro**. Close: tighten the navigation-history
+  idempotency test (it can't currently distinguish depth 1 from 2).
 
 ## Follow-ups
 - [ ] **Follows (next feature):** follow/unfollow, add followed authors to the feed's author set,
   enable the "Following" tab and "Who to follow", follower/following counts.
 - [ ] Reposts, bookmarks and share on post cards stay disabled ("Coming soon").
+- [ ] (open, app-wide — Alejandro to decide) The global `ValidationPipe` has
+  `enableImplicitConversion`, so a JSON number in a string field is coerced before `@IsString()` runs
+  (`POST /posts { body: 123 }` → 201 with body "123"). Affects every DTO. Either drop implicit
+  conversion (and add explicit `@Type(() => Number)` where query numbers need it) or accept it.
 
 ## Log
 - 2026-09-24 · framed
+- 2026-09-24 · built — posts (create/delete own, 280 code points), feed (you + followed, keyset
+  pagination, infinite scroll), profile posts + postCount, likes (idempotent, optimistic, race-safe),
+  post detail + flat comments; per-user rate limits; docs. BE 24 suites / 254 unit + 92 e2e,
+  FE 30 suites / 315, build/lint/tsc green.
