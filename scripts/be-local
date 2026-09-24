@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Run the NestJS backend locally (foreground, with logs): npm run start:dev.
+# Port defaults to 3000 (backend/src/main.ts); set PORT in backend/.env to override.
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BACKEND_DIR="$REPO_ROOT/backend"
+
+[ -d "$BACKEND_DIR" ] || { echo "backend/ not found at $BACKEND_DIR" >&2; exit 1; }
+[ -d "$BACKEND_DIR/node_modules" ] || echo "! backend/node_modules missing — run: (cd backend && npm install)" >&2
+
+port="$(grep -E '^PORT=' "$BACKEND_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+port="${port:-3000}"
+
+echo "Starting backend — npm run start:dev (port :${port})"
+if grep -qE '^OBSERVE_APP_KEY=.+' "$BACKEND_DIR/.env" 2>/dev/null \
+  && grep -qE '^OBSERVE_APP_SECRET=.+' "$BACKEND_DIR/.env" 2>/dev/null; then
+  echo "Observe APM enabled (OBSERVE_APP_KEY/OBSERVE_APP_SECRET set in backend/.env)."
+else
+  echo "Observe APM disabled (OBSERVE_APP_KEY/OBSERVE_APP_SECRET blank or missing — optional, see backend/.env.example)."
+fi
+echo
+cd "$BACKEND_DIR"
+exec npm run start:dev
