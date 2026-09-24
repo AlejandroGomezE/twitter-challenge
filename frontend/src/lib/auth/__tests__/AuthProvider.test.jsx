@@ -4,8 +4,8 @@ import { renderHook, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { renderWithProviders } from '@/test/render'
 import { apiUrl, server } from '@/test/server'
-import { AUTH_ME_QUERY_KEY } from './auth-context'
-import { useAuth } from './use-auth'
+import { AUTH_ME_QUERY_KEY } from '../auth-context'
+import { useAuth } from '../use-auth'
 
 const CREDENTIALS = { email: 'ada@example.com', password: 'correct horse battery' }
 

@@ -9,7 +9,7 @@ import {
   RESERVED_USERNAMES,
   USERNAME_MAX_LENGTH,
   USERNAME_MIN_LENGTH,
-} from './username.rules.js';
+} from '../username.rules.js';
 
 class RequiredUsernameDto {
   @IsUsername()

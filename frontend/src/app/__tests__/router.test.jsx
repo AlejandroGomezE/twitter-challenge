@@ -4,7 +4,7 @@ import { useLocation } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import { renderWithProviders } from '@/test/render'
 import { apiUrl, server } from '@/test/server'
-import { AppRouter } from './router'
+import { AppRouter } from '../router'
 
 function LocationDisplay() {
   const location = useLocation()

@@ -1,5 +1,5 @@
 import { instanceToPlain, plainToInstance } from 'class-transformer';
-import { UserResponseDto } from './user-response.dto.js';
+import { UserResponseDto } from '../user-response.dto.js';
 
 describe('UserResponseDto', () => {
   it('drops every field that is not @Expose()d', () => {

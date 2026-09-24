@@ -1,9 +1,9 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as argon2 from 'argon2';
-import { Prisma, type User } from '../../generated/prisma/client.js';
-import { UsersRepository } from './users.repository.js';
-import { UsersService } from './users.service.js';
+import { Prisma, type User } from '../../../generated/prisma/client.js';
+import { UsersRepository } from '../users.repository.js';
+import { UsersService } from '../users.service.js';
 
 const PASSWORD = 'correct horse battery staple';
 const CREATED_AT = new Date('2026-01-01T00:00:00Z');
