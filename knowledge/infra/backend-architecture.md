@@ -230,6 +230,16 @@ exact-match allowlist of one origin (never `*`); any other origin gets no
 initializes when both `OBSERVE_APP_KEY` and `OBSERVE_APP_SECRET` are set to a
 non-empty value in `backend/.env`; see the Config section above.
 
+## Tests
+
+Unit specs (`*.spec.ts`, Vitest) live in a `__tests__/` folder next to the code they cover —
+`src/auth/__tests__/auth.service.spec.ts`, `src/modules/users/dto/__tests__/…` — never loose
+beside the source file, so a module's folder lists only its code. They import the code under test
+with `../`. Service specs mock the repository through `Test.createTestingModule`; no real database
+in a unit spec. E2e (`test/app.e2e-spec.ts`, `npm run test:e2e`) boots the real `AppModule` through
+`configureApp` against the local SQLite DB. `tsconfig.build.json` excludes `**/*spec.ts`, so
+nothing under `__tests__/` reaches `dist/`.
+
 ## Open questions
 
 - `oxlint.json` currently turns `@typescript-eslint/no-explicit-any` **off**, while
