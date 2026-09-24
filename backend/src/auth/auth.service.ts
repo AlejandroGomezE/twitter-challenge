@@ -47,9 +47,14 @@ export class AuthService implements OnModuleInit {
     );
   }
 
-  // Throws 409 (from UsersService) when the email is already registered.
-  async signUp(email: string, password: string): Promise<AuthResult> {
-    const user = await this.usersService.create(email, password);
+  // Throws 409 (from UsersService) when the email is already registered or
+  // the username is already taken.
+  async signUp(
+    email: string,
+    username: string,
+    password: string,
+  ): Promise<AuthResult> {
+    const user = await this.usersService.create(email, username, password);
     const session = await this.createSession(user.id);
     return { user, session };
   }

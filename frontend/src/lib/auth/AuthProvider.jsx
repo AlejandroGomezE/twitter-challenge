@@ -53,9 +53,16 @@ export function AuthProvider({ children }) {
   )
 
   const signOut = useCallback(async () => {
+    // An in-flight `GET /auth/me` (e.g. the one sent on a fresh page load of /sign-out) was
+    // authorised by the session being revoked; if it resolved after we mark the user signed out it
+    // would write the user back into the cache. Cancel it before the request and again after (a
+    // refetch may have started meanwhile), so only the `null` below can land.
+    const cancelMe = () => queryClient.cancelQueries({ queryKey: AUTH_ME_QUERY_KEY, exact: true })
+    await cancelMe()
     try {
       await apiClient.post('/auth/sign-out')
     } finally {
+      await cancelMe()
       // Mark the user as signed out, then drop every other cached query/mutation so no signed-in
       // data survives. The `me` query itself is kept (not removed) because AuthProvider observes it.
       queryClient.setQueryData(AUTH_ME_QUERY_KEY, null)

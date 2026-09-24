@@ -13,6 +13,9 @@ datasource db {
 model User {
   id           String    @id @default(cuid())
   email        String    @unique
+  // Stored already lowercased by the app, so @unique is effectively case-insensitive.
+  username     String    @unique
+  bio          String?
   passwordHash String
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt

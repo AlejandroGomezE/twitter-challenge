@@ -1,4 +1,6 @@
+import { EditProfile } from '@/pages/EditProfile';
 import { Home } from '@/pages/Home';
+import { Profile } from '@/pages/Profile';
 import { SignIn } from '@/pages/SignIn';
 import { SignOut } from '@/pages/SignOut';
 import { SignUp } from '@/pages/SignUp';
@@ -16,6 +18,8 @@ export function AppRouter() {
       <Route path="/sign-out" element={<SignOut />} />
       <Route element={<ProtectedRoute />}>
         <Route path="/" element={<Home />} />
+        <Route path="/u/:username" element={<Profile />} />
+        <Route path="/settings/profile" element={<EditProfile />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

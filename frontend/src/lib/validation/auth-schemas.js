@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { usernameSchema } from '@/lib/validation/profile-schemas'
 
 // Client-side mirrors of the backend's auth DTO rules. The backend stays the source of truth.
 
@@ -19,6 +20,7 @@ export const signInSchema = z.object({
 
 export const signUpSchema = z
   .object({
+    username: usernameSchema,
     email,
     password: z
       .string()

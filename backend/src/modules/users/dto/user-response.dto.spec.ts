@@ -9,6 +9,8 @@ describe('UserResponseDto', () => {
     const row = {
       id: 'user-1',
       email: 'user@example.test',
+      username: 'someone',
+      bio: 'hello',
       passwordHash: '$argon2id$secret',
       createdAt: new Date(),
     };
@@ -18,7 +20,11 @@ describe('UserResponseDto', () => {
       options,
     );
 
-    expect(plain).toEqual({ id: 'user-1', email: 'user@example.test' });
-    expect(Object.keys(plain).sort()).toEqual(['email', 'id']);
+    expect(plain).toEqual({
+      id: 'user-1',
+      email: 'user@example.test',
+      username: 'someone',
+    });
+    expect(Object.keys(plain).sort()).toEqual(['email', 'id', 'username']);
   });
 });

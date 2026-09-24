@@ -14,10 +14,15 @@ import { IS_PUBLIC_KEY } from './public.decorator.js';
 const SERIALIZE_OPTIONS_KEY = 'class_serializer:options';
 const GUARDS_KEY = '__guards__';
 
-const USER = { id: 'user-1', email: 'user@example.test' };
+const USER = {
+  id: 'user-1',
+  email: 'user@example.test',
+  username: 'someone',
+};
 const TOKEN = 'session-token';
 const EXPIRES_AT = new Date('2026-06-08T12:00:00.000Z');
 const CREDENTIALS = { email: 'user@example.test', password: 'password123' };
+const SIGN_UP = { ...CREDENTIALS, username: 'someone' };
 
 function makeResponse(): Response & {
   cookie: ReturnType<typeof vi.fn>;
@@ -95,17 +100,19 @@ describe('AuthController', () => {
   ] as const)('%s', (name, serviceMethod) => {
     const call = (res: Response) =>
       name === 'signUp'
-        ? controller.signUp(CREDENTIALS, res)
+        ? controller.signUp(SIGN_UP, res)
         : controller.signIn(CREDENTIALS, res);
 
     it('calls the service with the credentials and returns the user', async () => {
       const res = makeResponse();
 
       await expect(call(res)).resolves.toEqual(USER);
-      expect(serviceMethod).toHaveBeenCalledWith(
-        CREDENTIALS.email,
-        CREDENTIALS.password,
-      );
+      // Sign-up also passes the username, between email and password.
+      const expectedArgs =
+        name === 'signUp'
+          ? [SIGN_UP.email, SIGN_UP.username, SIGN_UP.password]
+          : [CREDENTIALS.email, CREDENTIALS.password];
+      expect(serviceMethod).toHaveBeenCalledWith(...expectedArgs);
     });
 
     it('sets a non-secure httpOnly session cookie in development', async () => {
