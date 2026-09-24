@@ -1,8 +1,8 @@
 ---
 slug: social-feed-ui
-status: verifying
+status: done
 scope: frontend
-next: /close-feature social-feed-ui
+next: —
 ---
 # Social feed UI (migrated from the "Pulse" prototype, branded "The Flock Twitter")
 
@@ -146,3 +146,4 @@ rebuild it with our tools (Vite + React JSX, react-router, TanStack Query, shadc
   layouts, branded auth pages, docs. FE 17 suites / 194, build + lint green.
 - 2026-09-24 · verified — all 7 acceptance criteria + must-not-break in headless Chrome at 1400 /
   1100 / 390 px, light and OS-dark (37/37); AuthLayout and the Pulse UI approved by Alejandro.
+- 2026-09-24 · closed — PR #7, merged (merge commit `8663e87`)
