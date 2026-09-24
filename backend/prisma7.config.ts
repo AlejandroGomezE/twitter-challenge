@@ -2,6 +2,28 @@
 // npm install --save-dev prisma dotenv
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+// A relative `file:` SQLite DATABASE_URL has no inherent anchor, and the CLI
+// (this config) is invoked from whatever directory the command happens to
+// run in. To make sure `prisma generate`/`db push`/`migrate`/etc. always
+// target the same physical database file as the app's runtime
+// PrismaService (see src/database/prisma.service.ts, which does the same
+// resolution relative to its own module location), we anchor relative paths
+// to this config file's own directory — backend/ — rather than
+// process.cwd().
+function resolveSqliteUrl(url?: string): string | undefined {
+  if (!url) {
+    return url;
+  }
+  const rawPath = url.replace(/^file:/, "");
+  if (rawPath === ":memory:" || path.isAbsolute(rawPath)) {
+    return url;
+  }
+  const backendDir = path.dirname(fileURLToPath(import.meta.url));
+  return `file:${path.resolve(backendDir, "prisma", rawPath)}`;
+}
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
@@ -9,6 +31,6 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    url: resolveSqliteUrl(process.env["DATABASE_URL"]),
   },
 });
