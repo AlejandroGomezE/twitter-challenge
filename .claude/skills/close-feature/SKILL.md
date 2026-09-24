@@ -25,8 +25,13 @@ Not a full coverage sweep — just what this change actually touched:
 
 - **`backend/`** — a unit spec for the changed service/logic, at
   `backend/src/<module>/*.spec.ts`, dependencies mocked (no real database in a unit spec).
-- **`frontend/`** — `npm run build` + `npm run lint`. No test runner installed yet
-  (`ROADMAP.md`) — don't write a test file against nothing.
+- **`frontend/`** — a colocated `*.test.jsx`/`*.test.js` next to each changed page, component or
+  hook (`src/pages/Home.test.jsx` is the reference). Render with `renderWithProviders` from
+  `src/test/render.jsx`, query by role/text, drive interactions with its `user`. Fake the backend
+  with MSW (`server.use(http.get(apiUrl('/path'), …))` from `src/test/server.js`) — never mock
+  `apiClient`/`fetch`, never hit a real backend. Cover the states the change has
+  (loading/error/empty/success). shadcn primitives in `src/components/ui/*` aren't tested. Then
+  `npm test` + `npm run build` + `npm run lint`.
 
 Run them until green — "N suites / M tests", not a bare number.
 

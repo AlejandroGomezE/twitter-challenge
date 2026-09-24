@@ -55,8 +55,9 @@ For each task still unchecked in `## Tasks` (a few independent ones may run in p
 ## Step 4. Build & checks
 
 - **`backend/`:** `npm run build` (stop on errors), then `npm test`. Report as "N suites / M tests".
-- **`frontend/`:** `npm run build`, then `npm run lint`. There's no test runner yet
-  (`ROADMAP.md`) — don't write one against nothing.
+- **`frontend/`:** `npm run build`, then `npm test`, then `npm run lint`. Report tests as "N suites /
+  M tests". If a change breaks an existing test, fix the code or update the test deliberately — say
+  which. New tests for the touched surface are written at Close (`/close-feature` Step 2).
 
 Report failures; don't silently work around them — let Alejandro steer.
 

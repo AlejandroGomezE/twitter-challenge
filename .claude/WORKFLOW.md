@@ -22,7 +22,7 @@ Frame  →  Build  →  Verify  →  Close
 | **Frame** | `/feature <name>` | Confirm the slug and a one-paragraph scope, quickly check it doesn't already exist, write `features/<slug>/feature.md` with a short plan (touched surface + acceptance criteria). |
 | **Build** | `/implement <slug>` | Break the plan into a small task list; `implementer` ⇄ `reviewer` loop per task until each is done. You direct by iteration — you don't need to read every diff. |
 | **Verify** | `/review-feature <slug>` | Run the app for real (`scripts/be-local` / `scripts/fe-local`) and check the acceptance criteria against the running app, then stop it (`scripts/down-be` / `scripts/down-fe`). Loop back to Build if something's wrong. |
-| **Close** | `/close-feature <slug>` | Write/run the tests the change actually needs, open the PR, run a `review-pr` pass, merge with your explicit go-ahead, and stop any dev servers left running (`scripts/down-be` + `scripts/down-fe`). |
+| **Close** | `/close-feature <slug>` | Write/run the tests the change actually needs (backend specs and frontend `*.test.jsx`), open the PR, run a `review-pr` pass, merge with your explicit go-ahead, and stop any dev servers left running (`scripts/down-be` + `scripts/down-fe`). |
 
 The loop that matters is **Verify → Build**: you don't advance linearly, you go back and iterate until
 it's actually right.

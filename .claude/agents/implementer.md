@@ -79,8 +79,11 @@ See `knowledge/infra/frontend-architecture.md` and
   say so in your output rather than treating it as auto-approved.
 - **Path alias `@/*`** resolves to `src/*` (`jsconfig.json` + `vite.config.js`).
 - **This is a plain JS project** — no TypeScript, no `.tsx`/`.ts` files.
-- **Verify:** `npm run build` and `npm run lint`, from `frontend/`. No test runner exists yet — don't
-  write a test file against nothing.
+- **Tests:** Vitest + React Testing Library + MSW (`npm test`). Tests are colocated `*.test.jsx` next
+  to the file; render with `renderWithProviders` (`src/test/render.jsx`), fake the API with MSW
+  handlers (`src/test/server.js`) — never mock `apiClient`/`fetch`. Write/update a test when the
+  task asks for one or when your change breaks an existing one.
+- **Verify:** `npm run build`, `npm test` and `npm run lint`, from `frontend/`.
 
 ---
 
