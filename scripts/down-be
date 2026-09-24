@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Stop the backend started by scripts/be-local (or any npm/nest/node process running out of backend/).
+# Kills the whole process tree, then checks the port (PORT in backend/.env, default 3000) is free.
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BACKEND_DIR="$REPO_ROOT/backend"
+# shellcheck source=lib/stop-dev.sh
+. "$REPO_ROOT/scripts/lib/stop-dev.sh"
+
+port="$(grep -E '^PORT=' "$BACKEND_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+port="${port:-3000}"
+
+stop_dev backend "$BACKEND_DIR" "$port"

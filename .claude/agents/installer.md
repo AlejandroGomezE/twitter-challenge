@@ -46,7 +46,7 @@ go through GitHub via `gh`. No other required MCP server or external service.
    | **`gh`** | winget: `winget install GitHub.cli`. macOS: `brew install gh`. Then `gh auth login` (interactive) and verify with `gh auth status`. |
    | **git identity** | Propose `git config --global user.name/user.email` with values the user gives you — never guess an email. |
    | **`backend/.env`** | Copy from `backend/.env.example` (it exists, unlike a repo with secrets and no template) — `PORT` and the optional Observe APM keys are documented there. Safe to generate; never overwrite an existing one. |
-   | **Postgres** | Only needed once a feature actually queries the database — the app boots fine without it (Prisma connects lazily). Don't install it speculatively; if a feature needs it, that's its own decision (Docker Compose vs. native install — ask which). |
+   | **Database** | Nothing to install — it's a local SQLite file (`backend/prisma/dev.db`, git-ignored). If it's missing, run `npx prisma db push` from `backend/`; the app boots without it anyway. Never install Postgres. |
 
 3. Propose the command(s), explain, **wait for confirmation**, then run.
 4. Verify by re-running the check.

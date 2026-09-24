@@ -40,6 +40,10 @@ Walk the checklist:
 Record what passed/failed as you go. Don't fix anything here — Verify observes and reports; fixes
 happen back in `/implement`.
 
+When you're done driving it, **tear it down**: `scripts/down-be` / `scripts/down-fe` (whichever you
+started), and check they report the port free (`CONVENTIONS.md` §10). Don't leave servers running
+while you wait for the verdict.
+
 ## Step 3. Present findings
 
 Tell Alejandro, in his language: what passed, what didn't (each with what you expected vs. what

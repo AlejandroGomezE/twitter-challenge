@@ -22,6 +22,8 @@ their own.
 | Check the whole environment | `scripts/check-env` |
 | Run the **backend** locally (`:3000`) | `scripts/be-local` |
 | Run the **frontend** locally (`:5173`) | `scripts/fe-local` |
+| Stop the **backend** (incl. orphaned watchers) | `scripts/down-be` |
+| Stop the **frontend** | `scripts/down-fe` |
 
 ---
 
@@ -35,6 +37,12 @@ their own.
   back to **3000**.
 - **`scripts/fe-local`** — `npm run dev` in `frontend/` (foreground, Vite dev server,
   default port **5173** — Vite picks the next free port if it's taken).
+- **`scripts/down-be`** / **`scripts/down-fe`** — stop everything `be-local` / `fe-local`
+  (or a plain `npm run start:dev` / `npm run dev`) left behind: every `node` process whose
+  command line points into `backend/` / `frontend/`, killed with its whole process tree
+  (`nest --watch` watchers, Vite's esbuild service), then checks the port (`PORT` from
+  `backend/.env` or 3000 / 5173) is free. Anything else holding the port is reported, not
+  killed. Safe to run when nothing is up. Shared logic lives in `scripts/lib/stop-dev.sh`.
 
 ---
 

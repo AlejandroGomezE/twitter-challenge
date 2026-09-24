@@ -106,3 +106,13 @@ Conventional-commit style, one line, imperative mood: `<type>(<slug>): <summary>
 change — usually `feat` or `fix`; reach for `refactor`/`test`/`style`/`docs` only when that's really
 all the commit does. Pick the type from what the diff does, not by default. PR titles follow the same
 format.
+
+## 10. Dev servers — leave nothing running
+
+Any phase that starts the app (`scripts/be-local`, `scripts/fe-local`, `npm run start:dev`, a
+background `npm run dev`, …) stops it before handing off: run `scripts/down-be` and/or
+`scripts/down-fe` as the phase's last step, and confirm they report the port free. They kill every
+`node` process running out of `backend/` / `frontend/` (whole process tree, incl. `nest --watch`
+watchers and Vite's esbuild), so they're safe to run even when nothing is up. Something else holding
+the port is reported, never killed — tell Alejandro. `/close-feature` runs both unconditionally, so a
+finished feature never leaves orphaned servers behind.
