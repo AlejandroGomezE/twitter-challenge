@@ -88,15 +88,16 @@ requires a history rewrite or squash-merge plus rotating the credential.
   in source — **Warning**.
 - **Console/dead code.** `console.log` left in shipped code — **Warning** (`console.error`/`warn` on a
   real failure path is fine). An exported component/hook never referenced — **Warning**.
-- **No frontend test framework exists yet** — do not ask for one (see `ROADMAP.md`). Coverage today is
-  the build + a manual/browser check; note which flow needs manual verification instead of asking for
-  a test file against a runner that isn't there.
+- **Tests.** Vitest + React Testing Library + MSW. A new or changed page/component/hook with no
+  colocated `*.test.jsx` covering the change is a **Warning** (same bar as a backend service without
+  a spec). A test that mocks `apiClient`/`fetch` instead of using MSW handlers (`src/test/server.js`),
+  or that hits a real backend, is a **Blocker**. Tests for shadcn primitives in `src/components/ui/*`
+  are not expected.
 
 ---
 
 ## §D. Known non-findings
 
-- Asking for a frontend unit/component test (§C — no runner installed).
 - A DTO without `@ApiProperty` — this project has no Swagger/OpenAPI generation set up, so there's no
   contract-inference plugin to satisfy either way. Don't invent a requirement for tooling that doesn't
   exist here.

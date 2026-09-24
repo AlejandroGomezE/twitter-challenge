@@ -169,6 +169,6 @@ How the "Configure" list above maps onto the actual two apps — see
 * **Import aliases** — `@/*` → `frontend/src/*` (both `frontend/vite.config.js` and
   `frontend/jsconfig.json`). No alias configured on the backend yet (relative imports
   only).
-* **Tests** — backend: Vitest (`npm test`, `test:cov`, `test:e2e`). Frontend: no test
-  runner installed yet — nothing to configure until a component/feature exists to
-  test.
+* **Tests** — backend: Vitest (`npm test`, `test:cov`, `test:e2e`). Frontend: Vitest
+  + jsdom + React Testing Library + MSW (`npm test`, `test:watch`, `test:cov`) —
+  colocated `*.test.jsx`, API faked with MSW handlers, never by mocking `apiClient`.

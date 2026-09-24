@@ -99,6 +99,13 @@ shadcn/ui (Radix base, Nova preset), and `react-router` for client-side routing.
   production build).
 - **Build**: `build` (`vite build`).
 - **Lint**: `lint` (`eslint .`).
+- **Test**: `test` (`vitest run`), `test:watch`, `test:cov`. Vitest + jsdom + React
+  Testing Library, config in `vite.config.js`'s `test` block. Tests are colocated
+  `src/**/*.test.{js,jsx}`. Shared helpers live in `src/test/`: `setup.js`
+  (jest-dom matchers, MSW lifecycle), `server.js` (MSW server + default handlers;
+  `VITE_API_URL` is pinned to `http://api.test` in tests, build URLs with
+  `apiUrl()`), `render.jsx` (`renderWithProviders` — fresh QueryClient +
+  MemoryRouter). Unhandled requests fail the test.
 - **Structure** (`src/`): `app/` (`App.jsx`, `router.jsx`, `providers.jsx`),
   `components/ui/` (shadcn), `hooks/`, `lib/api/` (HTTP client), `pages/`.
   `features/`, `lib/auth/`, `lib/validation/`, and `routes/` (a `ProtectedRoute`)

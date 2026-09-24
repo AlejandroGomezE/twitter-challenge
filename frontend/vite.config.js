@@ -11,4 +11,12 @@ export default defineConfig({
       '@': path.resolve(import.meta.dirname, './src'),
     },
   },
+  // https://vitest.dev/config/
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.js'],
+    include: ['src/**/*.test.{js,jsx}'],
+    // Pin the API base URL so MSW handlers (src/test/server.js) match regardless of frontend/.env.
+    env: { VITE_API_URL: 'http://api.test' },
+  },
 })

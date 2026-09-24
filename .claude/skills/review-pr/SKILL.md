@@ -46,7 +46,7 @@ verdict for the whole PR.
 ## Step 4. Execution — only if asked
 
 If (and only if) explicitly asked to run something: `npm run build`/`test` in `backend/`,
-`npm run build`/`lint` in `frontend/`. Report "N suites / M tests", not a bare number.
+`npm run build`/`test`/`lint` in `frontend/`. Report "N suites / M tests", not a bare number.
 
 ## Step 5. Act
 

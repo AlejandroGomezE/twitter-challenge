@@ -28,7 +28,8 @@ frontend/src/
 │   ├── auth/           # not created yet — no auth module exists
 │   └── validation/     # not created yet — no form exists yet
 ├── pages/
-└── routes/             # not created yet — holds ProtectedRoute once auth exists
+├── routes/             # not created yet — holds ProtectedRoute once auth exists
+└── test/               # shared test helpers — setup.js, server.js (MSW), render.jsx
 ```
 
 Each feature, once one exists, should follow:
@@ -84,11 +85,23 @@ state, Zod for the schema and validation messages, a resolver from
 build out once one does — that guidance lives there rather than here so it isn't lost
 when this doc is re-verified against current state.
 
+## Tests
+
+Vitest + jsdom + React Testing Library + MSW (`npm test`; config in `vite.config.js`'s
+`test` block). Tests are colocated next to the file they cover (`Home.jsx` →
+`Home.test.jsx`). Render through `renderWithProviders` (`src/test/render.jsx` — fresh
+`QueryClient` with no retries, plus a `MemoryRouter`) and fake the backend with MSW
+handlers from `src/test/server.js` (`server.use(http.get(apiUrl('/path'), …))`) —
+never mock `apiClient` or `fetch`, so the real client (URL building, JSON parsing,
+`ApiError`) is exercised. Unhandled requests fail the test. `src/components/ui/*`
+(shadcn) isn't tested. Reference tests: `src/pages/Home.test.jsx`,
+`src/lib/api/client.test.js`.
+
 ## Current state vs. this doc
 
 **Implemented:** `app/` (`App.jsx`, `router.jsx`, `providers.jsx`), `components/ui/`
 (shadcn, see [[UI component inventory]]), `hooks/`, `lib/api/client.js`, `lib/utils.js`,
-`pages/Home.jsx` — a real `useQuery` call against the backend's `GET /`, used to prove
+`test/` (Vitest + RTL + MSW helpers), `pages/Home.jsx` — a real `useQuery` call against the backend's `GET /`, used to prove
 the whole chain (API client → TanStack Query → CORS → backend) actually works.
 
 **Not implemented, intentionally:** `components/layout/`, `features/`, `lib/auth/`,
