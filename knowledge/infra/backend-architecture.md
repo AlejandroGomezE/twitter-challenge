@@ -237,7 +237,11 @@ Unit specs (`*.spec.ts`, Vitest) live in a `__tests__/` folder next to the code 
 beside the source file, so a module's folder lists only its code. They import the code under test
 with `../`. Service specs mock the repository through `Test.createTestingModule`; no real database
 in a unit spec. E2e (`test/app.e2e-spec.ts`, `npm run test:e2e`) boots the real `AppModule` through
-`configureApp` against the local SQLite DB. `tsconfig.build.json` excludes `**/*spec.ts`, so
+`configureApp` against a dedicated SQLite file, `prisma/e2e.db` (git-ignored), never the dev DB:
+`vitest.config.e2e.ts` sets `DATABASE_URL` (from `test/e2e-database.ts`) — it wins over `.env`,
+since dotenv/`@nestjs/config` don't override an already-set variable — and `test/global-setup.ts`
+deletes the file and recreates it with a plain `prisma db push` before each run, then deletes it
+afterwards. A guard test asserts the connected file is `e2e.db`. `tsconfig.build.json` excludes `**/*spec.ts`, so
 nothing under `__tests__/` reaches `dist/`.
 
 ## Open questions

@@ -131,7 +131,9 @@ from `backend/.env` (create it from `backend/.env.example`; it's git-ignored).
   `start:debug`, `start:prod` (runs the compiled `dist/`).
 - **Test**: `test` (Vitest unit), `test:watch`, `test:cov` (coverage), `test:debug`,
   `test:e2e` (`vitest.config.e2e.ts`). Unit specs live in a `__tests__/` folder next to the code
-  they cover (`src/auth/__tests__/auth.service.spec.ts`); e2e lives in `test/`.
+  they cover (`src/auth/__tests__/auth.service.spec.ts`); e2e lives in `test/` and runs against its
+  own SQLite file, `prisma/e2e.db` (git-ignored), rebuilt from the schema at the start of every run
+  and deleted after — it never touches `prisma/dev.db`.
 - **Build**: `build` (`nest build`), `deploy` (`nest deploy`, via `@nestjs/mau`).
 - **Lint/format**: `lint` (`oxlint src/ test/`), `format` (`prettier --write`).
 
