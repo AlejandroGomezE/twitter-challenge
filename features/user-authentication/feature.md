@@ -2,7 +2,7 @@
 slug: user-authentication
 status: verifying
 scope: full-stack
-next: /review-feature user-authentication
+next: /close-feature user-authentication
 ---
 # User authentication (email + password)
 
@@ -177,3 +177,5 @@ next: /review-feature user-authentication
 - 2026-09-24 · built — response serialization added on Alejandro's request: response DTOs on every
   endpoint, fail-closed whitelist interceptor, flow docs require it. BE 23 unit + 12 e2e, FE 9 tests,
   lint/build green.
+- 2026-09-24 · verified — all 9 acceptance criteria exercised against the running app (curl on the
+  API, headless Chrome for the UI: 19/19 UI checks, argon2id/SHA-256/expiry confirmed in the DB).
