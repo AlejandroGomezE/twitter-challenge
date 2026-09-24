@@ -127,7 +127,7 @@ next: —
   §B/§C, the `implementer` agent, `/close-feature` Step 2, and the architecture docs.
 - [ ] (open) Every JSON request sends `Content-Type: application/json`, so even body-less `POST /auth/sign-out`
   triggers a CORS preflight. Harmless; `apiClient` could omit the header without a body.
-- [ ] (open, from the PR review) The e2e suite runs against the dev DB (`backend/prisma/dev.db`); it
+- [x] (done on branch `e2e-test-database`) The e2e suite runs against the dev DB (`backend/prisma/dev.db`); it
   cleans up after itself, but a dedicated test DB (e.g. `DATABASE_URL=file:./e2e.db` + `db push` in
   the e2e setup) would keep dev data out of reach.
 
