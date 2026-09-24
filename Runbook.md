@@ -51,14 +51,21 @@ from `backend/.env` (create it from `backend/.env.example`; it's git-ignored).
   registers itself in `src/app.module.ts` when **both** are set to a non-empty
   value, so leaving them blank is a normal, supported way to run without APM).
 - **Database**: Prisma (`prisma/schema.prisma`, config in `prisma7.config.ts`),
-  driver-adapter based (Prisma 7 requires one — `@prisma/adapter-pg` + `pg`, wired
-  in `src/database/prisma.service.ts`). **No Postgres is provisioned yet** —
-  `PrismaService` doesn't eagerly `$connect()`, so the app boots fine without a
-  reachable database; it'll only fail once a real domain module issues a query.
-  `DATABASE_URL` still has to be a syntactically valid Postgres URL (see
-  `.env.example`) because Prisma validates it at construction time, but it doesn't
-  need to be reachable. Regenerate the client after schema changes:
-  `npx prisma generate` (run from `backend/`).
+  driver-adapter based (Prisma 7 requires one — `@prisma/adapter-better-sqlite3` +
+  `better-sqlite3`, wired in `src/database/prisma.service.ts`). SQLite is a local
+  file, not a server — `DATABASE_URL` in `.env`/`.env.example` is a `file:` URL
+  (default `file:./dev.db`), not a Postgres connection string. The database
+  already exists as a real local file at `backend/prisma/dev.db`, created by
+  running `npx prisma db push` (from `backend/`); it's git-ignored
+  (`.gitignore`'s `/prisma/*.db*`), so each developer creates their own local
+  copy the same way. Both `src/database/prisma.service.ts` and
+  `prisma7.config.ts` explicitly resolve a relative SQLite path anchored to
+  their own module's location (not `process.cwd()`) — this was a deliberate fix
+  for a real divergence bug found during implementation, so the CLI
+  (`prisma generate`/`db push`) and the running app always agree on the same
+  physical file regardless of the directory a command is invoked from.
+  Regenerate the client after schema changes: `npx prisma generate` (run from
+  `backend/`).
 - **Config**: `@nestjs/config` (`ConfigModule.forRoot({ isGlobal: true, ... })` in
   `app.module.ts`), loading `src/config/configuration.ts` and validating through
   `src/config/environment.validation.ts`.
