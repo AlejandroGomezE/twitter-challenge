@@ -107,6 +107,11 @@ next: /review-feature user-profile
 ## Follow-ups
 - `frontend-architecture.md`'s `hooks/` comment lists only `use-profile.js` (also has the stock
   `use-mobile.js`) — incomplete, not wrong.
+- [ ] (next, separate refactor after this feature closes — Alejandro) Move unit tests into a
+  `__tests__/` folder per module/feature folder, backend AND frontend (e.g. `auth/__tests__/`,
+  `modules/users/__tests__/`, `modules/users/dto/__tests__/`, `pages/__tests__/`,
+  `lib/auth/__tests__/`); e2e stays in `backend/test/`. Make it a rule in `review-contract.md`
+  §B/§C, the `implementer` agent, `/close-feature` Step 2, and the architecture docs.
 
 ## Log
 - 2026-09-24 · framed
