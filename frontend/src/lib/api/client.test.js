@@ -5,7 +5,9 @@ import { ApiError, apiClient } from './client'
 
 describe('apiClient', () => {
   it('returns the parsed JSON body', async () => {
-    await expect(apiClient.get('/')).resolves.toEqual({ message: 'Hello World!' })
+    server.use(http.get(apiUrl('/thing'), () => HttpResponse.json({ id: 't1' })))
+
+    await expect(apiClient.get('/thing')).resolves.toEqual({ id: 't1' })
   })
 
   it('sends a JSON body on POST', async () => {
