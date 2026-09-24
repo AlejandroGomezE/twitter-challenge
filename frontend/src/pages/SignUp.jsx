@@ -23,19 +23,23 @@ export function SignUp() {
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(signUpSchema),
-    defaultValues: { email: '', password: '', confirmPassword: '' },
+    defaultValues: { username: '', email: '', password: '', confirmPassword: '' },
   })
 
-  // `confirmPassword` is client-only; the API takes just the credentials.
-  const onSubmit = async ({ email, password }) => {
+  // `confirmPassword` is client-only; the API takes just the credentials and the username.
+  const onSubmit = async ({ email, password, username }) => {
     setServerError(null)
     try {
-      await signUp({ email, password })
+      await signUp({ email, password, username })
       navigate('/', { replace: true })
     } catch (error) {
       setServerError(getAuthErrorMessage(error))
     }
   }
+
+  const usernameDescribedBy = errors.username
+    ? 'sign-up-username-hint sign-up-username-error'
+    : 'sign-up-username-hint'
 
   const passwordDescribedBy = errors.password
     ? 'sign-up-password-hint sign-up-password-error'
@@ -57,6 +61,23 @@ export function SignUp() {
                   <AlertDescription>{serverError}</AlertDescription>
                 </Alert>
               )}
+              <Field data-invalid={Boolean(errors.username)}>
+                <FieldLabel htmlFor="sign-up-username">Username</FieldLabel>
+                <Input
+                  id="sign-up-username"
+                  type="text"
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  aria-invalid={Boolean(errors.username)}
+                  aria-describedby={usernameDescribedBy}
+                  {...register('username')}
+                />
+                <FieldDescription id="sign-up-username-hint">
+                  3–20 characters: letters, numbers, underscores.
+                </FieldDescription>
+                <FieldError id="sign-up-username-error" errors={[errors.username]} />
+              </Field>
               <Field data-invalid={Boolean(errors.email)}>
                 <FieldLabel htmlFor="sign-up-email">Email</FieldLabel>
                 <Input

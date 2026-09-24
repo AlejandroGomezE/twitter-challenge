@@ -22,7 +22,11 @@ vi.mock('argon2', async (importOriginal) => {
 });
 
 const PASSWORD = 'correct horse battery staple';
-const PUBLIC_USER = { id: 'user-1', email: 'user@example.test' };
+const PUBLIC_USER = {
+  id: 'user-1',
+  email: 'user@example.test',
+  username: 'someone',
+};
 const NOW = new Date('2026-06-01T12:00:00.000Z');
 
 function sha256(value: string): string {
@@ -32,6 +36,7 @@ function sha256(value: string): string {
 function makeUser(passwordHash: string): User {
   return {
     ...PUBLIC_USER,
+    bio: null,
     passwordHash,
     createdAt: NOW,
     updatedAt: NOW,
@@ -45,7 +50,11 @@ describe('AuthService', () => {
   const usersService = {
     create: vi.fn(),
     findByEmail: vi.fn(),
-    toPublicUser: vi.fn((user: User) => ({ id: user.id, email: user.email })),
+    toPublicUser: vi.fn((user: User) => ({
+      id: user.id,
+      email: user.email,
+      username: user.username,
+    })),
   };
   const sessionsRepository = {
     create: vi.fn(),
@@ -173,7 +182,7 @@ describe('AuthService', () => {
       },
     );
 
-    it('returns only { id, email } for a valid session', async () => {
+    it('returns only { id, email, username } for a valid session', async () => {
       vi.useFakeTimers({ toFake: ['Date'] });
       vi.setSystemTime(NOW);
       sessionsRepository.findByTokenHash.mockResolvedValue({
@@ -184,7 +193,11 @@ describe('AuthService', () => {
       const result = await service.validateSession('tok');
 
       expect(result).toEqual(PUBLIC_USER);
-      expect(Object.keys(result ?? {}).sort()).toEqual(['email', 'id']);
+      expect(Object.keys(result ?? {}).sort()).toEqual([
+        'email',
+        'id',
+        'username',
+      ]);
       expect(sessionsRepository.deleteByTokenHash).not.toHaveBeenCalled();
     });
   });
@@ -209,10 +222,15 @@ describe('AuthService', () => {
     it('creates the user, then a session for it', async () => {
       usersService.create.mockResolvedValue(PUBLIC_USER);
 
-      const result = await service.signUp('user@example.test', PASSWORD);
+      const result = await service.signUp(
+        'user@example.test',
+        'someone',
+        PASSWORD,
+      );
 
       expect(usersService.create).toHaveBeenCalledWith(
         'user@example.test',
+        'someone',
         PASSWORD,
       );
       expect(result.user).toEqual(PUBLIC_USER);
@@ -229,7 +247,7 @@ describe('AuthService', () => {
       );
 
       await expect(
-        service.signUp('user@example.test', PASSWORD),
+        service.signUp('user@example.test', 'someone', PASSWORD),
       ).rejects.toBeInstanceOf(ConflictException);
       expect(sessionsRepository.create).not.toHaveBeenCalled();
     });
@@ -242,13 +260,17 @@ describe('AuthService', () => {
       vi.mocked(argon2.verify).mockClear();
     });
 
-    it('returns a fresh session and only { id, email } on success', async () => {
+    it('returns a fresh session and only { id, email, username } on success', async () => {
       usersService.findByEmail.mockResolvedValue(makeUser(storedHash));
 
       const result = await service.signIn('user@example.test', PASSWORD);
 
       expect(result.user).toEqual(PUBLIC_USER);
-      expect(Object.keys(result.user).sort()).toEqual(['email', 'id']);
+      expect(Object.keys(result.user).sort()).toEqual([
+        'email',
+        'id',
+        'username',
+      ]);
       expect(result.session.token).toMatch(/^[A-Za-z0-9_-]{43}$/);
       expect(sessionsRepository.create).toHaveBeenCalledTimes(1);
       expect(sessionsRepository.create.mock.calls[0][0].tokenHash).toBe(

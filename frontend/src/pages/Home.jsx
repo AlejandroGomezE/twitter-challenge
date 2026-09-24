@@ -19,7 +19,16 @@ export function Home() {
           </CardAction>
         </CardHeader>
         <CardContent>
-          {user && <p className="text-muted-foreground">Signed in as {user.email}</p>}
+          {user && (
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-muted-foreground">Signed in as {user.email}</p>
+              {user.username && (
+                <Button asChild variant="link" size="sm">
+                  <Link to={`/u/${encodeURIComponent(user.username)}`}>View profile</Link>
+                </Button>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
