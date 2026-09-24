@@ -1,0 +1,5 @@
+# Ajustes locales por máquina (permisos, etc.) — no compartir
+settings.local.json
+# Basura del SO
+.DS_Store
+Thumbs.db

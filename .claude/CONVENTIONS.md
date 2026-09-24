@@ -1,0 +1,85 @@
+# CONVENTIONS.md — twitter-clone (execution contracts)
+
+> Conventions every skill/agent in this flow follows. The full flow lives in
+> [`WORKFLOW.md`](./WORKFLOW.md). Stack-specific code conventions (layering, what goes where) live in
+> `knowledge/infra/` — this file is about *how the flow runs*, not about NestJS/React style.
+
+## 0. Language
+
+Artifacts (`feature.md`, skills, this file) are written in **English**. Converse with Alejandro in
+whatever language he uses. Code identifiers are always English.
+
+## 1. Feature slug
+
+Kebab-case from the feature name (e.g. "user timeline" → `user-timeline`). It's the key everywhere:
+`features/<slug>/`, the branch name, the PR title.
+
+## 2. Per-feature state — `features/<slug>/feature.md`
+
+One file. Frontmatter + sections:
+
+```markdown
+---
+slug: <slug>
+status: framed | building | verifying | done
+scope: backend | frontend | full-stack
+next: /<skill> <slug>        # the exact next command — rewritten at every phase close
+---
+# <Feature>
+
+## Plan
+<touched surface + acceptance criteria (2-4 bullets) + anything the change must not break>
+
+## Tasks
+- [ ] <task>
+- [x] <task> — done
+
+## Decisions
+- <what was decided and why, including anything escalated to Alejandro and how it resolved>
+
+## Follow-ups
+- [ ] <out-of-scope thing noticed along the way> · <why it's out of scope>
+
+## Log
+- <date> · framed
+- <date> · built — <one line>
+- <date> · verified — <one line>
+- <date> · closed — PR #<n>, merged
+```
+
+ Dates are plain (`YYYY-MM-DD` or
+looser) — this isn't timing-instrumented, it's just enough to resume cold.
+
+## 3. Status vocabulary
+
+`framed` · `building` · `verifying` · `done` · `blocked` (waiting on a decision from Alejandro).
+
+## 4. Orchestration
+
+`/feature <name>` frames and hands off. Each phase is its own skill; it reads `features/<slug>/`,
+does its work, updates `feature.md`, and tells you the next command. **The human advances** — no
+silent auto-chaining between phases.
+
+## 5. Code search
+
+Use `Grep`/`Glob`, or `rg` via Bash for what they can't express. Exclude `node_modules` (both
+`backend/` and `frontend/` have their own). There's no semantic-search MCP in this workspace.
+
+## 6. When to stop and ask
+
+Stop and ask Alejandro, rather than guessing, when: there's no precedent in the codebase for the
+decision, an implementer/reviewer disagree twice in a row, or a product question has no owner. Write
+the question and its answer under `## Decisions` once resolved, so it doesn't get re-asked.
+
+## 7. Publishing feature state
+
+When a phase closes: commit **only** `features/<slug>/` (never mix in product code or `.claude/`
+itself), and rewrite `next:` in the frontmatter to the exact next command. Push if you can; if the
+push fails, commit anyway and say the push is owed.
+
+## 8. PR review — no execution by default
+
+A review (`/review-pr`, or the `reviewer` agent) reads the diff and reports; it does **not** run
+builds, tests, or migrations, and does **not** touch the branch (no checkout, merge, rebase, push,
+commit) unless explicitly asked to. The rules for what counts as a finding live in
+`review-contract.md` — this file only says a review doesn't execute or mutate by default.
