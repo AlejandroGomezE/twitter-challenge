@@ -99,6 +99,11 @@ next: /review-feature user-authentication
   `button`/`card`), `SignOut.jsx`; Home shows the user's email + sign-out button.
 - [x] Docs: Runbook (auth section, new env vars), backend/frontend architecture knowledge docs,
   ROADMAP.
+- [x] Response serialization (Alejandro, after first build): every endpoint returns a response DTO
+  (`class-transformer` `@Expose()` whitelist) through a global `ClassSerializerInterceptor` with
+  `excludeExtraneousValues`, so only explicitly exposed fields can leave the API — `UserResponseDto`
+  for sign-up/sign-in/me, `MessageResponseDto` for `GET /`; sign-out stays 204 with no body. Docs
+  and review contract updated to require it for every future endpoint.
 
 ## Decisions
 - 2026-09-24 · framed · Public sign-up included (Alejandro), in addition to the sign-in/sign-out
@@ -133,6 +138,15 @@ next: /review-feature user-authentication
 - 2026-09-24 · building · Flow docs updated to match: `implementer` agent (auth exists, gated by
   default, new frontend folders) and `review-contract.md` §B (queries scoped by current user; an
   unrequested `@Public()` is a Blocker).
+- 2026-09-24 · building · Alejandro: handlers returned plain objects with no serialization layer, so
+  nothing enforced what leaves the API. Added a response-DTO task: whitelist serialization
+  (`@Expose` + `excludeExtraneousValues`) on every endpoint, enforced for future endpoints in
+  `review-contract.md` §B and the `implementer` agent.
+- 2026-09-24 · building · Serialization fails CLOSED: `ResponseSerializerInterceptor` (extends
+  `ClassSerializerInterceptor`, `excludeExtraneousValues: true`) returns 500 for any body whose
+  handler didn't declare `@SerializeOptions({ type: XResponseDto })` — the stock interceptor passes
+  plain objects through unfiltered when no type is declared, so a forgotten decorator would have
+  leaked data silently.
 
 ## Follow-ups
 - [x] ~~`review-contract.md` §B contradicted `knowledge/infra/code-quality.md` on where Prisma access
@@ -151,9 +165,15 @@ next: /review-feature user-authentication
   401 handling in `query-client.js`. Already covered: `auth.guard.spec.ts` (13) + e2e (11).
 - `knowledge/infra/code-quality.md` still describes auth shapes as guidance; they now point to the
   architecture docs. Fine as-is.
+- File-download endpoints (`StreamableFile`) and raw string bodies would get a 500 from the
+  fail-closed serializer unless they declare a type; add a `StreamableFile` passthrough (+ doc line)
+  when the first download endpoint is built. None exists today.
 
 ## Log
 - 2026-09-24 · framed
 - 2026-09-24 · built — email+password auth end to end: argon2id users, hashed cookie sessions,
   global guard + `@Public()`, Origin/CSRF check, 5/min/IP throttling, helmet + CORS allowlist; React
   auth context, gated routes, sign-in/up/out pages. BE 19 unit + 11 e2e, FE 9 tests, lint/build green.
+- 2026-09-24 · built — response serialization added on Alejandro's request: response DTOs on every
+  endpoint, fail-closed whitelist interceptor, flow docs require it. BE 23 unit + 12 e2e, FE 9 tests,
+  lint/build green.
