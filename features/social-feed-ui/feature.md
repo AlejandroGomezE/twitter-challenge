@@ -1,8 +1,8 @@
 ---
 slug: social-feed-ui
-status: framed
+status: verifying
 scope: frontend
-next: /implement social-feed-ui
+next: /review-feature social-feed-ui
 ---
 # Social feed UI (migrated from the "Pulse" prototype, branded "The Flock Twitter")
 
@@ -64,17 +64,17 @@ rebuild it with our tools (Vite + React JSX, react-router, TanStack Query, shadc
   test text/roles the tests rely on (update tests deliberately where the markup changes).
 
 ## Tasks
-- [ ] Theme: port Pulse tokens (light + dark) and radius into `index.css`, add Geist Mono
+- [x] Theme: port Pulse tokens (light + dark) and radius into `index.css`, add Geist Mono
   (`@fontsource-variable/geist-mono`) + `font-mono`, `index.html` title/favicon/color-scheme,
   ignore `temp/` in `.gitignore`; restyle `UserAvatar` (Pulse's tint palette, mono initial).
-- [ ] App shell: `AppShell` layout route (`<Outlet />`), `SideNav`, `MobileNav`, `RightRail`,
+- [x] App shell: `AppShell` layout route (`<Outlet />`), `SideNav`, `MobileNav`, `RightRail`,
   shared nav-items config with working vs disabled ("Coming soon") items, mobile compose FAB;
   wire gated routes in `router.jsx` through it.
-- [ ] Home feed page: header + tabs, disabled composer (visual only, no posting logic), empty state.
-- [ ] Profile + edit profile: Pulse profile layout on real data; EditProfile inside the shell with the
+- [x] Home feed page: header + tabs, disabled composer (visual only, no posting logic), empty state.
+- [x] Profile + edit profile: Pulse profile layout on real data; EditProfile inside the shell with the
   new header; keep all states and behaviour.
-- [ ] Auth pages: brand + palette on sign-in / sign-up / sign-out.
-- [ ] Docs: frontend architecture (shell, layout route, theme tokens, disabled-item pattern), UI
+- [x] Auth pages: brand + palette on sign-in / sign-up / sign-out.
+- [x] Docs: frontend architecture (shell, layout route, theme tokens, disabled-item pattern), UI
   component inventory (new layout components), Runbook frontend bullets.
 
 ## Decisions
@@ -91,10 +91,28 @@ rebuild it with our tools (Vite + React JSX, react-router, TanStack Query, shadc
   display name, location, website and follower counts are dropped rather than faked. The heading is
   `@username`.
 - 2026-09-24 · framed · The new layout components (`AppShell`, `SideNav`, `MobileNav`,
-  `RightRail`) are bespoke compositions of shadcn primitives migrated at Alejandro's request — that
+  `RightRail`, `ComingSoon`, `PageHeader`, and the feed `Composer` — all ports of Pulse pieces) are
+  bespoke compositions of shadcn primitives migrated at Alejandro's request — that
   request is the sign-off `knowledge/decisions/shadcn-component-preference.md` asks for.
 - 2026-09-24 · framed · Next.js-only pieces (`next/font`, `@vercel/analytics`, `'use client'`,
   metadata API) and TypeScript types are not carried over.
+- 2026-09-24 · building · Tailwind's `dark` variant now matches `.dark` OR `prefers-color-scheme:
+  dark` (without a `.light` ancestor), mirroring the token blocks — the stock `(&:is(.dark *))` would
+  have left shadcn's ~40 `dark:` utilities inert under OS dark mode (reviewer catch).
+- 2026-09-24 · building · Avatar tints get fixed per-tint text colours (all ≥4.5:1 in both themes)
+  instead of Pulse's `text-background`, which was ~2.7:1 on the amber tint.
+- 2026-09-24 · building · Auth pages share a new `AuthLayout` (centering + BrandMark + name +
+  per-page `document.title`, restored on unmount) and `BrandMark` (also used by SideNav). AuthLayout
+  sign-off: **pending Alejandro** (thin composition, no new primitive). Close: test its title
+  set/restore.
+- 2026-09-24 · building · Home tabs use Pulse's markup with real tab semantics instead of shadcn
+  `Tabs`: Radix triggers activate on focus/mousedown, which `ComingSoon` can't block for the disabled
+  "Following" tab. Close: tidy `Home.test.jsx` (an `async` test with no await; the "Following click"
+  test proves little since Home has no tab state).
+- 2026-09-24 · building · Sizing a `UserAvatar` = default size + a `size-*` class. Passing
+  `size="lg"|"sm"` together with a `size-*` class loses: shadcn Avatar's `data-[size=lg]:size-10`
+  (class + attribute) out-ranks the class (reviewer caught a 40px profile avatar; fixed there and in
+  RightRail).
 
 ## Follow-ups
 - [ ] **Posts (next feature):** create and list posts end to end — `Post` model + `POST /posts`
@@ -104,6 +122,15 @@ rebuild it with our tools (Vite + React JSX, react-router, TanStack Query, shadc
   `/u/:username`'s Posts tab (with counts in the profile header).
 - [ ] Later features behind the disabled items: Explore/search, Notifications, Messages, Bookmarks,
   Who to follow (follows), the Following feed tab, replies/reposts/likes.
+- [ ] (open) Bundle size: the shell's Radix tooltip + floating-ui (~45 kB) plus layout code pushed the
+  main JS chunk from 491 kB to ~549 kB, past Vite's 500 kB warning. Split by route (e.g. `lazy()`
+  the gated app vs the auth pages) or tune `build.chunkSizeWarningLimit` deliberately.
+- [ ] (open, minor) Disabled "Coming soon" items only explain themselves via a hover/focus tooltip;
+  on touch screens a tap shows nothing (they're just muted). Consider a tap-to-toggle tooltip or a
+  visible "Soon" hint on mobile. Also `RightRail.jsx`: the search icon isn't dimmed with its input.
 
 ## Log
 - 2026-09-24 · framed
+- 2026-09-24 · built — Pulse theme (light + OS dark), app shell (side/mobile nav, right rail,
+  "Coming soon" items), Home feed (tabs, disabled composer, empty state), Pulse profile + edit
+  layouts, branded auth pages, docs. FE 17 suites / 194, build + lint green.
