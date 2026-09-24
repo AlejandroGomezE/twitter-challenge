@@ -55,10 +55,9 @@ from `backend/.env` (create it from `backend/.env.example`; it's git-ignored).
   `better-sqlite3`, wired in `src/database/prisma.service.ts`). SQLite is a local
   file, not a server — `DATABASE_URL` in `.env`/`.env.example` is a `file:` URL
   (default `file:./dev.db`), not a Postgres connection string. The database
-  already exists as a real local file at `backend/prisma/dev.db`, created by
-  running `npx prisma db push` (from `backend/`); it's git-ignored
-  (`.gitignore`'s `/prisma/*.db*`), so each developer creates their own local
-  copy the same way. Both `src/database/prisma.service.ts` and
+  lives at `backend/prisma/dev.db` and is git-ignored (`.gitignore`'s
+  `/prisma/*.db*`), so a fresh clone doesn't have it — create it with
+  `npx prisma db push` (from `backend/`). Both `src/database/prisma.service.ts` and
   `prisma7.config.ts` explicitly resolve a relative SQLite path anchored to
   their own module's location (not `process.cwd()`) — this was a deliberate fix
   for a real divergence bug found during implementation, so the CLI

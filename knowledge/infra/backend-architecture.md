@@ -20,7 +20,7 @@ Service
    ↓
 Repository
    ↓
-Prisma / PostgreSQL
+Prisma / SQLite
 ```
 
 Not every module needs every layer — one with no persistence has no repository, one
@@ -41,7 +41,7 @@ backend/src/
 │   └── environment.validation.ts  # Zod schema, validated at boot via ConfigModule
 ├── database/
 │   ├── prisma.module.ts   # @Global, exports PrismaService
-│   └── prisma.service.ts  # extends generated PrismaClient, pg driver adapter
+│   └── prisma.service.ts  # extends generated PrismaClient, better-sqlite3 driver adapter
 ├── common/
 │   └── filters/
 │       └── all-exceptions.filter.ts  # global, normalizes every error response
@@ -63,17 +63,19 @@ per-module or lost between sessions.
 Prisma 7 (`backend/prisma/schema.prisma`, config in `backend/prisma7.config.ts` — loads
 `DATABASE_URL` via `dotenv/config`). No models are defined yet.
 
-Prisma 7 requires an explicit **driver adapter** — the bundled query-engine binary is
-gone — so `PrismaService` constructs
-`new PrismaPg({ connectionString: process.env.DATABASE_URL })` (`@prisma/adapter-pg` +
-`pg`) and passes it to the `PrismaClient` superclass constructor.
+The database is **SQLite** — a local file, no server. Prisma 7 requires an explicit
+**driver adapter** (the bundled query-engine binary is gone), so `PrismaService`
+constructs `new PrismaBetterSqlite3({ url })` (`@prisma/adapter-better-sqlite3` +
+`better-sqlite3`) and passes it to the `PrismaClient` superclass constructor.
 
-**No Postgres is provisioned yet.** `PrismaService` deliberately skips an eager
-`$connect()` in `onModuleInit` — the underlying `pg.Pool` connects lazily on first
-query, so the app boots fine without a reachable database. `DATABASE_URL` still has to
-be a syntactically valid Postgres URL (Prisma validates that at client construction
-time), but it doesn't need to resolve to anything running yet. Regenerate the client
-after any schema change: `npx prisma generate` (from `backend/`).
+`DATABASE_URL` is a `file:` URL (default `file:./dev.db`). A relative path is anchored
+to `backend/prisma/` from the module's own location, not `process.cwd()` — both in
+`PrismaService` and in `prisma7.config.ts` — so the CLI and the running app always open
+the same file, `backend/prisma/dev.db` (git-ignored). Absolute paths and `:memory:`
+pass through unchanged. Create or sync the file with `npx prisma db push`; regenerate
+the client after any schema change with `npx prisma generate` (both from `backend/`).
+`PrismaService` skips an eager `$connect()`, so the app boots even before the file
+exists.
 
 ## Config
 
