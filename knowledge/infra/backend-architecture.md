@@ -117,6 +117,7 @@ non-empty value in `backend/.env`; see the Config section above.
 - `oxlint.json` currently turns `@typescript-eslint/no-explicit-any` **off**, while
   [[Code quality]] says to avoid `any`. Not reconciled — flagging so it isn't
   silently re-decided; revisit if `any` actually starts showing up in reviews.
-- No domain module exists yet, so the "Repository" layer above is aspirational —
-  re-verify this doc once the first one lands (it may turn out thinner than shown,
-  per [[Code quality]]'s "avoid unnecessary repository interfaces").
+- No domain module exists yet, so the "Repository" layer above isn't built yet. It is
+  the rule, though: repositories are the only layer injecting `PrismaService` (plain
+  `@Injectable()` classes — no interface, no injection token), enforced by
+  `.claude/review-contract.md` §B.
