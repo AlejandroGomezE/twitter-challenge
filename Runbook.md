@@ -156,9 +156,14 @@ shadcn/ui (Radix base, Nova preset), and `react-router` for client-side routing.
   `apiUrl()`), `render.jsx` (`renderWithProviders` — QueryClient from the app's
   `createQueryClient` + `AuthProvider` + MemoryRouter). Unhandled requests fail the
   test. Tests render **signed in** by default (the default MSW `GET /auth/me` handler
-  returns a user); override it with a 401 (`server.use(...)`) to render signed out.
+  returns a user); override it with a 401 (`server.use(...)`) to render signed out. A default
+  `GET /users/:username` handler feeds the shell's profile card (`ada` → bio `null`, others →
+  404); tests routed through `AppRouter` render inside the shell, so scope queries with
+  `within(screen.getByRole('main'))`.
 - **Structure** (`src/`): `app/` (`App.jsx`, `router.jsx`, `providers.jsx`,
-  `query-client.js`), `components/ui/` (shadcn), `components/UserAvatar.jsx`, `hooks/`,
+  `query-client.js`), `components/ui/` (shadcn), `components/layout/` (app shell),
+  `components/feed/` (`Composer`), `components/AuthLayout.jsx`, `components/BrandMark.jsx`,
+  `components/UserAvatar.jsx`, `hooks/`,
   `lib/api/` (HTTP client, `users.js`, `error-message.js`), `lib/avatar-color.js`,
   `lib/auth/` (`AuthProvider`, `useAuth()`), `lib/validation/` (Zod form schemas),
   `routes/` (`ProtectedRoute`, `PublicOnlyRoute`), `pages/`. `features/` isn't created
@@ -184,9 +189,29 @@ shadcn/ui (Radix base, Nova preset), and `react-router` for client-side routing.
 - **Forms** — `react-hook-form` + `zod` (`@hookform/resolvers`), used by the sign-in,
   sign-up and edit-profile pages; schemas in `src/lib/validation/auth-schemas.js` and
   `profile-schemas.js` (username/bio rules, mirroring the backend).
-- **Profiles** — `/u/:username` (`pages/Profile.jsx`: avatar, `@username`, bio, join date,
-  "Edit profile" on your own) and `/settings/profile` (`pages/EditProfile.jsx`), both behind
-  `ProtectedRoute`; Home links to your profile. Data via `useProfile(username)`
+- **Brand + theme** — the app is "The Flock Twitter" (`index.html` title, feather favicon;
+  auth pages set `<page> · The Flock Twitter` via `components/AuthLayout.jsx`). Pulse palette
+  tokens (light + dark), `--radius: 1rem`, Geist Sans + Geist Mono (`font-mono` for handles,
+  timestamps, small-caps labels) live in `src/index.css`. Dark mode follows the OS (no toggle):
+  a custom `dark` variant matches `.dark` or `prefers-color-scheme: dark`.
+- **App shell** — every gated page renders inside `components/layout/AppShell.jsx`, a layout
+  route (`ProtectedRoute` → `AppShell` → page) in `router.jsx`: left nav rail (`lg`+, labels at
+  `xl`), the page in the center column (it renders its own sticky `PageHeader`), right rail
+  (`xl`: search, your profile card, who to follow), and a bottom nav + compose button below
+  `lg`. Nav items are configured once in `layout/nav-items.js`.
+- **Disabled items** — features without a backend yet are shown but disabled, never with fake
+  counts or users. The nav placeholders (Explore, Notifications, Messages, Bookmarks), "New
+  post" + the mobile compose button, the search box and the Following tab are wrapped in
+  `layout/ComingSoon.jsx`: `aria-disabled` (not native `disabled`, so the "Coming soon"
+  tooltip stays reachable). The composer (`feed/Composer.jsx`: textarea, icon buttons, "Post")
+  is natively `disabled` with a visible "Posting is coming soon" hint and no tooltip; "Who to
+  follow" (`layout/RightRail.jsx`) is a text-only "Coming soon" card, no `ComingSoon` wrapper.
+- **Home** (`/`) — the feed page: "For you" / "Following" (disabled) tabs, a disabled composer
+  ("Posting is coming soon") and a "No posts yet" empty state. Posts arrive in a follow-up.
+- **Profiles** — `/u/:username` (`pages/Profile.jsx`: Pulse layout — banner, avatar,
+  `@username`, bio, join date, "Edit profile" on your own, Posts tab empty state) and
+  `/settings/profile` (`pages/EditProfile.jsx`), both inside the shell; the nav's Profile item
+  and the right rail's card link to your profile. Data via `useProfile(username)`
   (`src/hooks/use-profile.js`, no retry on 404) keyed by `profileQueryKey(username)`
   (`src/lib/api/users.js`, lowercased). The avatar is a placeholder only
   (`components/UserAvatar.jsx`): the username's initial on a colour derived from the username.

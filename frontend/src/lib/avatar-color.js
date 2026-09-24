@@ -1,14 +1,17 @@
-// Background/foreground pairs for the avatar placeholder, all with readable contrast (white text
-// on a 600/700 shade). Full class strings so Tailwind picks them up.
+// Background/foreground pairs for the avatar placeholder, derived from the Pulse tints (primary
+// coral + chart colours, plus teal / violet / ochre in the same lightness-chroma family). The tints
+// are fixed (not theme tokens), so each one carries the fixed foreground that clears WCAG AA 4.5:1
+// on it: white on the darker tints, warm near-black on the lighter ones. Readable in both themes.
+// Full class strings so Tailwind picks them up.
 const AVATAR_COLORS = [
-  'bg-red-600 text-white',
-  'bg-orange-600 text-white',
-  'bg-amber-700 text-white',
-  'bg-emerald-600 text-white',
-  'bg-teal-600 text-white',
-  'bg-sky-600 text-white',
-  'bg-indigo-600 text-white',
-  'bg-fuchsia-600 text-white',
+  'bg-[oklch(0.585_0.196_30)] text-white',
+  'bg-[oklch(0.62_0.15_150)] text-[oklch(0.2_0.012_60)]',
+  'bg-[oklch(0.6_0.13_240)] text-[oklch(0.2_0.012_60)]',
+  'bg-[oklch(0.7_0.15_80)] text-[oklch(0.2_0.012_60)]',
+  'bg-[oklch(0.55_0.16_320)] text-white',
+  'bg-[oklch(0.6_0.12_200)] text-[oklch(0.2_0.012_60)]',
+  'bg-[oklch(0.55_0.15_280)] text-white',
+  'bg-[oklch(0.65_0.14_55)] text-[oklch(0.2_0.012_60)]',
 ];
 
 // Deterministic colour for a username: same username (any case) → same classes.

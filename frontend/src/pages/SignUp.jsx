@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, useNavigate } from 'react-router'
+import { AuthLayout } from '@/components/AuthLayout'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
@@ -46,8 +47,8 @@ export function SignUp() {
     : 'sign-up-password-hint'
 
   return (
-    <div className="flex min-h-svh items-center justify-center p-8">
-      <Card className="w-full max-w-sm">
+    <AuthLayout title="Create an account">
+      <Card className="w-full rounded-2xl border bg-card shadow-sm ring-0">
         <CardHeader>
           <CardTitle>
             <h1>Create an account</h1>
@@ -122,7 +123,7 @@ export function SignUp() {
                   errors={[errors.confirmPassword]}
                 />
               </Field>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button type="submit" disabled={isSubmitting} className="h-10 rounded-full font-semibold">
                 {isSubmitting && <Spinner aria-hidden="true" />}
                 Create account
               </Button>
@@ -132,12 +133,12 @@ export function SignUp() {
         <CardFooter className="justify-center text-muted-foreground">
           <span>
             Already have an account?{' '}
-            <Link to="/sign-in" className="text-primary underline-offset-4 hover:underline">
+            <Link to="/sign-in" className="font-medium text-primary underline-offset-4 hover:underline">
               Sign in
             </Link>
           </span>
         </CardFooter>
       </Card>
-    </div>
+    </AuthLayout>
   )
 }

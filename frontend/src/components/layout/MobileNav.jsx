@@ -1,0 +1,40 @@
+import { NavLink } from 'react-router'
+import { useAuth } from '@/lib/auth/use-auth'
+import { cn } from '@/lib/utils'
+import { ComingSoon } from './ComingSoon'
+import { getNavItems } from './nav-items'
+
+const itemClassName =
+  'flex flex-1 justify-center py-3.5 outline-none focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/50'
+
+// Bottom bar below lg: the same nav config as the left rail, icons only.
+export function MobileNav() {
+  const { user } = useAuth()
+  const items = getNavItems(user?.username, { mobile: true })
+
+  return (
+    <nav
+      aria-label="Primary (mobile)"
+      className="sticky bottom-0 z-20 flex items-center justify-around border-t border-border bg-background/85 backdrop-blur-md lg:hidden"
+    >
+      {items.map(({ key, label, icon: Icon, to, end, disabled }) =>
+        disabled ? (
+          <ComingSoon key={key} side="top">
+            <button type="button" aria-label={label} className={itemClassName}>
+              <Icon className="size-6 text-muted-foreground" aria-hidden="true" />
+            </button>
+          </ComingSoon>
+        ) : (
+          <NavLink key={key} to={to} end={end} aria-label={label} className={itemClassName}>
+            {({ isActive }) => (
+              <Icon
+                className={cn('size-6', isActive ? 'text-primary' : 'text-muted-foreground')}
+                aria-hidden="true"
+              />
+            )}
+          </NavLink>
+        ),
+      )}
+    </nav>
+  )
+}

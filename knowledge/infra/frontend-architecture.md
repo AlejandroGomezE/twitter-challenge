@@ -1,10 +1,10 @@
 ---
 title: Frontend architecture
 type: infra
-summary: Vite + React SPA (frontend/) structure and current implementation state — TanStack Query, shadcn/ui, react-router, HTTP client, cookie-session auth (useAuth, ProtectedRoute), user profiles (view + edit, avatar placeholder).
+summary: Vite + React SPA (frontend/) structure and current implementation state — TanStack Query, shadcn/ui, react-router, HTTP client, cookie-session auth (useAuth, ProtectedRoute), Pulse theme (tokens, OS dark mode), the app shell layout route with "Coming soon" disabled items, the Home feed page, user profiles (view + edit, avatar placeholder).
 status: active
 last-verified: 2026-09-24
-tags: [frontend, react, vite, architecture, tanstack-query, shadcn, auth]
+tags: [frontend, react, vite, architecture, tanstack-query, shadcn, auth, theme, layout]
 ---
 
 ## Structure
@@ -21,8 +21,12 @@ frontend/src/
 │   └── query-client.js # createQueryClient() — central 401 handling
 ├── components/
 │   ├── ui/           # shadcn/ui primitives — see [[UI component inventory]]
-│   ├── UserAvatar.jsx  # avatar placeholder (shadcn Avatar + AvatarFallback)
-│   └── layout/        # not created yet — no shared layout shell exists
+│   ├── layout/         # the app shell — AppShell, SideNav, MobileNav, RightRail, ComingSoon,
+│   │                   #   PageHeader, nav-items.js (see "App shell" below)
+│   ├── feed/           # Composer.jsx — the (disabled) post composer on Home
+│   ├── AuthLayout.jsx  # frame for /sign-in, /sign-up, /sign-out (brand + document.title)
+│   ├── BrandMark.jsx   # the feather logo mark (used by SideNav and AuthLayout)
+│   └── UserAvatar.jsx  # avatar placeholder (shadcn Avatar + AvatarFallback)
 ├── features/           # not created yet
 ├── hooks/              # use-profile.js — useProfile(username)
 ├── lib/
@@ -31,7 +35,7 @@ frontend/src/
 │   ├── auth/           # AuthProvider.jsx, use-auth.js, auth-context.js, auth-error-message.js
 │   ├── validation/     # auth-schemas.js (sign-in / sign-up), profile-schemas.js (username, bio)
 │   └── avatar-color.js # getAvatarColor / getAvatarInitial for the avatar placeholder
-├── pages/              # Home, SignIn, SignUp, SignOut, Profile, EditProfile
+├── pages/              # Home (feed), SignIn, SignUp, SignOut, Profile, EditProfile
 ├── routes/             # ProtectedRoute.jsx, PublicOnlyRoute.jsx
 └── test/               # shared test helpers — setup.js, server.js (MSW), render.jsx
 ```
@@ -49,6 +53,77 @@ features/<name>/
 
 Don't create these folders ahead of a real feature — an empty `features/<name>/` is
 dead weight until there's something to put in it.
+
+## Theme (`src/index.css`, `index.html`)
+
+The look is ported from the "Pulse" prototype and branded **The Flock Twitter** (`index.html`:
+that `<title>`, the feather `favicon.svg`, `<meta name="color-scheme" content="light dark">`).
+
+- **Tokens.** `index.css` replaces shadcn's neutral defaults with Pulse's palette as CSS
+  variables: a warm off-white `--background`, coral `--primary` (`oklch(0.585 0.196 30)`), warm
+  borders/muted, and `--chart-1…5` carrying Pulse's accent hues (nothing outside
+  `components/ui/` uses the chart tokens; the avatar tints in `avatar-color.js` borrow those
+  hues as fixed `oklch(...)` values). The dark palette is defined twice with the
+  same values — under `.dark`, and under `@media (prefers-color-scheme: dark)` for
+  `:root:not(.light)`. `--radius` is `1rem` (the `--radius-*` scale derives from it).
+- **Fonts.** Geist Sans (`@fontsource-variable/geist`, `--font-sans`, the default) and Geist
+  Mono (`@fontsource-variable/geist-mono`, `--font-mono`). Use `font-mono` for handles
+  (`@username`), timestamps/counters and the small-caps rail labels (`font-mono text-xs
+  uppercase tracking-[0.18em]`).
+- **Dark mode follows the OS** — there's no toggle. The `dark:` variant is a custom
+  `@custom-variant dark` that matches a `.dark` ancestor **or** `prefers-color-scheme: dark`
+  (unless a `.light` ancestor opts out), mirroring the token blocks. The stock shadcn variant
+  (`&:is(.dark *)`) only matches a `.dark` class, so under OS dark mode the tokens would switch
+  but the ~40 `dark:` utilities inside the shadcn primitives would stay inert.
+- **Avatar tints** (`src/lib/avatar-color.js`) are fixed Pulse colours (primary coral + chart
+  hues, plus teal / violet / ochre), not theme tokens, so each carries its own text colour —
+  white on the darker tints, a warm near-black on the lighter ones — clearing WCAG AA 4.5:1 in
+  both themes (Pulse's `text-background` was ~2.7:1 on the amber tint).
+
+## App shell (`src/components/layout/`)
+
+- **Layout route.** In `router.jsx`, every gated route is nested
+  `ProtectedRoute` → `AppShell` → the page (via `<Outlet />`). Auth pages sit outside it.
+- **Columns.** `AppShell` centres a `max-w-[1290px]` row of three columns:
+  - left rail — a `<header>` (the `banner` landmark) holding `SideNav`; hidden below `lg`,
+    88px wide with icons only at `lg`, 275px with icons + labels at `xl`;
+  - center — `<main id="main-content">`, `border-x`, `lg:max-w-[620px]`, rendering the page;
+  - right rail — `<aside aria-label="Sidebar">` holding `RightRail`, 350px, `xl` only.
+
+  Below `lg` there are no rails: `MobileNav` is a sticky bottom bar inside `<main>`, and a
+  floating (disabled) "New post" compose button sits bottom-right.
+- **Skip link + tooltips.** The shell renders a "Skip to content" link (visible on focus) to
+  `#main-content`, and wraps everything in shadcn's `TooltipProvider`.
+- **Pages own their header.** Each page renders `PageHeader` at the top of the center column —
+  sticky, blurred (`bg-background/85 backdrop-blur-md`), `border-b`. Props: `title` (rendered
+  as the page's `h1`), `subtitle` (small muted mono line), `leading` (e.g. a back button),
+  `trailing` (e.g. an icon), `children` (full-width row below the title, e.g. tabs),
+  `className`.
+- **Nav config (`nav-items.js`)** is the single source for `SideNav` and `MobileNav`. An item
+  with a `to` builder is a working route (Home `/`, Profile `/u/<me>` — left out while there's
+  no username, Settings `/settings/profile`); an item without one is a disabled placeholder
+  (Explore, Notifications, Messages, Bookmarks). `mobile` picks the bottom bar's items (no
+  Bookmarks, no Settings); `desktop: false` keeps Sign out out of the rail's nav —
+  `getSignOutItem()` hands it to `SideNav`'s footer (under the user chip), while the bottom bar
+  shows it as its last icon. Sign out always links to `/sign-out`. Working items are
+  `NavLink`s, so the active route is highlighted (`end` on Home).
+  `getNavItems(username, { mobile })` resolves the list to
+  `{ key, label, icon, to, end, disabled }`.
+- **Disabled "Coming soon" pattern (`ComingSoon`).** Features we show but don't have yet — the
+  disabled nav items, "New post" (rail + mobile button), the right rail's search box and Home's
+  "Following" tab — are wrapped in `ComingSoon`: a shadcn `Tooltip` whose `asChild` trigger
+  marks the single child `aria-disabled="true"`, muted (`opacity-50`, `cursor-not-allowed`),
+  and calls `preventDefault` on click, with a "Coming soon" tooltip on hover and keyboard
+  focus. The child is a `<button type="button">` or a read-only input, never a link, and
+  deliberately **not** natively `disabled` — disabled elements get no focus or pointer events,
+  so the tooltip would be unreachable. Placeholders never show fake data (no badge counts, no
+  suggested users). It needs a `TooltipProvider` above it.
+- **Rails.** `SideNav`: `BrandMark` + "The Flock Twitter" (home link), the nav, "New post",
+  then the signed-in user chip (`UserAvatar` + mono `@username`) and Sign out. `RightRail`: the
+  disabled search box, a "Your profile" card (avatar, `@username`, bio or "No bio yet.", "View
+  profile" link) and a "Who to follow" card that only says "Coming soon". The profile card
+  reads `useProfile(user.username)`, so it shares the cache entry with `/u/<me>` and
+  EditProfile (a skeleton while loading; on an error the bio line is left out).
 
 ## HTTP client (`src/lib/api/client.js`)
 
@@ -137,9 +212,9 @@ a shadcn `Alert`.
   seed `['auth', 'me']`, this is what sends a freshly signed-in user back.
 - `/sign-out` — public; the app's single sign-out path (calls `signOut()` once on
   mount, then → `/sign-in`).
-- `/` (`Home`, links to your own profile), `/u/:username` (`Profile`),
+- `/` (`Home`, the feed), `/u/:username` (`Profile`),
   `/settings/profile` (`EditProfile`) and a `*` catch-all (→ `/`) — inside
-  `ProtectedRoute`: signed-out users
+  `ProtectedRoute` and the `AppShell` layout route: signed-out users
   go to `/sign-in` with `state.from`, and `PublicOnlyRoute` sends them back there
   afterwards (in-app paths only; `SignIn` also navigates to the same target so it works
   outside the guard).
@@ -159,11 +234,17 @@ boundary).
   `profileQueryKey(username)` = `['users', username.toLowerCase(), 'profile']`
   (`src/lib/api/users.js`) — lowercased so `/u/Ada` and `/u/ada` share one entry. A 404 is
   never retried; other failures use the QueryClient's default retry.
-- **`/u/:username`** (`Profile.jsx`) — skeleton while loading, a shadcn `Empty` "User not
-  found" on 404, an error `Alert` + Retry otherwise; then avatar, `@username`, bio as plain
-  text (or "No bio yet."), "Joined <Month yyyy>", and an "Edit profile" link only when the
-  username matches `useAuth().user.username` (case-insensitive).
-- **`/settings/profile`** (`EditProfile.jsx`) — loads the current bio via
+- **`/u/:username`** (`Profile.jsx`) — Pulse's profile layout: a `PageHeader` with a back
+  button (→ `/`) and the mono `@username` as the `h1`, a `bg-primary/10` banner, the large
+  avatar overlapping it, an "Edit profile" link (→ `/settings/profile`) only when the username
+  matches `useAuth().user.username` (case-insensitive), the mono `@username` again as the name
+  line, the bio as plain text with line breaks kept (or "No bio yet."), "Joined <Month yyyy>"
+  with a calendar icon, and a single "Posts" tab (tab semantics, no switching) over a "No posts
+  yet" empty state. The loading (skeleton), 404 (shadcn `Empty` "User not found" + "Back to
+  home") and error (`Alert` + Retry) states keep the header, titled "Profile". Only data we
+  have is shown — no display name, location, website or follower counts.
+- **`/settings/profile`** (`EditProfile.jsx`) — inside the shell under a `PageHeader` "Edit
+  profile" with a back button (→ your profile); loads the current bio via
   `useProfile(user.username)` (the `me` payload has no bio), then a react-hook-form + zod
   form with a trimmed-length `n/160` bio counter. Only changed fields are sent to
   `updateMyProfile` (`PATCH /users/me`); nothing changed → straight back to the profile. On
@@ -171,10 +252,32 @@ boundary).
   `{ id, email, username }`, removes the old username's profile entry if it changed, and
   navigates (`replace`) to `/u/<new username>` — no stale username left in the cache.
 - **Avatar placeholder** — no image upload. `UserAvatar` (`src/components/UserAvatar.jsx`)
-  composes shadcn `Avatar` + `AvatarFallback`: the username's first character uppercased,
-  on one of 8 Tailwind colour pairs picked by a hash of the lowercased username
-  (`src/lib/avatar-color.js`), so the same user always gets the same colour. The root has
-  `role="img"` and `aria-label="@username"`; the letter is `aria-hidden`.
+  composes shadcn `Avatar` + `AvatarFallback`: the username's first character uppercased in
+  `font-mono`, on one of 8 Pulse tint / text-colour pairs (see Theme) picked by a hash of the
+  lowercased username (`src/lib/avatar-color.js`), so the same user always gets the same
+  colour. The root has
+  `role="img"` and `aria-label="@username"`; the letter is `aria-hidden`. **Sizing:** for a
+  custom size keep the default `size` and pass a `size-*` class (e.g. `className="size-12"`);
+  combined with `size="lg"` / `"sm"`, a `size-*` class loses to shadcn's
+  `data-[size=lg]:size-10` / `data-[size=sm]:size-6` (`components/ui/avatar.jsx`).
+
+## Pages
+
+- **Home (`/`) is the feed.** `PageHeader` "Home" (a primary `Sparkles` icon trailing) with
+  "For you" / "Following" tabs, then the `Composer` and a "No posts yet" empty state inside the
+  `tabpanel`. The tabs are plain markup with real tab semantics (`role="tablist"` / `tab` /
+  `tabpanel`, `aria-selected`, `aria-controls`) and no switching — only "For you" exists;
+  "Following" is a `ComingSoon` placeholder. shadcn `Tabs` isn't used because Radix triggers
+  activate on focus/mousedown, which `ComingSoon` can't block without making the tooltip
+  unreachable. The `Composer` (`components/feed/`) is visual only: avatar, a natively disabled
+  `Textarea` (280 `maxLength`), a visible "Posting is coming soon" hint (its
+  `aria-describedby`), disabled attachment icons, a mono `0/280` counter and a disabled "Post"
+  button. No mock posts.
+- **Profile / EditProfile** — see Profiles above.
+- **Auth pages** (`SignIn`, `SignUp`, `SignOut`) render outside the shell inside `AuthLayout`:
+  centred on the page background, `BrandMark` + "The Flock Twitter" above the content (a
+  `rounded-2xl` card), and `document.title` set to `<title> · The Flock Twitter` while mounted
+  (the previous title restored on unmount). Their behaviour is unchanged.
 
 ## Tests
 
@@ -190,16 +293,39 @@ by default (the default `GET /auth/me` handler returns a user); override it with
 to render signed out. `src/components/ui/*` (shadcn) isn't tested. Reference tests:
 `src/pages/__tests__/Home.test.jsx`, `src/lib/api/__tests__/client.test.js`.
 
+Shell-related gotchas:
+
+- A test that routes through `AppRouter` renders the page **inside the app shell**, so text
+  and roles can appear twice (`@ada` in the rail and on the page, a "Sign out" link in the
+  rail and the bottom bar). Scope queries: `within(screen.getByRole('main'))` for the page,
+  `within(screen.getByRole('banner'))` for the left rail.
+- The right rail fetches the signed-in user's profile, so `server.js` has a default
+  `GET /users/:username` handler: `ada` (any case) → `{ username: 'ada', bio: null,
+  createdAt }`, anything else → 404 `User not found`. Override it per test as usual.
+- Rendering a `ComingSoon` item outside the shell (e.g. `Home` on its own) needs a
+  `TooltipProvider` wrapper.
+- jsdom has no `ResizeObserver`, so Radix tooltips can't open: assert `aria-disabled` and
+  inertness rather than the tooltip text, and use `fireEvent` (no focus/pointer move) where a
+  `userEvent` interaction would try to open one.
+
 ## Current state vs. this doc
 
-**Implemented:** `app/` (`App.jsx`, `router.jsx`, `providers.jsx`, `query-client.js`),
-`components/ui/` (shadcn, see [[UI component inventory]]), `components/UserAvatar.jsx`,
-`hooks/`, `lib/api/` (`client.js`, `users.js`, `error-message.js`), `lib/auth/`,
-`lib/validation/`, `lib/avatar-color.js`, `lib/utils.js`, `routes/` (`ProtectedRoute`,
-`PublicOnlyRoute`), `test/` (Vitest + RTL + MSW helpers), and `pages/` — `SignIn`,
-`SignUp`, `SignOut`, `Home` (shows the signed-in email, a sign-out button and a "View
-profile" link), `Profile` and `EditProfile`.
+**Implemented:** `app/` (`App.jsx`, `router.jsx` with the `AppShell` layout route,
+`providers.jsx`, `query-client.js`), the Pulse theme (`index.css`, `index.html`),
+`components/ui/` (shadcn, see [[UI component inventory]]), `components/layout/` (the app
+shell), `components/feed/Composer.jsx`, `components/AuthLayout.jsx`,
+`components/BrandMark.jsx`, `components/UserAvatar.jsx`, `hooks/`, `lib/api/` (`client.js`,
+`users.js`, `error-message.js`), `lib/auth/`, `lib/validation/`, `lib/avatar-color.js`,
+`lib/utils.js`, `routes/` (`ProtectedRoute`, `PublicOnlyRoute`), `test/` (Vitest + RTL + MSW
+helpers), and `pages/` — `SignIn`, `SignUp`, `SignOut`, `Home` (the feed: tabs, disabled
+composer, empty state), `Profile` and `EditProfile`.
 
-**Not implemented, intentionally:** `components/layout/`, `features/` (profiles live in
-the flat `pages/` / `hooks/` / `lib/` layout). These follow once a feature needs them —
-see [[Code quality]] for the shape to build them in.
+**Pending (posts follow-up):** there are no posts yet. The next feature enables the
+`Composer` and the "New post" / mobile compose buttons, migrates Pulse's `PostCard`, and lists
+posts in the Home feed and on the profile's Posts tab. Explore/search, Notifications,
+Messages, Bookmarks, Who to follow and the Following tab stay "Coming soon" until their
+features exist.
+
+**Not implemented, intentionally:** `features/` (profiles and the shell live in the flat
+`pages/` / `components/` / `hooks/` / `lib/` layout). It follows once a feature needs it —
+see [[Code quality]] for the shape to build it in.
