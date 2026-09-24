@@ -83,7 +83,7 @@ describe('SignIn', () => {
 
     await fillAndSubmit(user, { email: '  ada@example.com  ', password: 'correct horse' })
 
-    expect(await screen.findByText('Signed in as ada@example.com')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Home' })).toBeInTheDocument()
     expect(requests).toEqual([{ email: 'ada@example.com', password: 'correct horse' }])
   })
 

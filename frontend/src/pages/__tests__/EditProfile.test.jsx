@@ -1,5 +1,5 @@
 import { http, HttpResponse } from 'msw'
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import { useLocation } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import { AppRouter } from '@/app/router'
@@ -72,6 +72,10 @@ async function replaceText(user, label, value) {
 
 const save = (user) => user.click(screen.getByRole('button', { name: 'Save' }))
 
+// The page content, without the app shell (whose profile card repeats the signed-in user's avatar
+// and bio).
+const page = () => within(screen.getByRole('main'))
+
 describe('EditProfile', () => {
   describe('loading', () => {
     it('shows a loading state, then the form prefilled with the current username and bio', async () => {
@@ -95,6 +99,7 @@ describe('EditProfile', () => {
       await received
 
       expect(screen.getByRole('heading', { name: 'Edit profile' })).toBeInTheDocument()
+      expect(screen.getByRole('link', { name: 'Back to your profile' })).toHaveAttribute('href', '/u/ada')
       expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument()
       expect(screen.queryByLabelText('Username')).not.toBeInTheDocument()
 
@@ -177,7 +182,7 @@ describe('EditProfile', () => {
       await save(user)
 
       await waitFor(() => expect(requests).toEqual([{ bio: 'New bio' }]))
-      expect(await screen.findByText('New bio')).toBeInTheDocument()
+      expect(await page().findByText('New bio')).toBeInTheDocument()
       expect(screen.getByTestId('location')).toHaveTextContent('/u/ada')
     })
 
@@ -201,7 +206,7 @@ describe('EditProfile', () => {
       await save(user)
 
       await waitFor(() => expect(requests).toEqual([{ bio: '' }]))
-      expect(await screen.findByText('No bio yet.')).toBeInTheDocument()
+      expect(await page().findByText('No bio yet.')).toBeInTheDocument()
     })
 
     it.each(['ada', 'ADA'])(
@@ -271,8 +276,8 @@ describe('EditProfile', () => {
       expect(await screen.findByRole('heading', { name: '@ada_l' })).toBeInTheDocument()
       expect(requests).toEqual([{ username: 'ada_l', bio: 'Renamed' }])
       expect(screen.getByTestId('location')).toHaveTextContent('/u/ada_l')
-      expect(screen.getByText('Renamed')).toBeInTheDocument()
-      expect(screen.getByRole('img', { name: '@ada_l' })).toBeInTheDocument()
+      expect(page().getByText('Renamed')).toBeInTheDocument()
+      expect(page().getByRole('img', { name: '@ada_l' })).toBeInTheDocument()
       // Still your own profile under the new name.
       expect(screen.getByRole('link', { name: 'Edit profile' })).toHaveAttribute('href', '/settings/profile')
 
@@ -302,7 +307,7 @@ describe('EditProfile', () => {
 
     expect(await screen.findByRole('heading', { name: '@ada' })).toBeInTheDocument()
     expect(screen.getByTestId('location')).toHaveTextContent('/u/ada')
-    expect(screen.getByText('Math & engines')).toBeInTheDocument()
+    expect(page().getByText('Math & engines')).toBeInTheDocument()
     expect(requests).toHaveLength(0)
   })
 })

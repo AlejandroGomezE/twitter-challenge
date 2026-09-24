@@ -1,5 +1,5 @@
 import { http, HttpResponse } from 'msw'
-import { getDefaultNormalizer, screen } from '@testing-library/react'
+import { getDefaultNormalizer, screen, within } from '@testing-library/react'
 import { useLocation } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import { AppRouter } from '@/app/router'
@@ -84,10 +84,15 @@ describe('Profile', () => {
     renderApp('/u/ada')
 
     expect(await screen.findByRole('heading', { name: '@ada' })).toBeInTheDocument()
-    expect(screen.getByRole('img', { name: '@ada' })).toHaveTextContent('A')
-    expect(screen.getByText('Math & engines')).toBeInTheDocument()
-    expect(screen.getByText('Joined September 2026')).toBeInTheDocument()
-    expect(screen.queryByText('No bio yet.')).not.toBeInTheDocument()
+    // Scoped to the page: the app shell also shows the signed-in user's (ada's) avatar and bio.
+    const page = within(screen.getByRole('main'))
+    expect(page.getByRole('img', { name: '@ada' })).toHaveTextContent('A')
+    expect(page.getByText('Math & engines')).toBeInTheDocument()
+    expect(page.getByText('Joined September 2026')).toBeInTheDocument()
+    expect(page.queryByText('No bio yet.')).not.toBeInTheDocument()
+    expect(page.getByRole('link', { name: 'Back to home' })).toHaveAttribute('href', '/')
+    expect(page.getByRole('tab', { name: 'Posts' })).toHaveAttribute('aria-selected', 'true')
+    expect(page.getByText('No posts yet')).toBeInTheDocument()
   })
 
   it('renders the bio as plain text, keeping line breaks and never interpreting HTML', async () => {
@@ -96,7 +101,8 @@ describe('Profile', () => {
 
     const { container } = renderApp('/u/ada')
 
-    const bioElement = await screen.findByText(bio, {
+    // Scoped to the page: the app shell's profile card shows the same (signed-in user's) bio.
+    const bioElement = await within(await screen.findByRole('main')).findByText(bio, {
       normalizer: getDefaultNormalizer({ trim: false, collapseWhitespace: false }),
     })
     expect(bioElement.textContent).toBe(bio)
@@ -141,9 +147,13 @@ describe('Profile', () => {
 
     expect(await screen.findByText('User not found')).toBeInTheDocument()
     expect(screen.getByText('There is no user called @ghost.')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Back to home' })).toHaveAttribute('href', '/')
+    // Two ways home: the header's back button and the empty state's link (same accessible name).
+    const homeLinks = screen.getAllByRole('link', { name: 'Back to home' })
+    expect(homeLinks).toHaveLength(2)
+    for (const link of homeLinks) expect(link).toHaveAttribute('href', '/')
     expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
-    expect(profiles.requests).toEqual(['ghost'])
+    // The app shell's profile card also loads the signed-in user (ada); only count @ghost here.
+    expect(profiles.requests.filter((username) => username === 'ghost')).toEqual(['ghost'])
   })
 
   it('shows a friendly error on a server failure and recovers on Retry', async () => {
