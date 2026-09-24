@@ -72,7 +72,9 @@ re-asked next session.
 ## Merging
 
 One person, so `gh pr review --approve` always fails (GitHub rejects self-approval) — don't try it.
-Your explicit "merge it" *is* the approval. Squash-merge, delete the branch.
+Your explicit "merge it" *is* the approval. **Merge commit, never squash** (`gh pr merge <n> --merge`)
+— every commit on the feature branch (frame, build, verified, fixes) stays visible in `main`'s
+history on GitHub. Delete the branch after.
 
 There's no auto-deploy configured for this project yet — merging to `main` doesn't ship anything by
 itself. If/when that changes, update this line.

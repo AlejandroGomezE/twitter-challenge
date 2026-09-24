@@ -65,7 +65,7 @@ severity. **Alejandro decides**: ready to merge, or changes needed.
 On explicit "merge it":
 
 ```bash
-gh pr merge <n> --squash --delete-branch
+gh pr merge <n> --merge --delete-branch
 ```
 
 Don't try `gh pr review --approve` first — solo repo, GitHub always rejects self-approval
@@ -94,6 +94,7 @@ Tell Alejandro it's done. Stop.
 
 - **Test the touched surface, not everything.**
 - **Leave nothing running.** A closed feature ends with `scripts/down-be` + `scripts/down-fe`.
-- **One PR, Alejandro decides the merge.**
+- **One PR, Alejandro decides the merge.** Always a merge commit (`--merge`) — never `--squash` or
+  `--rebase`; the feature's full commit history stays in `main`.
 - **Never `gh pr review --approve`** on this solo repo.
 - Follow-ups get resolved or explicitly carried forward — never silently forgotten.
