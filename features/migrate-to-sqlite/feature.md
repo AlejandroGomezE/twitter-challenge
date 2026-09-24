@@ -2,7 +2,7 @@
 slug: migrate-to-sqlite
 status: verifying
 scope: backend
-next: /review-feature migrate-to-sqlite
+next: /close-feature migrate-to-sqlite
 ---
 # Migrate from PostgreSQL to SQLite
 
@@ -55,9 +55,18 @@ next: /review-feature migrate-to-sqlite
   (implementer debris) was found during orchestrator verification and reverted.
 
 ## Follow-ups
+- `test:e2e` was already failing on `main` (spec expected plain `'Hello World!'`, controller returns
+  `{ message: 'Hello World!' }`) — unrelated to this feature; Alejandro is committing the spec fix
+  separately.
+- Dev servers from `scripts/be-local`/`fe-local` were piling up as orphans (7 `nest --watch`
+  processes + a stale `dist/main` on :3000, 2 Vite servers). Addressed outside this feature by the
+  new `scripts/down-be`/`scripts/down-fe` + `CONVENTIONS.md` §10, committed separately.
 
 ## Log
 - 2026-09-24 · framed
 - 2026-09-24 · built — datasource swapped to SQLite (`@prisma/adapter-better-sqlite3`), a real
   path-resolution bug caught by review and fixed, docs updated, backend builds/tests/boots
   clean against a real local `backend/prisma/dev.db`.
+- 2026-09-24 · verified — all 4 acceptance criteria exercised against the running app (boot on
+  SQLite, real query via `PrismaService` from a foreign cwd lands on `backend/prisma/dev.db`,
+  `dev.db` git-ignored); stale Postgres comment in `schema.prisma` removed.
