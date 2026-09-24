@@ -1,6 +1,6 @@
+import { PageHeader } from '@/components/layout/PageHeader';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Field,
   FieldDescription,
@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils';
 import { BIO_MAX_LENGTH, bioSchema, usernameSchema } from '@/lib/validation/profile-schemas';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { ArrowLeft } from 'lucide-react';
 import { useForm, useWatch } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router';
 import { z } from 'zod';
@@ -37,7 +38,7 @@ export function EditProfile() {
 
   if (isPending) {
     return (
-      <EditProfileShell>
+      <EditProfileShell username={user.username}>
         <div className="flex flex-col gap-4" aria-busy="true">
           <Spinner className="sr-only" />
           <Skeleton className="h-4 w-20" />
@@ -51,14 +52,18 @@ export function EditProfile() {
 
   if (isError) {
     return (
-      <EditProfileShell>
+      <EditProfileShell username={user.username}>
         <div className="flex flex-col gap-4">
           <Alert variant="destructive">
             <AlertDescription>
               Couldn&apos;t load your profile. Check your connection and try again.
             </AlertDescription>
           </Alert>
-          <Button onClick={() => refetch()} disabled={isFetching}>
+          <Button
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="self-start rounded-full px-5 font-semibold"
+          >
             {isFetching && <Spinner aria-hidden="true" />}
             Retry
           </Button>
@@ -68,7 +73,7 @@ export function EditProfile() {
   }
 
   return (
-    <EditProfileShell>
+    <EditProfileShell username={user.username}>
       <EditProfileForm currentUsername={user.username} currentBio={profile.bio ?? ''} />
     </EditProfileShell>
   );
@@ -173,10 +178,14 @@ function EditProfileForm({ currentUsername, currentBio }) {
           <FieldError id="edit-profile-bio-error" errors={[errors.bio]} />
         </Field>
         <div className="flex justify-end gap-2">
-          <Button asChild variant="outline">
+          <Button
+            asChild
+            variant="outline"
+            className="rounded-full border-foreground/20 px-5 font-semibold"
+          >
             <Link to={`/u/${currentUsername}`}>Cancel</Link>
           </Button>
-          <Button type="submit" disabled={isSaving}>
+          <Button type="submit" disabled={isSaving} className="rounded-full px-5 font-semibold">
             {isSaving && <Spinner aria-hidden="true" />}
             Save
           </Button>
@@ -186,18 +195,21 @@ function EditProfileForm({ currentUsername, currentBio }) {
   );
 }
 
-// Centered card, matching the profile page's layout.
-function EditProfileShell({ children }) {
+// Inside the app shell's center column: sticky header (back to your profile) + padded content.
+function EditProfileShell({ username, children }) {
   return (
-    <div className="mx-auto max-w-md p-8">
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            <h1>Edit profile</h1>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>{children}</CardContent>
-      </Card>
-    </div>
+    <>
+      <PageHeader
+        title="Edit profile"
+        leading={
+          <Button asChild variant="ghost" size="icon-lg" className="rounded-full">
+            <Link to={`/u/${username}`} aria-label="Back to your profile">
+              <ArrowLeft className="size-5" aria-hidden="true" />
+            </Link>
+          </Button>
+        }
+      />
+      <div className="px-5 py-6 sm:px-6">{children}</div>
+    </>
   );
 }

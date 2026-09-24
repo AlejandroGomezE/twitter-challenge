@@ -3,14 +3,14 @@ import { getAvatarColor, getAvatarInitial } from '../avatar-color'
 
 // Mirrors the (private) palette in avatar-color.js.
 const PALETTE = [
-  'bg-red-600 text-white',
-  'bg-orange-600 text-white',
-  'bg-amber-700 text-white',
-  'bg-emerald-600 text-white',
-  'bg-teal-600 text-white',
-  'bg-sky-600 text-white',
-  'bg-indigo-600 text-white',
-  'bg-fuchsia-600 text-white',
+  'bg-[oklch(0.585_0.196_30)] text-white',
+  'bg-[oklch(0.62_0.15_150)] text-[oklch(0.2_0.012_60)]',
+  'bg-[oklch(0.6_0.13_240)] text-[oklch(0.2_0.012_60)]',
+  'bg-[oklch(0.7_0.15_80)] text-[oklch(0.2_0.012_60)]',
+  'bg-[oklch(0.55_0.16_320)] text-white',
+  'bg-[oklch(0.6_0.12_200)] text-[oklch(0.2_0.012_60)]',
+  'bg-[oklch(0.55_0.15_280)] text-white',
+  'bg-[oklch(0.65_0.14_55)] text-[oklch(0.2_0.012_60)]',
 ]
 
 const SAMPLE_USERNAMES = ['ada', 'grace', 'linus', 'margaret', 'alan', 'barbara', 'ken', 'dennis', 'x', 'user_123']
