@@ -1,8 +1,8 @@
 ---
 slug: user-authentication
-status: verifying
+status: done
 scope: full-stack
-next: /close-feature user-authentication
+next: —
 ---
 # User authentication (email + password)
 
@@ -165,22 +165,22 @@ next: /close-feature user-authentication
   lives~~ — fixed: repositories are the only layer injecting `PrismaService` (contract §B,
   `implementer` agent, backend-architecture doc).
 
-- `argon2`'s install script (`node-gyp-build`) is blocked by npm's install-scripts policy; it works
+- [ ] (open) `argon2`'s install script (`node-gyp-build`) is blocked by npm's install-scripts policy; it works
   because a prebuilt binary exists for this platform (Windows x64). On a platform without one, run
   `npm install-scripts approve argon2` in `backend/` (or add it to `allowScripts`).
-- For Close — tests still to write: `AuthService` unit spec (call `onModuleInit()` before
+- [x] (done at Close: BE 8 suites / 78 + 12 e2e, FE 10 suites / 65) For Close — tests still to write: `AuthService` unit spec (call `onModuleInit()` before
   `signIn`, since the dummy hash is computed there); `UsersService` spec (argon2id params, P2002 →
   409, `toPublicUser` never includes `passwordHash`); frontend `*.test.jsx` for `SignIn` (incl. the
   `from` redirect guard), `SignUp` (validation, 409/429 messages), `SignOut` (redirects on success
   AND failure — reviewer noted `signOut` clears the mutation cache while that mutation is in
   flight; confirm it still settles), `ProtectedRoute`/`PublicOnlyRoute`, `AuthProvider`, and the
   401 handling in `query-client.js`. Already covered: `auth.guard.spec.ts` (13) + e2e (11).
-- `knowledge/infra/code-quality.md` still describes auth shapes as guidance; they now point to the
+- [x] (resolved — notes + stale lines fixed during Build) `knowledge/infra/code-quality.md` still describes auth shapes as guidance; they now point to the
   architecture docs. Fine as-is.
-- File-download endpoints (`StreamableFile`) and raw string bodies would get a 500 from the
+- [ ] (open) File-download endpoints (`StreamableFile`) and raw string bodies would get a 500 from the
   fail-closed serializer unless they declare a type; add a `StreamableFile` passthrough (+ doc line)
   when the first download endpoint is built. None exists today.
-- Retry on the server-unreachable screen: after a first-load 500 (no cached user) TanStack Query
+- [ ] (open) Retry on the server-unreachable screen: after a first-load 500 (no cached user) TanStack Query
   puts the me query back to `pending`, so `ProtectedRoute` shows the full-page spinner instead of the
   disabled Retry button + spinner; that branch only runs when a user was cached. Harmless (a loading
   state is shown), cosmetic mismatch with the design — check `isError` before `isLoading` if wanted.
@@ -202,3 +202,4 @@ next: /close-feature user-authentication
   `PublicOnlyRoute`), `/auth/me` server errors show an error + Retry instead of "signed out".
 - 2026-09-24 · verified — re-ran the UI checks (19/19) plus the new error state (4/4: backend down →
   error + Retry, sign-in still usable, Retry → correct route) against the running app.
+- 2026-09-24 · closed — PR #2, merged (merge commit `05a9e6a`)
