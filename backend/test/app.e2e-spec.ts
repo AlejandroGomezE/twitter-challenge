@@ -10,7 +10,7 @@ import { SESSION_COOKIE } from './../src/auth/session.constants.js';
 import { PrismaService } from './../src/database/prisma.service.js';
 import { UsersService } from './../src/modules/users/users.service.js';
 
-describe('AppController (e2e)', () => {
+describe('App (e2e)', () => {
   let app: INestApplication;
   const createdUserIds: string[] = [];
 
@@ -50,33 +50,35 @@ describe('AppController (e2e)', () => {
     return { userId: user.id, token };
   }
 
-  it('GET / without a session returns 401', async () => {
-    const res = await request(app.getHttpServer()).get('/').expect(401);
+  // GET /auth/me is the probe for the global guard: it's gated like every
+  // non-@Public() endpoint.
+  it('a gated endpoint without a session returns 401', async () => {
+    const res = await request(app.getHttpServer()).get('/auth/me').expect(401);
     expect(res.body).toEqual({
       statusCode: 401,
       message: 'Authentication required',
       timestamp: expect.any(String),
-      path: '/',
+      path: '/auth/me',
     });
   });
 
-  it('GET / with a valid session returns 200', async () => {
-    const { token } = await createUserWithSession();
-    await request(app.getHttpServer())
-      .get('/')
+  it('a gated endpoint with a valid session returns 200', async () => {
+    const { userId, token } = await createUserWithSession();
+    const res = await request(app.getHttpServer())
+      .get('/auth/me')
       .set('Cookie', `${SESSION_COOKIE}=${token}`)
-      .expect(200)
-      .expect({ message: 'Hello World!' });
+      .expect(200);
+    expect(res.body).toMatchObject({ id: userId });
   });
 
-  it('GET / with an expired session returns 401', async () => {
+  it('a gated endpoint with an expired session returns 401', async () => {
     const { userId, token } = await createUserWithSession();
     await app.get(PrismaService).session.updateMany({
       where: { userId },
       data: { expiresAt: new Date(Date.now() - 1000) },
     });
     await request(app.getHttpServer())
-      .get('/')
+      .get('/auth/me')
       .set('Cookie', `${SESSION_COOKIE}=${token}`)
       .expect(401);
   });
@@ -225,10 +227,6 @@ describe('AppController (e2e)', () => {
 
       await request(app.getHttpServer())
         .get('/auth/me')
-        .set('Cookie', cookie)
-        .expect(401);
-      await request(app.getHttpServer())
-        .get('/')
         .set('Cookie', cookie)
         .expect(401);
 

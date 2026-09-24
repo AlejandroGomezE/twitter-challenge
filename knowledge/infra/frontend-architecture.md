@@ -162,8 +162,8 @@ to render signed out. `src/components/ui/*` (shadcn) isn't tested. Reference tes
 `components/ui/` (shadcn, see [[UI component inventory]]), `hooks/`,
 `lib/api/client.js`, `lib/auth/`, `lib/validation/`, `lib/utils.js`, `routes/`
 (`ProtectedRoute`, `PublicOnlyRoute`), `test/` (Vitest + RTL + MSW helpers), and
-`pages/` — `SignIn`, `SignUp`, `SignOut`, and `Home` (shows the signed-in email, a
-sign-out button, and a `useQuery` against the backend's session-gated `GET /`).
+`pages/` — `SignIn`, `SignUp`, `SignOut`, and `Home` (shows the signed-in email and a
+sign-out button).
 
 **Not implemented, intentionally:** `components/layout/`, `features/`. These follow
 once there's a concrete domain feature — see [[Code quality]] for the shape to build

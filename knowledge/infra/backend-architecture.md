@@ -36,8 +36,6 @@ backend/src/
 │                          #   ResponseSerializerInterceptor, exception filter — shared by
 │                          #   main.ts and the e2e suite
 ├── app.module.ts          # root module — wires Config, Prisma, Auth, (conditionally) Observe
-├── app.controller.ts
-├── app.service.ts         # placeholder root route, GET / → { message } (session required)
 ├── observe.ts             # NestJS Observe APM module/instrument factory
 ├── config/
 │   ├── configuration.ts           # typed config (nodeEnv, port, database.url, frontendOrigin)
@@ -46,8 +44,6 @@ backend/src/
 │   ├── prisma.module.ts   # @Global, exports PrismaService
 │   └── prisma.service.ts  # extends generated PrismaClient, better-sqlite3 driver adapter
 ├── common/
-│   ├── dto/
-│   │   └── message-response.dto.ts   # MessageResponseDto { message } (GET /)
 │   ├── filters/
 │   │   └── all-exceptions.filter.ts  # global, normalizes every error response
 │   └── interceptors/
@@ -170,8 +166,8 @@ response to `{ statusCode, message, timestamp, path }`. Paired with a global
 
 **Responses.** Request DTOs validate input (`class-validator`); response DTOs define
 output. Every handler that returns a body returns a response DTO — a class with
-`@Expose()` on each emitted field and nothing else exposed (`UserResponseDto`,
-`MessageResponseDto`) — declared with `@SerializeOptions({ type: XResponseDto })` plus
+`@Expose()` on each emitted field and nothing else exposed (e.g.
+`UserResponseDto`) — declared with `@SerializeOptions({ type: XResponseDto })` plus
 the matching concrete return type. The global `ResponseSerializerInterceptor`
 (`src/common/interceptors/`, a `ClassSerializerInterceptor` subclass with
 `excludeExtraneousValues: true`, registered in `configureApp`) converts the returned

@@ -104,7 +104,7 @@ from `backend/.env` (create it from `backend/.env.example`; it's git-ignored).
     `Invalid email or password` otherwise.
   - `POST /auth/sign-out` → 204, revokes the session and clears the cookie (idempotent).
   - `GET /auth/me` → `{ id, email }` or 401.
-  - **Every other endpoint (incl. `GET /`) requires a valid `sid` cookie** — a global
+  - **Every other endpoint requires a valid `sid` cookie** — a global
     `AuthGuard` (`APP_GUARD`); opt a route out with `@Public()`. POST/PUT/PATCH/DELETE with
     an `Origin` other than `FRONTEND_ORIGIN` get 403, public routes included.
   - Sign-up and sign-in are rate limited to 5 requests/minute per IP (429 beyond).
