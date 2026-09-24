@@ -1,8 +1,8 @@
 ---
 slug: migrate-to-sqlite
-status: verifying
+status: done
 scope: backend
-next: /close-feature migrate-to-sqlite
+next: —
 ---
 # Migrate from PostgreSQL to SQLite
 
@@ -57,10 +57,10 @@ next: /close-feature migrate-to-sqlite
 ## Follow-ups
 - `test:e2e` was already failing on `main` (spec expected plain `'Hello World!'`, controller returns
   `{ message: 'Hello World!' }`) — unrelated to this feature; Alejandro is committing the spec fix
-  separately.
+  separately. **Still open** — not part of PR #1; lands with Alejandro's own commit.
 - Dev servers from `scripts/be-local`/`fe-local` were piling up as orphans (7 `nest --watch`
   processes + a stale `dist/main` on :3000, 2 Vite servers). Addressed outside this feature by the
-  new `scripts/down-be`/`scripts/down-fe` + `CONVENTIONS.md` §10, committed separately.
+  new `scripts/down-be`/`scripts/down-fe` + `CONVENTIONS.md` §10, committed separately. **Still open** — scripts are written and tested, but uncommitted; they land with Alejandro's flow commit (along with the `/setup`, installer and `close-feature` Postgres→SQLite wording from the PR review).
 
 ## PRs
 - https://github.com/AlejandroGomezE/twitter-challenge/pull/1
@@ -73,3 +73,4 @@ next: /close-feature migrate-to-sqlite
 - 2026-09-24 · verified — all 4 acceptance criteria exercised against the running app (boot on
   SQLite, real query via `PrismaService` from a foreign cwd lands on `backend/prisma/dev.db`,
   `dev.db` git-ignored); stale Postgres comment in `schema.prisma` removed.
+- 2026-09-24 · closed — PR #1, merged (squash `79a05ac`)
