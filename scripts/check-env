@@ -30,6 +30,13 @@ else
 fi
 
 command -v npm >/dev/null && ok "npm $(npm --version)" || err "npm missing"
+
+# Optional: only needed for `docker compose up --build` (Runbook → Run with Docker).
+if command -v docker >/dev/null && docker compose version >/dev/null 2>&1; then
+  ok "docker compose available (optional — Runbook → Run with Docker)"
+else
+  warn "docker compose not found (optional — only needed for Runbook → Run with Docker)"
+fi
 echo
 
 # --- Dependencies installed ---
