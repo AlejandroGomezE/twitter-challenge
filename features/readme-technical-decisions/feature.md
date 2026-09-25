@@ -1,8 +1,8 @@
 ---
 slug: readme-technical-decisions
-status: verifying
+status: done
 scope: full-stack
-next: /close-feature readme-technical-decisions
+next: —
 ---
 # Root README with technical decisions
 
@@ -134,3 +134,4 @@ duplicate or contradict it.
 - 2026-09-25 · framed
 - 2026-09-25 · built — root README.md (507 lines; §1–10 per outline, with claims checked against the code, the SQLite rationale from Alejandro, and a known setup gotchas section), plus cross-links from Runbook.md, backend/README.md and frontend/README.md; 65/65 relative links resolve; BE 47/609 and FE 52/606 green, builds + lint clean
 - 2026-09-25 · verified — all 4 criteria pass: every §5.3 topic covered; first screen has docker compose, demo login and Runbook links; auth, CSRF, rate-limit, feed-paging and SSE claims checked with real requests on :3100 (cookie flags, sha256 token with 7-day expiry, sign-out revocation, identical 401s, 409, 403 on foreign Origin, 5/min sign-in, 10/min posts, likes unlimited, limit 1–50, 400 on bad cursors); 65/65 links resolve against GitHub-rendered headings; no Runbook heading changed; README not viewed in a browser
+- 2026-09-25 · closed — PR #19, merged (e155d0b); docs only, so no new tests; review fix: history counts that go stale removed
