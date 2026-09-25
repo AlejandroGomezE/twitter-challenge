@@ -41,7 +41,7 @@ async function renderShellWithProbe(route) {
 const composerTextbox = () =>
   within(screen.getByRole('main')).getByRole('textbox', { name: 'Compose a new post' })
 
-const COMING_SOON_NAV = ['Explore', 'Notifications', 'Messages', 'Bookmarks']
+const COMING_SOON_NAV = ['Notifications', 'Messages', 'Bookmarks']
 
 describe('AppShell', () => {
   describe('left rail', () => {
@@ -81,6 +81,12 @@ describe('AppShell', () => {
         expect(button).not.toHaveAttribute('href')
         expect(rail.queryByRole('link', { name })).not.toBeInTheDocument()
       }
+    })
+
+    it('links Explore', async () => {
+      await renderShell()
+
+      expect(primaryNav().getByRole('link', { name: 'Explore' })).toHaveAttribute('href', '/explore')
     })
 
     it('shows New post as an enabled button', async () => {
@@ -159,12 +165,21 @@ describe('AppShell', () => {
       expect(card.queryByText('Coming soon')).not.toBeInTheDocument()
     })
 
-    it('shows the search box as a read-only, aria-disabled input', async () => {
+    it('shows the search box as an editable combobox', async () => {
       await renderShell()
 
-      const search = rightRail().getByRole('searchbox', { name: 'Search' })
-      expect(search).toHaveAttribute('readonly')
-      expect(search).toHaveAttribute('aria-disabled', 'true')
+      const search = rightRail().getByRole('combobox', { name: 'Search' })
+      expect(search).not.toHaveAttribute('readonly')
+      expect(search).not.toHaveAttribute('aria-disabled')
+    })
+
+    // AC5: the rail scrolls (`overflow-y-auto`, which clips on both axes), so it needs inline
+    // padding for the search box's 3px focus ring (and the typeahead panel) not to be cut off.
+    it('pads the scrolling rail so its edges do not clip the focus ring', async () => {
+      await renderShell()
+
+      const rail = screen.getByRole('complementary', { name: 'Sidebar' })
+      expect(rail).toHaveClass('overflow-y-auto', 'px-2', 'w-[366px]')
     })
   })
 
@@ -181,7 +196,8 @@ describe('AppShell', () => {
       expect(nav.getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page')
       expect(nav.getByRole('link', { name: 'Profile' })).toHaveAttribute('href', '/u/ada')
       expect(nav.getByRole('link', { name: 'Sign out' })).toHaveAttribute('href', '/sign-out')
-      for (const name of ['Explore', 'Notifications', 'Messages']) {
+      expect(nav.getByRole('link', { name: 'Explore' })).toHaveAttribute('href', '/explore')
+      for (const name of ['Notifications', 'Messages']) {
         expect(nav.getByRole('button', { name })).toHaveAttribute('aria-disabled', 'true')
         expect(nav.queryByRole('link', { name })).not.toBeInTheDocument()
       }

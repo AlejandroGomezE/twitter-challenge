@@ -1,6 +1,7 @@
 import { NavigationDepthTracker } from '@/app/NavigationDepthTracker';
 import { AppShell } from '@/components/layout/AppShell';
 import { EditProfile } from '@/pages/EditProfile';
+import { Explore } from '@/pages/Explore';
 import { Home } from '@/pages/Home';
 import { PostDetail } from '@/pages/PostDetail';
 import { Profile } from '@/pages/Profile';
@@ -23,6 +24,7 @@ export function AppRouter() {
         <Route element={<ProtectedRoute />}>
           <Route element={<AppShell />}>
             <Route path="/" element={<Home />} />
+            <Route path="/explore" element={<Explore />} />
             <Route path="/u/:username" element={<Profile />} />
             {/* A distinct, longer path: ranked separately from /u/:username, no overlap. */}
             <Route path="/u/:username/posts/:id" element={<PostDetail />} />

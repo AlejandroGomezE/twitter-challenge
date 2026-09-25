@@ -135,6 +135,8 @@ describe('PostDetail', () => {
       'href',
       '/u/grace',
     )
+    // Without a display name the author reads as before: just @username.
+    expect(within(comments[0]).getByRole('link', { name: '@ada' })).toHaveAttribute('href', '/u/ada')
     const time = comments[0].querySelector('time')
     expect(time).toHaveAttribute('dateTime', CREATED_AT)
     expect(time).toHaveAttribute('title')

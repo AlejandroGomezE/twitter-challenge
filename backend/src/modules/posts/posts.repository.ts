@@ -3,13 +3,14 @@ import { PrismaService } from '../../database/prisma.service.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import type { CursorPosition } from './pagination.js';
 
-// Columns every post read needs: the post itself plus its author's username.
+// Columns every post read needs: the post itself plus its author's username
+// and display name (fetched in the same query, never one lookup per row).
 const POST_WITH_AUTHOR_SELECT = {
   id: true,
   authorId: true,
   body: true,
   createdAt: true,
-  author: { select: { username: true } },
+  author: { select: { username: true, displayName: true } },
 } satisfies Prisma.PostSelect;
 
 export type PostWithAuthor = Prisma.PostGetPayload<{

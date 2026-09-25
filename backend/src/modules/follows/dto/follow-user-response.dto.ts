@@ -6,6 +6,10 @@ export class FollowUserResponseDto {
   @Expose()
   username: string;
 
+  // null until the user sets one.
+  @Expose()
+  displayName: string | null;
+
   @Expose()
   bio: string | null;
 

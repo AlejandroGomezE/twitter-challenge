@@ -18,7 +18,14 @@ import { profileQueryKey, updateMyProfile } from '@/lib/api/users';
 import { AUTH_ME_QUERY_KEY } from '@/lib/auth/auth-context';
 import { useAuth } from '@/lib/auth/use-auth';
 import { cn } from '@/lib/utils';
-import { BIO_MAX_LENGTH, bioSchema, usernameSchema } from '@/lib/validation/profile-schemas';
+import {
+  BIO_MAX_LENGTH,
+  bioSchema,
+  DISPLAY_NAME_MAX_LENGTH,
+  displayNameSchema,
+  optionalDisplayNameSchema,
+  usernameSchema,
+} from '@/lib/validation/profile-schemas';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft } from 'lucide-react';
@@ -26,12 +33,16 @@ import { useForm, useWatch } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router';
 import { z } from 'zod';
 
-const editProfileSchema = z.object({
-  username: usernameSchema,
-  bio: bioSchema,
-});
+// The name is required once set (it can be changed, never cleared); a user without one yet (`null`)
+// may leave it empty.
+const editProfileSchema = (hasDisplayName) =>
+  z.object({
+    displayName: hasDisplayName ? displayNameSchema : optionalDisplayNameSchema,
+    username: usernameSchema,
+    bio: bioSchema,
+  });
 
-// Loads the current bio (the `me` payload has no bio), then renders the form prefilled with it.
+// Loads the current bio and name (the `me` payload has no bio), then renders the form prefilled with it.
 export function EditProfile() {
   const { user } = useAuth();
   const { data: profile, isPending, isError, isFetching, refetch } = useProfile(user.username);
@@ -74,12 +85,16 @@ export function EditProfile() {
 
   return (
     <EditProfileShell username={user.username}>
-      <EditProfileForm currentUsername={user.username} currentBio={profile.bio ?? ''} />
+      <EditProfileForm
+        currentUsername={user.username}
+        currentDisplayName={profile.displayName ?? null}
+        currentBio={profile.bio ?? ''}
+      />
     </EditProfileShell>
   );
 }
 
-function EditProfileForm({ currentUsername, currentBio }) {
+function EditProfileForm({ currentUsername, currentDisplayName, currentBio }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -89,18 +104,23 @@ function EditProfileForm({ currentUsername, currentBio }) {
     control,
     formState: { errors },
   } = useForm({
-    resolver: zodResolver(editProfileSchema),
-    defaultValues: { username: currentUsername, bio: currentBio },
+    resolver: zodResolver(editProfileSchema(Boolean(currentDisplayName))),
+    defaultValues: {
+      displayName: currentDisplayName ?? '',
+      username: currentUsername,
+      bio: currentBio,
+    },
   });
 
   const mutation = useMutation({
     mutationFn: updateMyProfile,
     onSuccess: (updated) => {
-      const { id, email, username, bio, createdAt } = updated;
+      const { id, email, username, displayName, bio, createdAt } = updated;
       // Seed the new profile entry first so the profile page renders the saved data immediately.
-      queryClient.setQueryData(profileQueryKey(username), { username, bio, createdAt });
-      // `me` keeps its own shape ({ id, email, username }), as AuthProvider/sign-in store it.
-      queryClient.setQueryData(AUTH_ME_QUERY_KEY, { id, email, username });
+      queryClient.setQueryData(profileQueryKey(username), { username, displayName, bio, createdAt });
+      // `me` keeps its own shape ({ id, email, username, displayName }), as AuthProvider/sign-in
+      // store it.
+      queryClient.setQueryData(AUTH_ME_QUERY_KEY, { id, email, username, displayName });
       if (currentUsername.toLowerCase() !== username.toLowerCase()) {
         queryClient.removeQueries({ queryKey: profileQueryKey(currentUsername), exact: true });
       }
@@ -108,9 +128,11 @@ function EditProfileForm({ currentUsername, currentBio }) {
     },
   });
 
-  // Values arrive already trimmed/lowercased by the schema; only changed fields are sent.
-  const onSubmit = ({ username, bio }) => {
+  // Values arrive already trimmed/lowercased by the schema; only changed fields are sent. An empty
+  // name (only possible while the user has none) is simply not sent: `''` would be a 400.
+  const onSubmit = ({ displayName, username, bio }) => {
     const patch = {};
+    if (displayName !== '' && displayName !== currentDisplayName) patch.displayName = displayName;
     if (username !== currentUsername.toLowerCase()) patch.username = username;
     if (bio !== currentBio) patch.bio = bio;
 
@@ -126,6 +148,9 @@ function EditProfileForm({ currentUsername, currentBio }) {
   const bioLength = bioValue.trim().length;
   const bioTooLong = bioLength > BIO_MAX_LENGTH;
 
+  const displayNameDescribedBy = errors.displayName
+    ? 'edit-profile-display-name-hint edit-profile-display-name-error'
+    : 'edit-profile-display-name-hint';
   const usernameDescribedBy = errors.username
     ? 'edit-profile-username-hint edit-profile-username-error'
     : 'edit-profile-username-hint';
@@ -143,6 +168,21 @@ function EditProfileForm({ currentUsername, currentBio }) {
             <AlertDescription>{getApiErrorMessage(mutation.error)}</AlertDescription>
           </Alert>
         )}
+        <Field data-invalid={Boolean(errors.displayName)}>
+          <FieldLabel htmlFor="edit-profile-display-name">Name</FieldLabel>
+          <Input
+            id="edit-profile-display-name"
+            type="text"
+            autoComplete="name"
+            aria-invalid={Boolean(errors.displayName)}
+            aria-describedby={displayNameDescribedBy}
+            {...register('displayName')}
+          />
+          <FieldDescription id="edit-profile-display-name-hint">
+            Up to {DISPLAY_NAME_MAX_LENGTH} characters. Shown next to your username.
+          </FieldDescription>
+          <FieldError id="edit-profile-display-name-error" errors={[errors.displayName]} />
+        </Field>
         <Field data-invalid={Boolean(errors.username)}>
           <FieldLabel htmlFor="edit-profile-username">Username</FieldLabel>
           <Input

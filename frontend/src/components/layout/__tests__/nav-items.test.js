@@ -34,6 +34,16 @@ describe('getNavItems', () => {
     const items = getNavItems('ada')
 
     expect(byKey(items, 'home')).toMatchObject({ label: 'Home', to: '/', end: true, disabled: false })
+    expect(byKey(items, 'explore')).toMatchObject({
+      label: 'Explore',
+      to: '/explore',
+      end: false,
+      disabled: false,
+    })
+    expect(byKey(getNavItems('ada', { mobile: true }), 'explore')).toMatchObject({
+      to: '/explore',
+      disabled: false,
+    })
     expect(byKey(items, 'profile')).toMatchObject({
       label: 'Profile',
       to: '/u/ada',
@@ -65,17 +75,15 @@ describe('getNavItems', () => {
   it('flags the "Coming soon" items as disabled, with no path', () => {
     const items = getNavItems('ada')
 
-    for (const key of ['explore', 'notifications', 'messages', 'bookmarks']) {
+    for (const key of ['notifications', 'messages', 'bookmarks']) {
       expect(byKey(items, key)).toMatchObject({ disabled: true, to: undefined })
     }
     expect(keysOf(items.filter((item) => item.disabled))).toEqual([
-      'explore',
       'notifications',
       'messages',
       'bookmarks',
     ])
     expect(keysOf(getNavItems('ada', { mobile: true }).filter((item) => item.disabled))).toEqual([
-      'explore',
       'notifications',
       'messages',
     ])

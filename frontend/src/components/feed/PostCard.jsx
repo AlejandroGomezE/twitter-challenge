@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { ComingSoon } from '@/components/layout/ComingSoon';
 import { UserAvatar } from '@/components/UserAvatar';
+import { UserName } from '@/components/UserName';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,7 +39,7 @@ const COMING_SOON_ACTIONS = [
 
 const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
 
-// A post in Pulse's card layout: avatar, @username (→ profile), relative time, the body as plain
+// A post in Pulse's card layout: avatar, display name + @username (→ profile), relative time, the body as plain
 // text, and an action row (comments → detail, like toggle, repost / bookmark / share "Coming
 // soon"). Your own posts get a "…" menu with Delete behind a confirmation; others' posts get no
 // menu at all.
@@ -100,9 +101,9 @@ export function PostCard({ post, variant = 'card', onDeleted, className }) {
           <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-1.5 text-sm">
             <Link
               to={profilePath}
-              className="truncate rounded-sm font-mono font-semibold text-foreground outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="min-w-0 max-w-full truncate rounded-sm outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
             >
-              @{username}
+              <UserName username={username} displayName={post.author.displayName} />
             </Link>
             {!isDetail && (
               <>

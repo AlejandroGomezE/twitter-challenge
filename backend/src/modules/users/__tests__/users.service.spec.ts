@@ -1,4 +1,8 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as argon2 from 'argon2';
 import { Prisma, type User } from '../../../generated/prisma/client.js';
@@ -15,6 +19,7 @@ function makeUser(overrides: Partial<User> = {}): User {
     id: 'user-1',
     email: 'user@example.test',
     username: 'someone',
+    displayName: null,
     bio: null,
     passwordHash: '$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA',
     createdAt: CREATED_AT,
@@ -62,6 +67,7 @@ describe('UsersService', () => {
     findById: vi.fn(),
     findByUsername: vi.fn(),
     updateProfile: vi.fn(),
+    searchPage: vi.fn(),
   };
   const postsService = {
     countByAuthor: vi.fn(),
@@ -70,6 +76,7 @@ describe('UsersService', () => {
   const followsService = {
     counts: vi.fn(),
     relation: vi.fn(),
+    relationsFor: vi.fn(),
   };
 
   beforeEach(async () => {
@@ -91,15 +98,25 @@ describe('UsersService', () => {
     });
     // Echo the stored data back as a full record, like Prisma would.
     repository.create.mockImplementation(
-      (data: { email: string; username: string; passwordHash: string }) =>
-        Promise.resolve(makeUser(data)),
+      (data: {
+        email: string;
+        username: string;
+        displayName: string;
+        passwordHash: string;
+      }) => Promise.resolve(makeUser(data)),
     );
     repository.updateProfile.mockImplementation(
-      (_id: string, data: { username?: string; bio?: string | null }) =>
+      (
+        _id: string,
+        data: { username?: string; bio?: string | null; displayName?: string },
+      ) =>
         Promise.resolve(
           makeUser({
             ...(data.username !== undefined && { username: data.username }),
             ...(data.bio !== undefined && { bio: data.bio }),
+            ...(data.displayName !== undefined && {
+              displayName: data.displayName,
+            }),
           }),
         ),
     );
@@ -116,18 +133,31 @@ describe('UsersService', () => {
   });
 
   describe('create', () => {
-    it('normalizes the email and username (trim + lowercase) before storing them', async () => {
-      await service.create('  User@Example.TEST ', '  Some_One ', PASSWORD);
+    it('normalizes the email and username (trim + lowercase) and trims the display name before storing them', async () => {
+      await service.create(
+        '  User@Example.TEST ',
+        '  Some_One ',
+        '  Ada Lovelace  ',
+        PASSWORD,
+      );
 
       expect(repository.create).toHaveBeenCalledTimes(1);
       expect(repository.create.mock.calls[0][0].email).toBe(
         'user@example.test',
       );
       expect(repository.create.mock.calls[0][0].username).toBe('some_one');
+      expect(repository.create.mock.calls[0][0].displayName).toBe(
+        'Ada Lovelace',
+      );
     });
 
     it('stores an argon2id hash of the password, never the plaintext', async () => {
-      await service.create('user@example.test', 'someone', PASSWORD);
+      await service.create(
+        'user@example.test',
+        'someone',
+        'Some One',
+        PASSWORD,
+      );
 
       const data = repository.create.mock.calls[0][0] as {
         email: string;
@@ -135,6 +165,7 @@ describe('UsersService', () => {
         passwordHash: string;
       };
       expect(Object.keys(data).sort()).toEqual([
+        'displayName',
         'email',
         'passwordHash',
         'username',
@@ -147,10 +178,11 @@ describe('UsersService', () => {
       );
     });
 
-    it('returns only { id, email, username }', async () => {
+    it('returns only { id, email, username, displayName }', async () => {
       const result = await service.create(
         'user@example.test',
         'someone',
+        'Some One',
         PASSWORD,
       );
 
@@ -158,13 +190,19 @@ describe('UsersService', () => {
         id: 'user-1',
         email: 'user@example.test',
         username: 'someone',
+        displayName: 'Some One',
       });
-      expect(Object.keys(result).sort()).toEqual(['email', 'id', 'username']);
+      expect(Object.keys(result).sort()).toEqual([
+        'displayName',
+        'email',
+        'id',
+        'username',
+      ]);
     });
 
     it('produces a different hash for the same password on each call (random salt)', async () => {
-      await service.create('a@example.test', 'user_a', PASSWORD);
-      await service.create('b@example.test', 'user_b', PASSWORD);
+      await service.create('a@example.test', 'user_a', 'Some One', PASSWORD);
+      await service.create('b@example.test', 'user_b', 'Some One', PASSWORD);
 
       const first = repository.create.mock.calls[0][0].passwordHash as string;
       const second = repository.create.mock.calls[1][0].passwordHash as string;
@@ -182,6 +220,7 @@ describe('UsersService', () => {
         const promise = service.create(
           'user@example.test',
           'someone',
+          'Some One',
           PASSWORD,
         );
         await expect(promise).rejects.toBeInstanceOf(ConflictException);
@@ -199,7 +238,7 @@ describe('UsersService', () => {
         repository.create.mockRejectedValue(prismaError('P2002', { target }));
 
         await expect(
-          service.create('user@example.test', 'someone', PASSWORD),
+          service.create('user@example.test', 'someone', 'Some One', PASSWORD),
         ).rejects.toThrow(message);
       },
     );
@@ -216,6 +255,7 @@ describe('UsersService', () => {
         const promise = service.create(
           ' USER@example.test',
           'someone',
+          'Some One',
           PASSWORD,
         );
         await expect(promise).rejects.toBeInstanceOf(ConflictException);
@@ -231,7 +271,7 @@ describe('UsersService', () => {
       repository.create.mockRejectedValue(error);
 
       await expect(
-        service.create('user@example.test', 'someone', PASSWORD),
+        service.create('user@example.test', 'someone', 'Some One', PASSWORD),
       ).rejects.toBe(error);
     });
 
@@ -240,7 +280,7 @@ describe('UsersService', () => {
       repository.create.mockRejectedValue(error);
 
       await expect(
-        service.create('user@example.test', 'someone', PASSWORD),
+        service.create('user@example.test', 'someone', 'Some One', PASSWORD),
       ).rejects.toBe(error);
     });
   });
@@ -258,7 +298,7 @@ describe('UsersService', () => {
   });
 
   describe('findById', () => {
-    it('returns only { id, email, username } for an existing user', async () => {
+    it('returns only { id, email, username, displayName } for an existing user', async () => {
       repository.findById.mockResolvedValue(makeUser({ bio: 'hello' }));
 
       const result = await service.findById('user-1');
@@ -268,8 +308,10 @@ describe('UsersService', () => {
         id: 'user-1',
         email: 'user@example.test',
         username: 'someone',
+        displayName: null,
       });
       expect(Object.keys(result ?? {}).sort()).toEqual([
+        'displayName',
         'email',
         'id',
         'username',
@@ -285,7 +327,9 @@ describe('UsersService', () => {
 
   describe('getProfile', () => {
     it('looks the username up normalized and returns the profile with counts and the relation to the viewer', async () => {
-      repository.findByUsername.mockResolvedValue(makeUser({ bio: 'hello' }));
+      repository.findByUsername.mockResolvedValue(
+        makeUser({ bio: 'hello', displayName: 'Some One' }),
+      );
 
       const result = await service.getProfile('  SomeOne ', 'viewer-1');
 
@@ -302,6 +346,7 @@ describe('UsersService', () => {
       );
       expect(result).toEqual({
         username: 'someone',
+        displayName: 'Some One',
         bio: 'hello',
         createdAt: CREATED_AT,
         postCount: 4,
@@ -313,6 +358,7 @@ describe('UsersService', () => {
       expect(Object.keys(result).sort()).toEqual([
         'bio',
         'createdAt',
+        'displayName',
         'followerCount',
         'followingCount',
         'followsYou',
@@ -347,6 +393,14 @@ describe('UsersService', () => {
       expect([...started].sort()).toEqual(['counts', 'posts', 'relation']);
       releases.forEach((release) => release());
       await expect(promise).resolves.toMatchObject({ postCount: 1 });
+    });
+
+    it('returns displayName: null for a user who never set one', async () => {
+      repository.findByUsername.mockResolvedValue(makeUser());
+
+      await expect(
+        service.getProfile('someone', 'viewer-1'),
+      ).resolves.toMatchObject({ displayName: null });
     });
 
     it("passes the viewer's own id through when viewing your own profile (relation is false/false)", async () => {
@@ -402,21 +456,170 @@ describe('UsersService', () => {
     });
   });
 
+  describe('searchUsers', () => {
+    const NO_RELATIONS = {
+      followedByViewer: new Set<string>(),
+      followingViewer: new Set<string>(),
+    };
+
+    function row(username: string) {
+      return {
+        id: `id-${username}`,
+        username,
+        displayName: `Name ${username}`,
+        bio: null,
+      };
+    }
+
+    function cursorFor(username: string): string {
+      return Buffer.from(JSON.stringify([username]), 'utf8').toString(
+        'base64url',
+      );
+    }
+
+    beforeEach(() => {
+      repository.searchPage.mockResolvedValue([]);
+      followsService.relationsFor.mockResolvedValue(NO_RELATIONS);
+    });
+
+    it('reads the first page with the default size (20) and no cursor', async () => {
+      await expect(service.searchUsers('viewer-1', 'ada', {})).resolves.toEqual(
+        { items: [], nextCursor: null },
+      );
+      expect(repository.searchPage).toHaveBeenCalledWith({
+        query: 'ada',
+        afterUsername: undefined,
+        limit: 20,
+      });
+    });
+
+    it('returns `limit` items and a cursor on the last one when there are more', async () => {
+      repository.searchPage.mockResolvedValue(['ann', 'bea', 'cid'].map(row));
+
+      const page = await service.searchUsers('viewer-1', 'a', { limit: 2 });
+
+      expect(repository.searchPage).toHaveBeenCalledWith({
+        query: 'a',
+        afterUsername: undefined,
+        limit: 2,
+      });
+      expect(page.items.map((item) => item.username)).toEqual(['ann', 'bea']);
+      expect(page.nextCursor).toBe(cursorFor('bea'));
+    });
+
+    it('has no next cursor on the last page', async () => {
+      repository.searchPage.mockResolvedValue(['ann', 'bea'].map(row));
+
+      const page = await service.searchUsers('viewer-1', 'a', { limit: 2 });
+
+      expect(page.items).toHaveLength(2);
+      expect(page.nextCursor).toBeNull();
+    });
+
+    it('continues after the username in the cursor', async () => {
+      await service.searchUsers('viewer-1', 'a', {
+        cursor: cursorFor('bea'),
+        limit: 2,
+      });
+
+      expect(repository.searchPage).toHaveBeenCalledWith({
+        query: 'a',
+        afterUsername: 'bea',
+        limit: 2,
+      });
+    });
+
+    it.each(['', '!!', cursorFor('')])(
+      'rejects cursor %j with 400 Invalid cursor before any query',
+      async (cursor) => {
+        const promise = service.searchUsers('viewer-1', 'a', { cursor });
+        await expect(promise).rejects.toBeInstanceOf(BadRequestException);
+        await expect(promise).rejects.toThrow('Invalid cursor');
+        expect(repository.searchPage).not.toHaveBeenCalled();
+        expect(followsService.relationsFor).not.toHaveBeenCalled();
+      },
+    );
+
+    it('computes the booleans for the whole page in one batch lookup and never exposes the id', async () => {
+      repository.searchPage.mockResolvedValue(
+        ['ann', 'bea', 'cid', 'me'].map(row),
+      );
+      followsService.relationsFor.mockResolvedValue({
+        followedByViewer: new Set(['id-ann', 'id-bea']),
+        followingViewer: new Set(['id-bea', 'id-cid']),
+      });
+
+      const page = await service.searchUsers('id-me', 'a', {});
+
+      expect(followsService.relationsFor).toHaveBeenCalledTimes(1);
+      expect(followsService.relationsFor).toHaveBeenCalledWith('id-me', [
+        'id-ann',
+        'id-bea',
+        'id-cid',
+        'id-me',
+      ]);
+      expect(page.items).toEqual([
+        {
+          username: 'ann',
+          displayName: 'Name ann',
+          bio: null,
+          isFollowing: true,
+          followsYou: false,
+        },
+        {
+          username: 'bea',
+          displayName: 'Name bea',
+          bio: null,
+          isFollowing: true,
+          followsYou: true,
+        },
+        {
+          username: 'cid',
+          displayName: 'Name cid',
+          bio: null,
+          isFollowing: false,
+          followsYou: true,
+        },
+        // The caller's own row: both false.
+        {
+          username: 'me',
+          displayName: 'Name me',
+          bio: null,
+          isFollowing: false,
+          followsYou: false,
+        },
+      ]);
+    });
+
+    it('only looks up relations for the rows it returns (not the extra row)', async () => {
+      repository.searchPage.mockResolvedValue(['ann', 'bea'].map(row));
+
+      await service.searchUsers('viewer-1', 'a', { limit: 1 });
+
+      expect(followsService.relationsFor).toHaveBeenCalledWith('viewer-1', [
+        'id-ann',
+      ]);
+    });
+  });
+
   describe('updateProfile', () => {
     it('updates the caller row with the normalized values and returns the full own view', async () => {
       const result = await service.updateProfile('user-1', {
         username: ' New_Name ',
         bio: '  hello there  ',
+        displayName: '  New Name  ',
       });
 
       expect(repository.updateProfile).toHaveBeenCalledWith('user-1', {
         username: 'new_name',
         bio: 'hello there',
+        displayName: 'New Name',
       });
       expect(result).toEqual({
         id: 'user-1',
         email: 'user@example.test',
         username: 'new_name',
+        displayName: 'New Name',
         bio: 'hello there',
         createdAt: CREATED_AT,
         postCount: 4,
@@ -429,6 +632,7 @@ describe('UsersService', () => {
       expect(Object.keys(result).sort()).toEqual([
         'bio',
         'createdAt',
+        'displayName',
         'email',
         'followerCount',
         'followingCount',
@@ -470,6 +674,25 @@ describe('UsersService', () => {
       expect(repository.updateProfile).toHaveBeenCalledWith('user-1', {
         bio: null,
       });
+    });
+
+    it('sets the display name on its own, leaving the other fields untouched', async () => {
+      const result = await service.updateProfile('user-1', {
+        displayName: 'Ada',
+      });
+
+      expect(repository.updateProfile).toHaveBeenCalledWith('user-1', {
+        displayName: 'Ada',
+      });
+      expect(result).toMatchObject({ displayName: 'Ada', username: 'someone' });
+    });
+
+    it('leaves the display name unchanged when it is omitted', async () => {
+      await service.updateProfile('user-1', { bio: 'x' });
+
+      expect(repository.updateProfile.mock.calls[0][1]).not.toHaveProperty(
+        'displayName',
+      );
     });
 
     it('only writes the fields that were provided', async () => {
@@ -519,7 +742,12 @@ describe('UsersService', () => {
       const result = service.toPublicUser(makeUser({ bio: 'hello' }));
 
       expect(result).not.toHaveProperty('passwordHash');
-      expect(Object.keys(result).sort()).toEqual(['email', 'id', 'username']);
+      expect(Object.keys(result).sort()).toEqual([
+        'displayName',
+        'email',
+        'id',
+        'username',
+      ]);
     });
   });
 });

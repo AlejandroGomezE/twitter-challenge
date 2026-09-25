@@ -1,4 +1,5 @@
 import { mapPages, profileQueryFilters } from '@/lib/api/post-cache';
+import { searchKeys } from '@/lib/api/search';
 import { followKeys, profileQueryKey } from '@/lib/api/users';
 
 // Cache helpers for the follow mutation, so "change a user's follow state everywhere it's cached"
@@ -7,7 +8,9 @@ import { followKeys, profileQueryKey } from '@/lib/api/users';
 //   - the signed-in user's own profile — `followingCount`;
 //   - every followers / following list under `followKeys.lists()` — infinite `{ pages, pageParams }`
 //     whose rows are `FollowUser`s (`isFollowing`);
-//   - the suggestions `followKeys.suggestions()` — `{ items: FollowUser[] }`.
+//   - the suggestions `followKeys.suggestions()` — `{ items: FollowUser[] }`;
+//   - every user search result under `searchKeys.all` — the typeahead's single page
+//     `{ items: FollowUser[], nextCursor }` or Explore's infinite `{ pages, pageParams }`.
 // The race rules are post-cache.js's (`cancelLoadedFetches` / `writeAfterServerChange`); these
 // filters are what to pass them. Every helper returns the previous object untouched when nothing
 // changed, so unrelated observers don't re-render.
@@ -15,12 +18,19 @@ import { followKeys, profileQueryKey } from '@/lib/api/users';
 const sameUser = (a, b) => a.toLowerCase() === b.toLowerCase();
 
 // Filters for every cache entry a follow of `username` by `me` can touch: the target's profile,
-// the caller's profile (when known) and every follow listing.
+// the caller's profile (when known), every follow listing and every search result.
 export const followQueryFilters = (username, me) => [
   ...profileQueryFilters(username),
   ...(me ? profileQueryFilters(me) : []),
   { queryKey: followKeys.all },
+  { queryKey: searchKeys.all },
 ];
+
+// The row arrays of a cached listing: an infinite query's pages, or a single `{ items }` page.
+const rowsOf = (data) => {
+  if (data?.pages) return data.pages.map((page) => page.items);
+  return data?.items ? [data.items] : [];
+};
 
 // The last known follow state of `username` — `{ following, followerCount }` from their profile,
 // else `{ following, followerCount: null }` from any listed row — or null when it isn't cached.
@@ -34,9 +44,11 @@ export function findFollowState(queryClient, username) {
   }
   const suggestions = queryClient.getQueryData(followKeys.suggestions());
   const lists = queryClient.getQueriesData({ queryKey: followKeys.lists() }).map(([, data]) => data);
+  const searches = queryClient.getQueriesData({ queryKey: searchKeys.all }).map(([, data]) => data);
   const rowSets = [
     suggestions?.items ?? [],
     ...lists.flatMap((data) => (data?.pages ?? []).map((page) => page.items)),
+    ...searches.flatMap(rowsOf),
   ];
   for (const rows of rowSets) {
     const row = rows.find((item) => sameUser(item.username, username));
@@ -61,7 +73,8 @@ export function setFollowInProfile(queryClient, username, following, followerCou
   });
 }
 
-// Sets `isFollowing` on every loaded row of `username` (followers / following lists, suggestions).
+// Sets `isFollowing` on every loaded row of `username` (followers / following lists, suggestions,
+// search results).
 export function setFollowingInLists(queryClient, username, following) {
   const mapRows = (items) => {
     if (!items.some((item) => sameUser(item.username, username) && item.isFollowing !== following)) {
@@ -72,11 +85,15 @@ export function setFollowingInLists(queryClient, username, following) {
     );
   };
   queryClient.setQueriesData({ queryKey: followKeys.lists() }, (data) => mapPages(data, mapRows));
-  queryClient.setQueryData(followKeys.suggestions(), (data) => {
+  const mapSinglePage = (data) => {
     if (!data?.items) return data;
     const items = mapRows(data.items);
     return items === data.items ? data : { ...data, items };
-  });
+  };
+  queryClient.setQueryData(followKeys.suggestions(), mapSinglePage);
+  queryClient.setQueriesData({ queryKey: searchKeys.all }, (data) =>
+    data?.pages ? mapPages(data, mapRows) : mapSinglePage(data),
+  );
 }
 
 // Adds `delta` to a loaded profile's `followingCount` (never below 0).

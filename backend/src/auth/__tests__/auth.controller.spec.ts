@@ -18,11 +18,16 @@ const USER = {
   id: 'user-1',
   email: 'user@example.test',
   username: 'someone',
+  displayName: 'Some One',
 };
 const TOKEN = 'session-token';
 const EXPIRES_AT = new Date('2026-06-08T12:00:00.000Z');
 const CREDENTIALS = { email: 'user@example.test', password: 'password123' };
-const SIGN_UP = { ...CREDENTIALS, username: 'someone' };
+const SIGN_UP = {
+  ...CREDENTIALS,
+  username: 'someone',
+  displayName: 'Some One',
+};
 
 function makeResponse(): Response & {
   cookie: ReturnType<typeof vi.fn>;
@@ -107,10 +112,16 @@ describe('AuthController', () => {
       const res = makeResponse();
 
       await expect(call(res)).resolves.toEqual(USER);
-      // Sign-up also passes the username, between email and password.
+      // Sign-up also passes the username and display name, between email and
+      // password.
       const expectedArgs =
         name === 'signUp'
-          ? [SIGN_UP.email, SIGN_UP.username, SIGN_UP.password]
+          ? [
+              SIGN_UP.email,
+              SIGN_UP.username,
+              SIGN_UP.displayName,
+              SIGN_UP.password,
+            ]
           : [CREDENTIALS.email, CREDENTIALS.password];
       expect(serviceMethod).toHaveBeenCalledWith(...expectedArgs);
     });

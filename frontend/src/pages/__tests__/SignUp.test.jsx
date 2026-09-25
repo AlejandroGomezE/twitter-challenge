@@ -5,7 +5,7 @@ import { AppRouter } from '@/app/router'
 import { renderWithProviders } from '@/test/render'
 import { apiUrl, server } from '@/test/server'
 
-const ADA = { id: 'u1', email: 'ada@example.com', username: 'ada' }
+const ADA = { id: 'u1', email: 'ada@example.com', username: 'ada', displayName: 'Ada Lovelace' }
 const GOOD_PASSWORD = 'correct horse battery'
 
 const signedOut = () =>
@@ -30,9 +30,14 @@ async function renderSignUp() {
   return result
 }
 
-// `username` defaults to a valid one so tests about other fields stay focused; pass '' to skip it.
-async function fillAndSubmit(user, { username = 'ada', email, password, confirmPassword }) {
+// `displayName` and `username` default to valid ones so tests about other fields stay focused;
+// pass '' to skip one.
+async function fillAndSubmit(
+  user,
+  { displayName = 'Ada Lovelace', username = 'ada', email, password, confirmPassword },
+) {
   for (const [label, value] of [
+    ['Name', displayName],
     ['Username', username],
     ['Email', email],
     ['Password', password],
@@ -108,6 +113,47 @@ describe('SignUp', () => {
       expect(requests).toHaveLength(0)
     })
 
+    it('shows the Name field first', async () => {
+      await renderSignUp()
+
+      const inputs = screen.getAllByRole('textbox')
+      expect(inputs[0]).toBe(screen.getByLabelText('Name'))
+    })
+
+    it.each(['', '   '])('requires a name (%j)', async (displayName) => {
+      const requests = mockSignUp()
+      const { user } = await renderSignUp()
+
+      await fillAndSubmit(user, {
+        displayName,
+        email: 'ada@example.com',
+        password: GOOD_PASSWORD,
+        confirmPassword: GOOD_PASSWORD,
+      })
+
+      expect(await screen.findByText('Name is required')).toBeInTheDocument()
+      const input = screen.getByLabelText('Name')
+      expect(input).toHaveAttribute('aria-invalid', 'true')
+      expect(input.getAttribute('aria-describedby')).toContain('sign-up-display-name-error')
+      expect(requests).toHaveLength(0)
+    })
+
+    it('rejects a name longer than 50 characters (counted in code points)', async () => {
+      const requests = mockSignUp()
+      const { user } = await renderSignUp()
+
+      await fillAndSubmit(user, {
+        displayName: '😀'.repeat(51),
+        email: 'ada@example.com',
+        password: GOOD_PASSWORD,
+        confirmPassword: GOOD_PASSWORD,
+      })
+
+      expect(await screen.findByText('Name must be at most 50 characters')).toBeInTheDocument()
+      expect(screen.getByLabelText('Name')).toHaveAttribute('aria-invalid', 'true')
+      expect(requests).toHaveLength(0)
+    })
+
     it('requires a username', async () => {
       const requests = mockSignUp()
       const { user } = await renderSignUp()
@@ -150,11 +196,12 @@ describe('SignUp', () => {
     })
   })
 
-  it('posts { email, password, username } (normalized, never confirmPassword) and lands on Home', async () => {
+  it('posts { email, password, username, displayName } (normalized, never confirmPassword) and lands on Home', async () => {
     const requests = mockSignUp()
     const { user } = await renderSignUp()
 
     await fillAndSubmit(user, {
+      displayName: '  Ada Lovelace 😀 ',
       username: '  Ada_Lovelace ',
       email: '  ada@example.com ',
       password: GOOD_PASSWORD,
@@ -163,7 +210,12 @@ describe('SignUp', () => {
 
     expect(await screen.findByRole('heading', { name: 'Home' })).toBeInTheDocument()
     expect(requests).toEqual([
-      { email: 'ada@example.com', password: GOOD_PASSWORD, username: 'ada_lovelace' },
+      {
+        email: 'ada@example.com',
+        password: GOOD_PASSWORD,
+        username: 'ada_lovelace',
+        displayName: 'Ada Lovelace 😀',
+      },
     ])
   })
 
@@ -197,6 +249,29 @@ describe('SignUp', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Email is already registered')
     expect(screen.getByRole('heading', { name: 'Create an account' })).toBeInTheDocument()
+  })
+
+  it('shows a 400 about the name as-is', async () => {
+    mockSignUp(() =>
+      HttpResponse.json(
+        {
+          message: ['displayName must be between 1 and 50 characters with no line breaks'],
+          statusCode: 400,
+        },
+        { status: 400 },
+      ),
+    )
+    const { user } = await renderSignUp()
+
+    await fillAndSubmit(user, {
+      email: 'ada@example.com',
+      password: GOOD_PASSWORD,
+      confirmPassword: GOOD_PASSWORD,
+    })
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'displayName must be between 1 and 50 characters with no line breaks',
+    )
   })
 
   it('joins an array of validation messages', async () => {

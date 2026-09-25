@@ -13,8 +13,14 @@ const VIEWER_ID = 'user-viewer';
 const TARGET_ID = 'user-target';
 const CREATED_AT = new Date('2026-09-24T10:00:00.000Z');
 
+// `b` has no display name (null), like an account created before names.
 function user(id: string): FollowUserRow {
-  return { id, username: `name_${id}`, bio: `bio of ${id}` };
+  return {
+    id,
+    username: `name_${id}`,
+    displayName: id === 'b' ? null : `Name ${id}`,
+    bio: `bio of ${id}`,
+  };
 }
 
 // `count` edges sharing one timestamp, ids descending like the repository's
@@ -239,18 +245,21 @@ describe('FollowsService', () => {
       expect(page.items).toEqual([
         {
           username: 'name_a',
+          displayName: 'Name a',
           bio: 'bio of a',
           isFollowing: true,
           followsYou: true,
         },
         {
           username: `name_${VIEWER_ID}`,
+          displayName: `Name ${VIEWER_ID}`,
           bio: `bio of ${VIEWER_ID}`,
           isFollowing: false,
           followsYou: false,
         },
         {
           username: 'name_b',
+          displayName: null,
           bio: 'bio of b',
           isFollowing: false,
           followsYou: true,
@@ -280,12 +289,14 @@ describe('FollowsService', () => {
         items: [
           {
             username: 'name_a',
+            displayName: 'Name a',
             bio: 'bio of a',
             isFollowing: false,
             followsYou: false,
           },
           {
             username: 'name_b',
+            displayName: null,
             bio: 'bio of b',
             isFollowing: false,
             followsYou: true,
@@ -339,6 +350,23 @@ describe('FollowsService', () => {
       });
       expect(followsRepository.relationsAmong).toHaveBeenCalledWith(VIEWER_ID, [
         TARGET_ID,
+      ]);
+    });
+
+    it('relationsFor looks up a whole batch at once, without the viewer', async () => {
+      const relations = {
+        followedByViewer: new Set(['a']),
+        followingViewer: new Set(['b']),
+      };
+      followsRepository.relationsAmong.mockResolvedValue(relations);
+
+      await expect(
+        service.relationsFor(VIEWER_ID, ['a', VIEWER_ID, 'b']),
+      ).resolves.toBe(relations);
+      expect(followsRepository.relationsAmong).toHaveBeenCalledTimes(1);
+      expect(followsRepository.relationsAmong).toHaveBeenCalledWith(VIEWER_ID, [
+        'a',
+        'b',
       ]);
     });
 

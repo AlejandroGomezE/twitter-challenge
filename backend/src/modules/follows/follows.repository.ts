@@ -8,6 +8,7 @@ import type { CursorPosition } from '../posts/pagination.js';
 const FOLLOW_USER_SELECT = {
   id: true,
   username: true,
+  displayName: true,
   bio: true,
 } satisfies Prisma.UserSelect;
 

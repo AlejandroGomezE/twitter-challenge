@@ -12,6 +12,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { getAuthErrorMessage } from '@/lib/auth/auth-error-message'
 import { useAuth } from '@/lib/auth/use-auth'
 import { PASSWORD_MIN_LENGTH, signUpSchema } from '@/lib/validation/auth-schemas'
+import { DISPLAY_NAME_MAX_LENGTH } from '@/lib/validation/profile-schemas'
 
 export function SignUp() {
   const { signUp } = useAuth()
@@ -24,19 +25,23 @@ export function SignUp() {
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(signUpSchema),
-    defaultValues: { username: '', email: '', password: '', confirmPassword: '' },
+    defaultValues: { displayName: '', username: '', email: '', password: '', confirmPassword: '' },
   })
 
-  // `confirmPassword` is client-only; the API takes just the credentials and the username.
-  const onSubmit = async ({ email, password, username }) => {
+  // `confirmPassword` is client-only; the API takes the credentials, the username and the name.
+  const onSubmit = async ({ email, password, username, displayName }) => {
     setServerError(null)
     try {
-      await signUp({ email, password, username })
+      await signUp({ email, password, username, displayName })
       navigate('/', { replace: true })
     } catch (error) {
       setServerError(getAuthErrorMessage(error))
     }
   }
+
+  const displayNameDescribedBy = errors.displayName
+    ? 'sign-up-display-name-hint sign-up-display-name-error'
+    : 'sign-up-display-name-hint'
 
   const usernameDescribedBy = errors.username
     ? 'sign-up-username-hint sign-up-username-error'
@@ -62,6 +67,21 @@ export function SignUp() {
                   <AlertDescription>{serverError}</AlertDescription>
                 </Alert>
               )}
+              <Field data-invalid={Boolean(errors.displayName)}>
+                <FieldLabel htmlFor="sign-up-display-name">Name</FieldLabel>
+                <Input
+                  id="sign-up-display-name"
+                  type="text"
+                  autoComplete="name"
+                  aria-invalid={Boolean(errors.displayName)}
+                  aria-describedby={displayNameDescribedBy}
+                  {...register('displayName')}
+                />
+                <FieldDescription id="sign-up-display-name-hint">
+                  Up to {DISPLAY_NAME_MAX_LENGTH} characters. Shown next to your username.
+                </FieldDescription>
+                <FieldError id="sign-up-display-name-error" errors={[errors.displayName]} />
+              </Field>
               <Field data-invalid={Boolean(errors.username)}>
                 <FieldLabel htmlFor="sign-up-username">Username</FieldLabel>
                 <Input

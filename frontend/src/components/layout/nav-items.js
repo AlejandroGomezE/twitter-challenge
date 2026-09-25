@@ -18,7 +18,7 @@ const SIGN_OUT_ITEM = {
 // left rail's nav.
 const NAV_ITEMS = [
   { key: 'home', label: 'Home', icon: Home, to: () => '/', end: true, mobile: true },
-  { key: 'explore', label: 'Explore', icon: Hash, mobile: true },
+  { key: 'explore', label: 'Explore', icon: Hash, to: () => '/explore', mobile: true },
   { key: 'notifications', label: 'Notifications', icon: Bell, mobile: true },
   { key: 'messages', label: 'Messages', icon: Mail, mobile: true },
   { key: 'bookmarks', label: 'Bookmarks', icon: Bookmark, mobile: false },

@@ -49,7 +49,7 @@ describe('Strict request validation (e2e)', () => {
   }
 
   async function createUserWithSession(): Promise<{ username: string; cookie: string }> {
-    const user = await app.get(UsersService).create(uniqueEmail(), uniqueUsername(), PASSWORD);
+    const user = await app.get(UsersService).create(uniqueEmail(), uniqueUsername(), 'E2E User', PASSWORD);
     createdUserIds.push(user.id);
     const { token } = await app.get(AuthService).createSession(user.id);
     return { username: user.username, cookie: `${SESSION_COOKIE}=${token}` };
@@ -67,6 +67,7 @@ describe('Strict request validation (e2e)', () => {
       ['a boolean username', { username: true }],
       ['a numeric password', { password: 123456789012 }],
       ['a numeric email', { email: 42 }],
+      ['a numeric displayName', { displayName: 42 }],
     ])('rejects %s with 400 and creates nothing', async (_label, override) => {
       const email = uniqueEmail();
       const username = uniqueUsername();
@@ -74,7 +75,7 @@ describe('Strict request validation (e2e)', () => {
       const res = await request(app.getHttpServer())
         .post('/auth/sign-up')
         .set('Origin', FRONTEND_ORIGIN)
-        .send({ email, password: PASSWORD, username, ...override })
+        .send({ email, password: PASSWORD, username, displayName: 'E2E User', ...override })
         .expect(400);
 
       expect(res.body.statusCode).toBe(400);
@@ -87,7 +88,7 @@ describe('Strict request validation (e2e)', () => {
       const res = await request(app.getHttpServer())
         .post('/auth/sign-up')
         .set('Origin', FRONTEND_ORIGIN)
-        .send({ email: uniqueEmail(), password: PASSWORD, username })
+        .send({ email: uniqueEmail(), password: PASSWORD, username, displayName: 'E2E User' })
         .expect(201);
 
       createdUserIds.push(res.body.id);
@@ -113,6 +114,7 @@ describe('Strict request validation (e2e)', () => {
       ['a boolean bio', { bio: true }],
       ['a numeric bio', { bio: 123 }],
       ['a numeric username', { username: 123456 }],
+      ['a numeric displayName', { displayName: 123456 }],
     ])('rejects %s with 400 and changes nothing', async (_label, body) => {
       const { username, cookie } = await createUserWithSession();
 
@@ -127,7 +129,7 @@ describe('Strict request validation (e2e)', () => {
         .get(`/users/${username}`)
         .set('Cookie', cookie)
         .expect(200);
-      expect(profile.body).toMatchObject({ username, bio: null });
+      expect(profile.body).toMatchObject({ username, bio: null, displayName: 'E2E User' });
     });
 
     it('still accepts well-typed values', async () => {

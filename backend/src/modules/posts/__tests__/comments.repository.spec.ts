@@ -64,13 +64,15 @@ describe('CommentsRepository', () => {
       );
     });
 
-    it("selects the author's username only (never the whole user row)", async () => {
+    it("selects the author's username and display name only (never the whole user row)", async () => {
       await repository.findPage({ postId: 'post-1', limit: 1 });
 
       const [args] = prisma.comment.findMany.mock.calls[0] as [
         { select: Record<string, unknown> },
       ];
-      expect(args.select.author).toEqual({ select: { username: true } });
+      expect(args.select.author).toEqual({
+        select: { username: true, displayName: true },
+      });
     });
   });
 

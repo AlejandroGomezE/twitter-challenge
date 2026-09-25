@@ -44,6 +44,7 @@ function leakyPost(id: string): Record<string, unknown> {
     author: {
       id: 'user-1',
       username: 'someone',
+      displayName: 'Some One',
       email: 'someone@example.test',
       passwordHash: '$argon2id$secret',
     },
@@ -59,7 +60,7 @@ function expectedItem(id: string): Record<string, unknown> {
     id,
     body: `body of ${id}`,
     createdAt: '2026-09-24T10:00:00.000Z',
-    author: { username: 'someone' },
+    author: { username: 'someone', displayName: 'Some One' },
     likeCount: 2,
     commentCount: 0,
     likedByMe: false,

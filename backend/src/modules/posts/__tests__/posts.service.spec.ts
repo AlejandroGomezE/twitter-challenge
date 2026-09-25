@@ -20,7 +20,7 @@ const POST: PostWithAuthor = {
   authorId: AUTHOR_ID,
   body: 'hello world',
   createdAt: CREATED_AT,
-  author: { username: 'author' },
+  author: { username: 'author', displayName: 'The Author' },
 };
 
 // `count` posts by AUTHOR_ID, newest first, all sharing one timestamp so the
@@ -76,7 +76,7 @@ describe('PostsService', () => {
         id: 'post-1',
         body: 'hello world',
         createdAt: CREATED_AT,
-        author: { username: 'author' },
+        author: { username: 'author', displayName: 'The Author' },
         likeCount: 0,
         commentCount: 0,
         likedByMe: false,
@@ -105,7 +105,7 @@ describe('PostsService', () => {
         id: 'post-1',
         body: 'hello world',
         createdAt: CREATED_AT,
-        author: { username: 'author' },
+        author: { username: 'author', displayName: 'The Author' },
         likeCount: 3,
         commentCount: 2,
         likedByMe: true,
@@ -376,7 +376,7 @@ describe('PostsService', () => {
         id: rows[0].id,
         body: 'hello world',
         createdAt: CREATED_AT,
-        author: { username: 'author' },
+        author: { username: 'author', displayName: 'The Author' },
         likeCount: 4,
         commentCount: 1,
         likedByMe: true,

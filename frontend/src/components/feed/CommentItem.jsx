@@ -2,6 +2,7 @@ import { MoreHorizontal } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { UserAvatar } from '@/components/UserAvatar';
+import { UserName } from '@/components/UserName';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,7 +26,7 @@ import { getApiErrorMessage } from '@/lib/api/error-message';
 import { useAuth } from '@/lib/auth/use-auth';
 import { formatFullDate, formatRelativeShort } from '@/lib/format';
 
-// One comment under a post: avatar, @username (→ profile), relative time (full date on hover) and
+// One comment under a post: avatar, display name + @username (→ profile), relative time (full date on hover) and
 // the body as plain text with line breaks kept. Your own comments get a "More options" menu →
 // Delete → confirmation dialog → useDeleteComment; others' comments have no menu.
 // `onDeleted(commentId)` runs once the delete succeeded (the list moves focus, since this item and
@@ -47,9 +48,9 @@ export function CommentItem({ comment, postId, onDeleted }) {
           <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-1.5 text-sm">
             <Link
               to={profilePath}
-              className="truncate rounded-sm font-mono font-semibold text-foreground outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="min-w-0 max-w-full truncate rounded-sm outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
             >
-              @{username}
+              <UserName username={username} displayName={comment.author.displayName} />
             </Link>
             <span aria-hidden="true" className="text-muted-foreground">
               ·
