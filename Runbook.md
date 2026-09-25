@@ -48,10 +48,24 @@ schema change — see Backend → Realtime).
 
 The database is a local SQLite file (`backend/prisma/dev.db`), and both the file and the generated
 Prisma client (`backend/src/generated/prisma`) are git-ignored. On a fresh clone neither exists yet,
-and `npm install` doesn't create them because there's no `postinstall` hook. Run these once, from the repo root:
+and `npm install` doesn't create them because there's no `postinstall` hook.
+
+**Prerequisites:**
+
+- **Node 22.12+ (22 LTS) or Node 24**, with the npm it ships (10 or 11). `.nvmrc` pins 22, so with nvm:
+  `nvm install && nvm use`. Odd majors (23, 25) and anything older than 22.12 aren't supported: the
+  frontend's Vitest and the backend's `better-sqlite3` require it, and it's what `engines` in both
+  `package.json` files and `scripts/check-env` enforce.
+- **git**, and **bash** for `scripts/` (on Windows: Git Bash or WSL, see [Cross-platform](#cross-platform)).
+- **A C/C++ build toolchain** for the native `better-sqlite3` build during `npm install`: Xcode
+  Command Line Tools on macOS (`xcode-select --install`), `build-essential` + `python3` on Debian/Ubuntu.
+- **Docker** (optional, only for [Run with Docker](#run-with-docker)): Docker Engine with the Compose v2
+  plugin (`docker compose`). Verified with Docker 28.
+
+Then run these once, from the repo root:
 
 ```bash
-scripts/check-env                 # Node >= 20.11, npm; it will flag the missing node_modules/.env
+scripts/check-env                 # Node ^22.12 / 24, npm; it will flag the missing node_modules/.env
 cd backend
 npm install                       # also builds the native better-sqlite3 / argon2 modules
 cp .env.example .env              # DATABASE_URL=file:./dev.db is the right default
@@ -139,8 +153,8 @@ docker compose down -v            # stop and wipe the database (removes the volu
 
 ## Scripts index
 
-- **`scripts/check-env`** — checks Node (>=20.11, `frontend/vite.config.ts` uses
-  `import.meta.dirname`) and npm are installed, that `backend/node_modules` and
+- **`scripts/check-env`** — checks Node (^22.12, 24 or >=26, the `engines` range; see `.nvmrc`)
+  and npm are installed, that `backend/node_modules` and
   `frontend/node_modules` are present, and that `backend/.env` exists. It also reports whether
   Docker (optional, for [Run with Docker](#run-with-docker)) is available. Read-only.
 - **`scripts/be-local`** — `npm run start:dev` in `backend/` (foreground, logs, watch
