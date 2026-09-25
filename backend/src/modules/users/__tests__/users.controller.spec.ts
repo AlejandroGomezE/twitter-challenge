@@ -1,6 +1,7 @@
 import { Reflector } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
 import { IS_PUBLIC_KEY } from '../../../auth/public.decorator.js';
+import { PostPageResponseDto } from '../../posts/dto/post-page-response.dto.js';
 import { MyProfileResponseDto } from '../dto/my-profile-response.dto.js';
 import { ProfileResponseDto } from '../dto/profile-response.dto.js';
 import { UsersController } from '../users.controller.js';
@@ -16,10 +17,21 @@ const CALLER = {
   username: 'someone',
 };
 const CREATED_AT = new Date('2026-01-02T03:04:05.678Z');
-const PROFILE = { username: 'other', bio: 'hi', createdAt: CREATED_AT };
-const MY_PROFILE = { ...CALLER, bio: 'new bio', createdAt: CREATED_AT };
+const PROFILE = {
+  username: 'other',
+  bio: 'hi',
+  createdAt: CREATED_AT,
+  postCount: 2,
+};
+const MY_PROFILE = {
+  ...CALLER,
+  bio: 'new bio',
+  createdAt: CREATED_AT,
+  postCount: 0,
+};
+const PAGE = { items: [], nextCursor: null };
 
-type Handler = 'getProfile' | 'updateMe';
+type Handler = 'getProfile' | 'updateMe' | 'listPosts';
 
 function handlerOf(name: Handler): (...args: unknown[]) => unknown {
   return (
@@ -36,13 +48,16 @@ describe('UsersController', () => {
   const usersService = {
     getProfile: vi.fn(),
     updateProfile: vi.fn(),
+    listPosts: vi.fn(),
   };
 
   beforeEach(async () => {
     usersService.getProfile.mockReset();
     usersService.updateProfile.mockReset();
+    usersService.listPosts.mockReset();
     usersService.getProfile.mockResolvedValue(PROFILE);
     usersService.updateProfile.mockResolvedValue(MY_PROFILE);
+    usersService.listPosts.mockResolvedValue(PAGE);
 
     const moduleRef = await Test.createTestingModule({
       controllers: [UsersController],
@@ -55,6 +70,18 @@ describe('UsersController', () => {
     it('passes the route param to the service and returns the profile', async () => {
       await expect(controller.getProfile('Other')).resolves.toBe(PROFILE);
       expect(usersService.getProfile).toHaveBeenCalledWith('Other');
+    });
+  });
+
+  describe('listPosts', () => {
+    it('passes the route param, the session user as viewer and the query to the service', async () => {
+      await expect(
+        controller.listPosts(CALLER, 'Other', { cursor: 'abc', limit: 5 }),
+      ).resolves.toBe(PAGE);
+      expect(usersService.listPosts).toHaveBeenCalledWith('Other', CALLER.id, {
+        cursor: 'abc',
+        limit: 5,
+      });
     });
   });
 
@@ -88,6 +115,7 @@ describe('UsersController', () => {
     it.each([
       ['getProfile', ProfileResponseDto],
       ['updateMe', MyProfileResponseDto],
+      ['listPosts', PostPageResponseDto],
     ] as const)('%s serializes through its response DTO', (name, type) => {
       expect(
         reflector.get<{ type?: unknown }>(
@@ -97,7 +125,7 @@ describe('UsersController', () => {
       ).toEqual({ type });
     });
 
-    it.each(['getProfile', 'updateMe'] as const)(
+    it.each(['getProfile', 'updateMe', 'listPosts'] as const)(
       '%s is not @Public()',
       (name) => {
         expect(reflector.get(IS_PUBLIC_KEY, handlerOf(name))).toBeUndefined();

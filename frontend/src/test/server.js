@@ -18,6 +18,14 @@ export const handlers = [
       ? HttpResponse.json({ username: 'ada', bio: null, createdAt: '2026-09-15T12:00:00.000Z' })
       : HttpResponse.json({ message: 'User not found' }, { status: 404 }),
   ),
+  // Profile pages load the user's posts: ada has none; other usernames are unknown (like above).
+  http.get(apiUrl('/users/:username/posts'), ({ params }) =>
+    params.username.toLowerCase() === 'ada'
+      ? HttpResponse.json({ items: [], nextCursor: null })
+      : HttpResponse.json({ message: 'User not found' }, { status: 404 }),
+  ),
+  // Home loads the feed; empty by default.
+  http.get(apiUrl('/feed'), () => HttpResponse.json({ items: [], nextCursor: null })),
 ]
 
 export const server = setupServer(...handlers)

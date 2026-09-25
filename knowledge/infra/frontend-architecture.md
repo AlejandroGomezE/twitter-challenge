@@ -1,10 +1,10 @@
 ---
 title: Frontend architecture
 type: infra
-summary: Vite + React SPA (frontend/) structure and current implementation state — TanStack Query, shadcn/ui, react-router, HTTP client, cookie-session auth (useAuth, ProtectedRoute), Pulse theme (tokens, OS dark mode), the app shell layout route with "Coming soon" disabled items, the Home feed page, user profiles (view + edit, avatar placeholder).
+summary: Vite + React SPA (frontend/) structure and current implementation state — TanStack Query, shadcn/ui, react-router, HTTP client, cookie-session auth (useAuth, ProtectedRoute), Pulse theme (tokens, OS dark mode), the app shell layout route with "Coming soon" disabled items, the Home feed page, user profiles (view + edit, avatar placeholder), posts (feed, profile posts, post detail + comments, likes) with infinite queries and race-safe cache updates.
 status: active
 last-verified: 2026-09-24
-tags: [frontend, react, vite, architecture, tanstack-query, shadcn, auth, theme, layout]
+tags: [frontend, react, vite, architecture, tanstack-query, shadcn, auth, theme, layout, posts]
 ---
 
 ## Structure
@@ -17,25 +17,37 @@ frontend/src/
 ├── app/
 │   ├── App.jsx
 │   ├── router.jsx
+│   ├── NavigationDepthTracker.jsx # records every navigation for lib/navigation-history.js;
+│   │                   #   wraps AppRouter's <Routes>, renders nothing of its own
 │   ├── providers.jsx   # QueryClientProvider + AuthProvider (+ devtools in dev)
 │   └── query-client.js # createQueryClient() — central 401 handling
 ├── components/
 │   ├── ui/           # shadcn/ui primitives — see [[UI component inventory]]
 │   ├── layout/         # the app shell — AppShell, SideNav, MobileNav, RightRail, ComingSoon,
 │   │                   #   PageHeader, nav-items.js (see "App shell" below)
-│   ├── feed/           # Composer.jsx — the (disabled) post composer on Home
+│   ├── feed/           # Composer, PostCard, CommentComposer, CommentItem, InfiniteListFooter,
+│   │                   #   CharacterCounter, PostListSkeleton (see "Posts" below)
 │   ├── AuthLayout.jsx  # frame for /sign-in, /sign-up, /sign-out (brand + document.title)
 │   ├── BrandMark.jsx   # the feather logo mark (used by SideNav and AuthLayout)
 │   └── UserAvatar.jsx  # avatar placeholder (shadcn Avatar + AvatarFallback)
 ├── features/           # not created yet
-├── hooks/              # use-profile.js — useProfile(username)
+├── hooks/              # use-profile.js — useProfile(username); use-posts.js — useFeed,
+│                       #   useUserPosts, usePost, useCreatePost, useDeletePost, useToggleLike;
+│                       #   use-comments.js; use-retry-unless-not-found.js; use-open-composer.js
 ├── lib/
 │   ├── api/            # client.js — apiClient, ApiError; users.js — profileQueryKey,
-│   │                   #   fetchProfile, updateMyProfile; error-message.js — getApiErrorMessage
+│   │                   #   fetchProfile, updateMyProfile; posts.js — postKeys + post/like/comment
+│   │                   #   calls; post-cache.js — cache helpers; error-message.js —
+│   │                   #   getApiErrorMessage
 │   ├── auth/           # AuthProvider.jsx, use-auth.js, auth-context.js, auth-error-message.js
 │   ├── validation/     # auth-schemas.js (sign-in / sign-up), profile-schemas.js (username, bio)
-│   └── avatar-color.js # getAvatarColor / getAvatarInitial for the avatar placeholder
-├── pages/              # Home (feed), SignIn, SignUp, SignOut, Profile, EditProfile
+│   ├── avatar-color.js # getAvatarColor / getAvatarInitial for the avatar placeholder
+│   ├── text.js         # POST_MAX_LENGTH, measureBody, limitAnnouncement, isSubmitShortcut —
+│   │                   #   shared by both composers
+│   ├── navigation-history.js # per-entry in-app depth store + useCanGoBackInApp() (Back buttons)
+│   ├── format.js       # formatCount ("1.2K"), formatRelativeShort ("3h"), formatFullDate
+│   └── composer-focus.js # COMPOSER_TEXTAREA_ID, FOCUS_COMPOSER_STATE, focusComposer()
+├── pages/              # Home (feed), SignIn, SignUp, SignOut, Profile, EditProfile, PostDetail
 ├── routes/             # ProtectedRoute.jsx, PublicOnlyRoute.jsx
 └── test/               # shared test helpers — setup.js, server.js (MSW), render.jsx
 ```
@@ -91,7 +103,7 @@ that `<title>`, the feather `favicon.svg`, `<meta name="color-scheme" content="l
   - right rail — `<aside aria-label="Sidebar">` holding `RightRail`, 350px, `xl` only.
 
   Below `lg` there are no rails: `MobileNav` is a sticky bottom bar inside `<main>`, and a
-  floating (disabled) "New post" compose button sits bottom-right.
+  floating "New post" compose button sits bottom-right.
 - **Skip link + tooltips.** The shell renders a "Skip to content" link (visible on focus) to
   `#main-content`, and wraps everything in shadcn's `TooltipProvider`.
 - **Pages own their header.** Each page renders `PageHeader` at the top of the center column —
@@ -109,9 +121,14 @@ that `<title>`, the feather `favicon.svg`, `<meta name="color-scheme" content="l
   `NavLink`s, so the active route is highlighted (`end` on Home).
   `getNavItems(username, { mobile })` resolves the list to
   `{ key, label, icon, to, end, disabled }`.
+- **"New post"** (rail button + mobile compose button) calls `useOpenComposer()`
+  (`hooks/use-open-composer.js`): on `/` it focuses the composer at once (`focusComposer()` in
+  `lib/composer-focus.js`, by the textarea's `id="composer"`); elsewhere it navigates to `/` with
+  `state.focusComposer`, and Home focuses the composer once rendered, then replaces the entry
+  with `state: null` so a reload or Back doesn't refocus.
 - **Disabled "Coming soon" pattern (`ComingSoon`).** Features we show but don't have yet — the
-  disabled nav items, "New post" (rail + mobile button), the right rail's search box and Home's
-  "Following" tab — are wrapped in `ComingSoon`: a shadcn `Tooltip` whose `asChild` trigger
+  disabled nav items, the right rail's search box, Home's "Following" tab, the composer's
+  attachment icons and the post cards' Repost / Bookmark / Share — are wrapped in `ComingSoon`: a shadcn `Tooltip` whose `asChild` trigger
   marks the single child `aria-disabled="true"`, muted (`opacity-50`, `cursor-not-allowed`),
   and calls `preventDefault` on click, with a "Coming soon" tooltip on hover and keyboard
   focus. The child is a `<button type="button">` or a read-only input, never a link, and
@@ -127,7 +144,7 @@ that `<title>`, the feather `favicon.svg`, `<meta name="color-scheme" content="l
 
 ## HTTP client (`src/lib/api/client.js`)
 
-Centralized `apiClient` (`get` / `post` / `patch` / `delete`) — no component calls
+Centralized `apiClient` (`get` / `post` / `put` / `patch` / `delete`) — no component calls
 `fetch` directly. It:
 
 - Reads `VITE_API_URL` (`frontend/.env`, defaults to `http://localhost:3000` if unset;
@@ -177,8 +194,8 @@ survives a reload because the cookie does.
   refetch,          // () → refetch /auth/me (the Retry button)
   signIn,           // ({ email, password }) → POST /auth/sign-in, seeds ['auth', 'me']
   signUp,           // ({ email, password, username }) → POST /auth/sign-up, seeds ['auth', 'me']
-  signOut,          // () → POST /auth/sign-out, then user = null and every other query /
-                    //   mutation cleared (even if the request fails)
+  signOut,          // () → POST /auth/sign-out, then user = null, every other query /
+                    //   mutation cleared and like bursts reset (even if the request fails)
 }
 ```
 
@@ -204,7 +221,9 @@ a shadcn `Alert`.
 
 ## Routes
 
-`src/app/router.jsx` holds the `<Routes>` tree:
+`src/app/router.jsx` holds the `<Routes>` tree, wrapped in `NavigationDepthTracker` (see
+PostDetail's Back rule under Posts) so it sees every navigation, the auth pages' redirects
+included:
 
 - `/sign-in`, `/sign-up` — inside `PublicOnlyRoute`: signed-in users go to
   `getRedirectTarget(location.state.from)` (`src/lib/auth/redirect-target.js` — in-app
@@ -212,7 +231,8 @@ a shadcn `Alert`.
   seed `['auth', 'me']`, this is what sends a freshly signed-in user back.
 - `/sign-out` — public; the app's single sign-out path (calls `signOut()` once on
   mount, then → `/sign-in`).
-- `/` (`Home`, the feed), `/u/:username` (`Profile`),
+- `/` (`Home`, the feed), `/u/:username` (`Profile`), `/u/:username/posts/:id`
+  (`PostDetail` — a distinct, longer path, ranked separately from `/u/:username`),
   `/settings/profile` (`EditProfile`) and a `*` catch-all (→ `/`) — inside
   `ProtectedRoute` and the `AppShell` layout route: signed-out users
   go to `/sign-in` with `state.from`, and `PublicOnlyRoute` sends them back there
@@ -230,17 +250,21 @@ boundary).
 ## Profiles
 
 - **Data.** `useProfile(username)` (`src/hooks/use-profile.js`) is a `useQuery` over
-  `fetchProfile` (`GET /users/:username` → `{ username, bio, createdAt }`), keyed by
+  `fetchProfile` (`GET /users/:username` → `{ username, bio, createdAt, postCount }`), keyed by
   `profileQueryKey(username)` = `['users', username.toLowerCase(), 'profile']`
   (`src/lib/api/users.js`) — lowercased so `/u/Ada` and `/u/ada` share one entry. A 404 is
-  never retried; other failures use the QueryClient's default retry.
+  never retried (`useRetryUnlessNotFound()`, `hooks/use-retry-unless-not-found.js` — shared with
+  the post / comment queries); other failures use the QueryClient's default retry.
 - **`/u/:username`** (`Profile.jsx`) — Pulse's profile layout: a `PageHeader` with a back
   button (→ `/`) and the mono `@username` as the `h1`, a `bg-primary/10` banner, the large
   avatar overlapping it, an "Edit profile" link (→ `/settings/profile`) only when the username
   matches `useAuth().user.username` (case-insensitive), the mono `@username` again as the name
   line, the bio as plain text with line breaks kept (or "No bio yet."), "Joined <Month yyyy>"
-  with a calendar icon, and a single "Posts" tab (tab semantics, no switching) over a "No posts
-  yet" empty state. The loading (skeleton), 404 (shadcn `Empty` "User not found" + "Back to
+  with a calendar icon, the header subtitle "N posts" (`postCount`, `formatCount`), and a single
+  "Posts" tab (tab semantics, no switching) listing the user's posts via `useUserPosts(username)`
+  — `PostCard`s, `InfiniteListFooter` ("That's all of @x's posts" at the end), skeleton / error +
+  Retry states, and an empty state worded for your own profile or someone else's. The loading
+  (skeleton), 404 (shadcn `Empty` "User not found" + "Back to
   home") and error (`Alert` + Retry) states keep the header, titled "Profile". Only data we
   have is shown — no display name, location, website or follower counts.
 - **`/settings/profile`** (`EditProfile.jsx`) — inside the shell under a `PageHeader` "Edit
@@ -250,7 +274,8 @@ boundary).
   `updateMyProfile` (`PATCH /users/me`); nothing changed → straight back to the profile. On
   success it seeds `profileQueryKey(<new username>)`, sets `['auth', 'me']` to
   `{ id, email, username }`, removes the old username's profile entry if it changed, and
-  navigates (`replace`) to `/u/<new username>` — no stale username left in the cache.
+  navigates (`replace`) to `/u/<new username>` — no stale username left in the cache. The
+  PATCH response carries `postCount` too.
 - **Avatar placeholder** — no image upload. `UserAvatar` (`src/components/UserAvatar.jsx`)
   composes shadcn `Avatar` + `AvatarFallback`: the username's first character uppercased in
   `font-mono`, on one of 8 Pulse tint / text-colour pairs (see Theme) picked by a hash of the
@@ -263,21 +288,117 @@ boundary).
 
 ## Pages
 
-- **Home (`/`) is the feed.** `PageHeader` "Home" (a primary `Sparkles` icon trailing) with
-  "For you" / "Following" tabs, then the `Composer` and a "No posts yet" empty state inside the
-  `tabpanel`. The tabs are plain markup with real tab semantics (`role="tablist"` / `tab` /
-  `tabpanel`, `aria-selected`, `aria-controls`) and no switching — only "For you" exists;
-  "Following" is a `ComingSoon` placeholder. shadcn `Tabs` isn't used because Radix triggers
-  activate on focus/mousedown, which `ComingSoon` can't block without making the tooltip
-  unreachable. The `Composer` (`components/feed/`) is visual only: avatar, a natively disabled
-  `Textarea` (280 `maxLength`), a visible "Posting is coming soon" hint (its
-  `aria-describedby`), disabled attachment icons, a mono `0/280` counter and a disabled "Post"
-  button. No mock posts.
+- **Home (`/`) is the feed.** `PageHeader` "Home" with "For you" / "Following" tabs, then the
+  `Composer` and the feed inside the `tabpanel`. The tabs are plain markup with real tab
+  semantics (`role="tablist"` / `tab` / `tabpanel`, `aria-selected`, `aria-controls`) and no
+  switching — only "For you" exists; "Following" is a `ComingSoon` placeholder. shadcn `Tabs`
+  isn't used because Radix triggers activate on focus/mousedown, which `ComingSoon` can't block
+  without making the tooltip unreachable. The feed (`useFeed()`): `PostListSkeleton` while
+  loading, an `Alert` + Retry on a first-load error, a "No posts yet" empty state, else
+  `PostCard`s newest first + `InfiniteListFooter` ("You're all caught up" at the end).
 - **Profile / EditProfile** — see Profiles above.
+- **PostDetail** — see Posts below.
 - **Auth pages** (`SignIn`, `SignUp`, `SignOut`) render outside the shell inside `AuthLayout`:
   centred on the page background, `BrandMark` + "The Flock Twitter" above the content (a
   `rounded-2xl` card), and `document.title` set to `<title> · The Flock Twitter` while mounted
   (the previous title restored on unmount). Their behaviour is unchanged.
+
+## Posts
+
+**Data layer** (`lib/api/posts.js`, `lib/api/post-cache.js`, `hooks/use-posts.js`,
+`hooks/use-comments.js`).
+
+- **Keys.** `postKeys`: `all` `['posts']`; every list under `lists()` `['posts', 'list']` —
+  `feed()` and `userPosts(username)` (lowercased, like `profileQueryKey`); `detail(id)`;
+  `comments(id)`. One prefix reaches every list a post can be in.
+- **Queries.** `useFeed()`, `useUserPosts(username)` and `useComments(postId)` are
+  `useInfiniteQuery`s (`initialPageParam: null`, `getNextPageParam` = `nextCursor ?? undefined`);
+  `usePost(id)` is a `useQuery`. The API functions only append `?cursor=` when there is one — the
+  backend rejects an empty `cursor=` with 400. Lookups that can 404 use `useRetryUnlessNotFound()`.
+- **`post-cache.js` is the single place for "update a post everywhere it's cached"** (every list
+  + its detail): `updatePostInCaches`, `removePostFromCaches` (also drops its detail and comments
+  entries), `prependPostToList` (only into a loaded list, skipped if already there),
+  `bumpProfilePostCount`, `bumpCommentCount`, `setLikeInCaches`, `findPostInCaches`. Helpers
+  return the previous object when nothing changed, so unrelated observers don't re-render.
+- **Writes land in the cache, not through invalidation.** Create post → detail seeded, prepended
+  to the feed's and the author's first page, profile `postCount` +1. Delete post → removed
+  everywhere, `postCount` −1. Create comment → appended to the comments cache **only when every
+  page is loaded** (oldest first — otherwise it would sit above comments a later "load more"
+  brings in, then show twice), `commentCount` +1; delete comment → removed, −1.
+- **Races with in-flight fetches.** A fetch that started before the server applied a write can
+  land after the cache write and silently undo it (a new post vanishes, a deleted one comes back,
+  a like flips back). So every write after a server change goes through
+  `writeAfterServerChange(queryClient, filters, write)`: cancel every in-flight fetch of the
+  touched queries (a cancelled fetch reverts to its previous data), `write()`, then restart the
+  cancelled **first** loads (queries with no data — cancelling one would leave it pending with
+  nothing fetching). Before an optimistic write, `cancelLoadedFetches` cancels only fetches of
+  queries that already have data. Trade-off: an in-flight "load more" is cancelled too and is
+  re-requested on the next scroll / click.
+- **Likes** (`useToggleLike`, `mutate({ postId, liked })` with the intended final state; PUT or
+  DELETE — idempotent). Optimistic: cancel loaded fetches, flip `likedByMe` / `likeCount`
+  everywhere. Overlapping requests for a post form a **burst** (per QueryClient, a `WeakMap` →
+  `Map` by post id) that tracks the last **server-confirmed** state by click order — the cached
+  state when the burst began, replaced by each successful response newer than the one it holds.
+  When the burst's last request settles, the caches get that confirmed state (through
+  `writeAfterServerChange`), so any mix of failures and out-of-order responses ends matching the
+  server; if nothing was cached and nothing succeeded, the post is invalidated instead.
+  `resetLikeBursts(queryClient)` runs on sign-out (`AuthProvider`), so a like still in flight
+  can't write into the next user's cache.
+
+**`InfiniteListFooter`** (`components/feed/`, used by the feed, profile posts and comments —
+pass the `useInfiniteQuery` result as `query`). While there are more pages it renders an
+IntersectionObserver sentinel (`rootMargin` 400px below the viewport; skipped where IO doesn't
+exist) plus one "Load more" button — the keyboard / screen-reader path and the no-IO fallback —
+that shows "Loading…" (`aria-disabled`, keeps focus) and becomes Retry with an error `Alert` after
+a failed page (a failed page is only re-requested through Retry). At the end: `endMessage`.
+Re-arm logic: the observer is armed only while the query isn't fetching at all (a window-focus
+refetch or a post-write restart included) and calls `fetchNextPage({ cancelRefetch: false })`
+(joins a fetch in flight, never restarts it); when it fires it unobserves, and re-observes once
+that `fetchNextPage` resolves — re-observing reports the current intersection, so a sentinel
+still in view loads the next page. Without that, a sentinel that fired while a refetch was
+starting would only join the refetch and never load page 2 (a refetch that starts and ends between
+renders never flips `isFetching` as React sees it). A short page keeps loading until the list
+fills the viewport, stopping at the last page or a failed one.
+
+**Composers** (`Composer` on Home, `CommentComposer` on the detail page) share `lib/text.js`
+and `CharacterCounter`: `measureBody(body)` gives the trimmed body, its code-point length,
+`remaining` and `isValid` (not blank, ≤ 280) — the backend's count. No `maxLength` (it counts
+UTF-16), so over-limit text stays visible; the counter turns destructive over 280 and its sr-only
+live region only speaks from 20 left (`limitAnnouncement`). Submit is disabled while invalid or
+pending; `isSubmitShortcut` = Cmd/Ctrl+Enter, ignored during IME composition. While sending the
+textarea is `readOnly` (not `disabled`, so it keeps focus); cleared on success, kept on failure
+with `getApiErrorMessage(error, { rateLimitMessage })` below it ("Too many posts…" / "Too many
+comments…"; editing dismisses it). `getApiErrorMessage` joins Nest's validation-message arrays.
+When a reply is posted but the comments list isn't fully loaded (so it wasn't appended — see the
+data layer), `CommentComposer` shows a `role="status"` notice "Reply posted. Load more comments to
+see it.", cleared on typing or the next submit.
+
+**`PostCard`** (`variant="card"` default, `"detail"` on the detail page). Avatar + mono
+`@username` (→ profile), relative time, the body as a plain text node (`whitespace-pre-wrap`,
+never HTML), an action row: comments (a link → detail with the count), like toggle
+(`aria-pressed`, `formatCount`), Repost / Bookmark / Share as `ComingSoon`. **Keyboard "open
+post" = the timestamp link** (`aria-label` "Open post by @x, <full date>") — one tab stop, no
+interactive element nested in another. The **card click is a mouse shortcut** on top: it ignores
+non-primary / modified clicks, clicks on inner links / buttons / menu items, clicks from portaled
+menus or dialogs, and clicks that end a text selection. Your own posts get a "More options" (…)
+`DropdownMenu` (non-modal) → Delete → `AlertDialog` that stays open while the request runs and
+shows its error; others' posts have no menu (the API would 403 anyway). `CommentItem` follows the
+same layout and own-comment menu.
+
+**PostDetail** (`/u/:username/posts/:id`) loads by id (`usePost`). Once loaded, a `:username`
+that isn't the author's (case-insensitive) is a `<Navigate replace>` (no state) to the canonical
+URL; 404 → `Empty` "Post not found" + "Back to home"; other errors → `Alert` + Retry. **Back
+rule:** Back is `navigate(-1)` only when an in-app entry is behind this one
+(`useCanGoBackInApp()(location.key)`), else it goes to the author's profile — so a redirect
+(sign-in's return, the canonical redirect) never makes Back leave the app. The depth comes from
+`lib/navigation-history.js`: a store that records, per `location.key`, how many app entries
+precede it — PUSH = previous + 1, REPLACE = same as previous, POP keeps the recorded value, an
+unknown key (first entry, anything from before a reload) = 0. `NavigationDepthTracker`
+(`app/`, at the top of `AppRouter`) feeds it from `useLocation` / `useNavigationType` in an
+effect; without a tracker (a page rendered alone in a test) the answer is false. Deleting the
+post replaces the entry with the author's profile. Below the post: `CommentComposer`, then the comments (oldest first,
+`InfiniteListFooter`); after deleting a comment focus moves to the reply box once the comment has
+left the list.
 
 ## Tests
 
@@ -302,6 +423,17 @@ Shell-related gotchas:
 - The right rail fetches the signed-in user's profile, so `server.js` has a default
   `GET /users/:username` handler: `ada` (any case) → `{ username: 'ada', bio: null,
   createdAt }`, anything else → 404 `User not found`. Override it per test as usual.
+- Home and the profile page load posts, so `server.js` also has default `GET /feed` (empty page
+  `{ items: [], nextCursor: null }`) and `GET /users/:username/posts` (`ada` → empty page,
+  others → 404) handlers.
+- jsdom has no `IntersectionObserver`, so `InfiniteListFooter` skips auto-loading there and tests
+  use "Load more". To test the observer, `vi.stubGlobal('IntersectionObserver', …)` with a small
+  fake class (always in view, or controllable) and `vi.unstubAllGlobals()` in `afterEach` — see
+  `components/feed/__tests__/InfiniteListFooter.test.jsx`.
+- Race tests hold a response with a **gated handler**: `hooks/__tests__/use-posts.test.jsx` has
+  a local `gate()` helper returning `{ promise, open }`; the MSW handler does
+  `await g.promise` and the test calls `g.open()` when it wants the response to land, so a stale
+  refetch or a like request can be made to arrive before / after a cache write.
 - Rendering a `ComingSoon` item outside the shell (e.g. `Home` on its own) needs a
   `TooltipProvider` wrapper.
 - jsdom has no `ResizeObserver`, so Radix tooltips can't open: assert `aria-disabled` and
@@ -311,20 +443,21 @@ Shell-related gotchas:
 ## Current state vs. this doc
 
 **Implemented:** `app/` (`App.jsx`, `router.jsx` with the `AppShell` layout route,
-`providers.jsx`, `query-client.js`), the Pulse theme (`index.css`, `index.html`),
+`NavigationDepthTracker.jsx`, `providers.jsx`, `query-client.js`), the Pulse theme (`index.css`, `index.html`),
 `components/ui/` (shadcn, see [[UI component inventory]]), `components/layout/` (the app
-shell), `components/feed/Composer.jsx`, `components/AuthLayout.jsx`,
-`components/BrandMark.jsx`, `components/UserAvatar.jsx`, `hooks/`, `lib/api/` (`client.js`,
-`users.js`, `error-message.js`), `lib/auth/`, `lib/validation/`, `lib/avatar-color.js`,
-`lib/utils.js`, `routes/` (`ProtectedRoute`, `PublicOnlyRoute`), `test/` (Vitest + RTL + MSW
-helpers), and `pages/` — `SignIn`, `SignUp`, `SignOut`, `Home` (the feed: tabs, disabled
-composer, empty state), `Profile` and `EditProfile`.
+shell), `components/feed/` (posts, comments, composers, infinite lists),
+`components/AuthLayout.jsx`, `components/BrandMark.jsx`, `components/UserAvatar.jsx`, `hooks/`,
+`lib/api/` (`client.js`, `users.js`, `posts.js`, `post-cache.js`, `error-message.js`),
+`lib/auth/`, `lib/validation/`, `lib/text.js`, `lib/format.js`, `lib/composer-focus.js`,
+`lib/navigation-history.js`,
+`lib/avatar-color.js`, `lib/utils.js`, `routes/` (`ProtectedRoute`, `PublicOnlyRoute`), `test/`
+(Vitest + RTL + MSW helpers), and `pages/` — `SignIn`, `SignUp`, `SignOut`, `Home` (the feed),
+`Profile`, `EditProfile` and `PostDetail`.
 
-**Pending (posts follow-up):** there are no posts yet. The next feature enables the
-`Composer` and the "New post" / mobile compose buttons, migrates Pulse's `PostCard`, and lists
-posts in the Home feed and on the profile's Posts tab. Explore/search, Notifications,
-Messages, Bookmarks, Who to follow and the Following tab stay "Coming soon" until their
-features exist.
+**Pending:** follows (next feature) — add followed users to the feed's author set (backend),
+enable the Following tab and "Who to follow". Repost, bookmark and share on post cards,
+Explore/search, Notifications, Messages and Bookmarks stay "Coming soon" until their features
+exist.
 
 **Not implemented, intentionally:** `features/` (profiles and the shell live in the flat
 `pages/` / `components/` / `hooks/` / `lib/` layout). It follows once a feature needs it —

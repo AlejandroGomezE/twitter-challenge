@@ -5,6 +5,11 @@ import {
 } from '@nestjs/common';
 import * as argon2 from 'argon2';
 import { Prisma, type User } from '../../generated/prisma/client.js';
+import {
+  type PageQuery,
+  type PostPage,
+  PostsService,
+} from '../posts/posts.service.js';
 import { normalizeBio, normalizeUsername } from './username.rules.js';
 import { type UpdateProfileData, UsersRepository } from './users.repository.js';
 
@@ -19,6 +24,7 @@ export interface PublicProfile {
   username: string;
   bio: string | null;
   createdAt: Date;
+  postCount: number;
 }
 
 // The caller's own profile.
@@ -28,6 +34,7 @@ export interface MyProfile {
   username: string;
   bio: string | null;
   createdAt: Date;
+  postCount: number;
 }
 
 // Only the keys present are changed; an empty bio (or null) clears it.
@@ -97,7 +104,10 @@ function uniqueViolationFields(
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly usersRepository: UsersRepository) {}
+  constructor(
+    private readonly usersRepository: UsersRepository,
+    private readonly postsService: PostsService,
+  ) {}
 
   normalizeEmail(email: string): string {
     return normalizeEmail(email);
@@ -140,17 +150,24 @@ export class UsersService {
   }
 
   async getProfile(username: string): Promise<PublicProfile> {
-    const user = await this.usersRepository.findByUsername(
-      normalizeUsername(username),
-    );
-    if (!user) {
-      throw new NotFoundException(USER_NOT_FOUND_MESSAGE);
-    }
+    const user = await this.findByUsernameOrThrow(username);
     return {
       username: user.username,
       bio: user.bio,
       createdAt: user.createdAt,
+      postCount: await this.postsService.countByAuthor(user.id),
     };
+  }
+
+  // A user's posts, newest first, as `viewerId` sees them (likedByMe). 404
+  // `User not found` for an unknown username.
+  async listPosts(
+    username: string,
+    viewerId: string,
+    query: PageQuery,
+  ): Promise<PostPage> {
+    const user = await this.findByUsernameOrThrow(username);
+    return this.postsService.listByAuthor(user.id, viewerId, query);
   }
 
   // Always scoped to the caller's own id. Re-setting your current username
@@ -166,9 +183,9 @@ export class UsersService {
     if (input.bio !== undefined) {
       data.bio = input.bio === null ? null : normalizeBio(input.bio);
     }
+    let user: User;
     try {
-      const user = await this.usersRepository.updateProfile(userId, data);
-      return this.toMyProfile(user);
+      user = await this.usersRepository.updateProfile(userId, data);
     } catch (error) {
       // username is the only unique column this update can write.
       if (isPrismaError(error, UNIQUE_CONSTRAINT_VIOLATION)) {
@@ -179,19 +196,35 @@ export class UsersService {
       }
       throw error;
     }
+    return this.toMyProfile(
+      user,
+      await this.postsService.countByAuthor(user.id),
+    );
   }
 
   toPublicUser(user: User): PublicUser {
     return { id: user.id, email: user.email, username: user.username };
   }
 
-  private toMyProfile(user: User): MyProfile {
+  // Lookup is case-insensitive (usernames are stored normalized).
+  private async findByUsernameOrThrow(username: string): Promise<User> {
+    const user = await this.usersRepository.findByUsername(
+      normalizeUsername(username),
+    );
+    if (!user) {
+      throw new NotFoundException(USER_NOT_FOUND_MESSAGE);
+    }
+    return user;
+  }
+
+  private toMyProfile(user: User, postCount: number): MyProfile {
     return {
       id: user.id,
       email: user.email,
       username: user.username,
       bio: user.bio,
       createdAt: user.createdAt,
+      postCount,
     };
   }
 

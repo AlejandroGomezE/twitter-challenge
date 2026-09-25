@@ -1,5 +1,6 @@
 import { http, HttpResponse } from 'msw'
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
+import { useLocation } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import { AppRouter } from '@/app/router'
 import { renderWithProviders } from '@/test/render'
@@ -18,6 +19,27 @@ const leftRail = () => within(screen.getByRole('banner'))
 const primaryNav = () => within(leftRail().getByRole('navigation', { name: 'Primary' }))
 const rightRail = () => within(screen.getByRole('complementary', { name: 'Sidebar' }))
 const mobileNav = () => within(screen.getByRole('navigation', { name: 'Primary (mobile)' }))
+
+// Exposes the current location (path + history key), to tell whether a click navigated.
+function LocationProbe() {
+  const location = useLocation()
+  return <output data-testid="location" data-key={location.key}>{location.pathname}</output>
+}
+
+async function renderShellWithProbe(route) {
+  const utils = renderWithProviders(
+    <>
+      <AppRouter />
+      <LocationProbe />
+    </>,
+    { route },
+  )
+  await screen.findByRole('banner')
+  return utils
+}
+
+const composerTextbox = () =>
+  within(screen.getByRole('main')).getByRole('textbox', { name: 'Compose a new post' })
 
 const COMING_SOON_NAV = ['Explore', 'Notifications', 'Messages', 'Bookmarks']
 
@@ -49,16 +71,24 @@ describe('AppShell', () => {
       expect(nav.queryByRole('link', { name: 'Sign out' })).not.toBeInTheDocument()
     })
 
-    it('shows the "Coming soon" items and New post as aria-disabled buttons, not links', async () => {
+    it('shows the "Coming soon" items as aria-disabled buttons, not links', async () => {
       await renderShell()
       const rail = leftRail()
 
-      for (const name of [...COMING_SOON_NAV, 'New post']) {
+      for (const name of COMING_SOON_NAV) {
         const button = rail.getByRole('button', { name })
         expect(button).toHaveAttribute('aria-disabled', 'true')
         expect(button).not.toHaveAttribute('href')
         expect(rail.queryByRole('link', { name })).not.toBeInTheDocument()
       }
+    })
+
+    it('shows New post as an enabled button', async () => {
+      await renderShell()
+
+      const button = leftRail().getByRole('button', { name: 'New post' })
+      expect(button).toBeEnabled()
+      expect(button).not.toHaveAttribute('aria-disabled')
     })
 
     it('shows the signed-in user chip and a Sign out link', async () => {
@@ -137,13 +167,14 @@ describe('AppShell', () => {
       }
     })
 
-    it('renders the compose button as an aria-disabled "New post" button', async () => {
+    it('renders the compose button as an enabled "New post" button', async () => {
       await renderShell()
 
       const buttons = screen.getAllByRole('button', { name: 'New post' })
       expect(buttons).toHaveLength(2) // left rail + mobile compose button
       for (const button of buttons) {
-        expect(button).toHaveAttribute('aria-disabled', 'true')
+        expect(button).toBeEnabled()
+        expect(button).not.toHaveAttribute('aria-disabled')
       }
     })
   })
@@ -179,5 +210,34 @@ describe('AppShell', () => {
 
     expect(primaryNav().getByRole('link', { name: 'Profile' })).toHaveAttribute('aria-current', 'page')
     expect(primaryNav().getByRole('link', { name: 'Home' })).not.toHaveAttribute('aria-current')
+  })
+
+  describe('New post', () => {
+    it.each([
+      ['left rail', () => leftRail().getByRole('button', { name: 'New post' })],
+      ['mobile compose button', () => screen.getAllByRole('button', { name: 'New post' })[1]],
+    ])('goes Home from /u/ada and focuses the composer (%s)', async (_label, getButton) => {
+      const { user } = await renderShellWithProbe('/u/ada')
+      await within(screen.getByRole('main')).findByRole('heading', { level: 1, name: '@ada' })
+
+      await user.click(getButton())
+
+      expect(
+        await within(screen.getByRole('main')).findByRole('heading', { level: 1, name: 'Home' }),
+      ).toBeInTheDocument()
+      expect(screen.getByTestId('location')).toHaveTextContent('/')
+      await waitFor(() => expect(composerTextbox()).toHaveFocus())
+    })
+
+    it('on Home, focuses the composer right away without navigating', async () => {
+      const { user } = await renderShellWithProbe('/')
+      const keyBefore = screen.getByTestId('location').dataset.key
+      expect(composerTextbox()).not.toHaveFocus()
+
+      await user.click(leftRail().getByRole('button', { name: 'New post' }))
+
+      expect(composerTextbox()).toHaveFocus()
+      expect(screen.getByTestId('location').dataset.key).toBe(keyBefore)
+    })
   })
 })

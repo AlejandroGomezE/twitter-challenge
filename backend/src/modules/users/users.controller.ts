@@ -4,16 +4,19 @@ import {
   Get,
   Param,
   Patch,
+  Query,
   SerializeOptions,
 } from '@nestjs/common';
 import type { AuthenticatedUser } from '../../auth/authenticated-user.interface.js';
 import { CurrentUser } from '../../auth/current-user.decorator.js';
+import { ListPostsQueryDto } from '../posts/dto/list-posts-query.dto.js';
+import { PostPageResponseDto } from '../posts/dto/post-page-response.dto.js';
 import { MyProfileResponseDto } from './dto/my-profile-response.dto.js';
 import { ProfileResponseDto } from './dto/profile-response.dto.js';
 import { UpdateProfileDto } from './dto/update-profile.dto.js';
 import { UsersService } from './users.service.js';
 
-// Both routes are gated by the global AuthGuard (no @Public()).
+// Every route is gated by the global AuthGuard (no @Public()).
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
@@ -41,5 +44,22 @@ export class UsersController {
   @SerializeOptions({ type: ProfileResponseDto })
   getProfile(@Param('username') username: string): Promise<ProfileResponseDto> {
     return this.usersService.getProfile(username);
+  }
+
+  // A user's posts, newest first, paged (the profile Posts tab). Lives here,
+  // not in PostsController, because it is a sub-resource of /users/:username;
+  // two path segments, so it never collides with GET /users/:username or
+  // PATCH /users/me. `GET /users/me/posts` is a 404 like `GET /users/me`.
+  @Get(':username/posts')
+  @SerializeOptions({ type: PostPageResponseDto })
+  listPosts(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('username') username: string,
+    @Query() query: ListPostsQueryDto,
+  ): Promise<PostPageResponseDto> {
+    return this.usersService.listPosts(username, user.id, {
+      cursor: query.cursor,
+      limit: query.limit,
+    });
   }
 }

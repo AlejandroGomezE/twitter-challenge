@@ -2,6 +2,7 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as argon2 from 'argon2';
 import { Prisma, type User } from '../../../generated/prisma/client.js';
+import { PostsService } from '../../posts/posts.service.js';
 import { UsersRepository } from '../users.repository.js';
 import { UsersService } from '../users.service.js';
 
@@ -61,11 +62,19 @@ describe('UsersService', () => {
     findByUsername: vi.fn(),
     updateProfile: vi.fn(),
   };
+  const postsService = {
+    countByAuthor: vi.fn(),
+    listByAuthor: vi.fn(),
+  };
 
   beforeEach(async () => {
-    for (const fn of Object.values(repository)) {
+    for (const fn of [
+      ...Object.values(repository),
+      ...Object.values(postsService),
+    ]) {
       fn.mockReset();
     }
+    postsService.countByAuthor.mockResolvedValue(4);
     // Echo the stored data back as a full record, like Prisma would.
     repository.create.mockImplementation(
       (data: { email: string; username: string; passwordHash: string }) =>
@@ -85,6 +94,7 @@ describe('UsersService', () => {
       providers: [
         UsersService,
         { provide: UsersRepository, useValue: repository },
+        { provide: PostsService, useValue: postsService },
       ],
     }).compile();
     service = moduleRef.get(UsersService);
@@ -259,20 +269,24 @@ describe('UsersService', () => {
   });
 
   describe('getProfile', () => {
-    it('looks the username up normalized and returns only { username, bio, createdAt }', async () => {
+    it('looks the username up normalized and returns only { username, bio, createdAt, postCount }', async () => {
       repository.findByUsername.mockResolvedValue(makeUser({ bio: 'hello' }));
 
       const result = await service.getProfile('  SomeOne ');
 
       expect(repository.findByUsername).toHaveBeenCalledWith('someone');
+      expect(postsService.countByAuthor).toHaveBeenCalledTimes(1);
+      expect(postsService.countByAuthor).toHaveBeenCalledWith('user-1');
       expect(result).toEqual({
         username: 'someone',
         bio: 'hello',
         createdAt: CREATED_AT,
+        postCount: 4,
       });
       expect(Object.keys(result).sort()).toEqual([
         'bio',
         'createdAt',
+        'postCount',
         'username',
       ]);
     });
@@ -283,6 +297,35 @@ describe('UsersService', () => {
       const promise = service.getProfile('nobody');
       await expect(promise).rejects.toBeInstanceOf(NotFoundException);
       await expect(promise).rejects.toThrow('User not found');
+      expect(postsService.countByAuthor).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('listPosts', () => {
+    it("resolves the username (normalized) and pages that user's posts for the viewer", async () => {
+      const page = { items: [], nextCursor: null };
+      repository.findByUsername.mockResolvedValue(makeUser());
+      postsService.listByAuthor.mockResolvedValue(page);
+
+      await expect(
+        service.listPosts(' SomeOne', 'viewer-1', { cursor: 'abc', limit: 5 }),
+      ).resolves.toBe(page);
+
+      expect(repository.findByUsername).toHaveBeenCalledWith('someone');
+      expect(postsService.listByAuthor).toHaveBeenCalledWith(
+        'user-1',
+        'viewer-1',
+        { cursor: 'abc', limit: 5 },
+      );
+    });
+
+    it('throws 404 User not found for an unknown username', async () => {
+      repository.findByUsername.mockResolvedValue(null);
+
+      const promise = service.listPosts('nobody', 'viewer-1', {});
+      await expect(promise).rejects.toBeInstanceOf(NotFoundException);
+      await expect(promise).rejects.toThrow('User not found');
+      expect(postsService.listByAuthor).not.toHaveBeenCalled();
     });
   });
 
@@ -303,12 +346,15 @@ describe('UsersService', () => {
         username: 'new_name',
         bio: 'hello there',
         createdAt: CREATED_AT,
+        postCount: 4,
       });
+      expect(postsService.countByAuthor).toHaveBeenCalledWith('user-1');
       expect(Object.keys(result).sort()).toEqual([
         'bio',
         'createdAt',
         'email',
         'id',
+        'postCount',
         'username',
       ]);
     });
