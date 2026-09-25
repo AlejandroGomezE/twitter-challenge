@@ -29,6 +29,9 @@ export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
+    // `npx prisma db seed` runs the same reset as `npm run db:seed` (build +
+    // compiled src/database/seed/seed.ts); extra args after `--` pass through.
+    seed: "npm run db:seed --",
   },
   datasource: {
     url: resolveSqliteUrl(process.env["DATABASE_URL"]),

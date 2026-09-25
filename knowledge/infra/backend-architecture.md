@@ -43,7 +43,9 @@ backend/src/
 │   └── environment.validation.ts  # Zod schema, validated at boot via ConfigModule
 ├── database/
 │   ├── prisma.module.ts   # @Global, exports PrismaService
-│   └── prisma.service.ts  # extends generated PrismaClient, better-sqlite3 driver adapter
+│   ├── prisma.service.ts  # extends generated PrismaClient, better-sqlite3 driver adapter;
+│   │                      #   exports resolveDatabaseUrl (also used by the seed CLI)
+│   └── seed/              # demo data set (`npm run db:seed`) — see Database → Seed data
 ├── common/
 │   ├── events/
 │   │   └── domain-events.ts  # DomainEvent names, payload types, emitDomainEvent (typed emit)
@@ -262,6 +264,40 @@ pass through unchanged. Create or sync the file with `npx prisma db push`; regen
 the client after any schema change with `npx prisma generate` (both from `backend/`).
 `PrismaService` skips an eager `$connect()`, so the app boots even before the file
 exists.
+
+### Seed data
+
+`src/database/seed/` holds the demo data set (`npm run db:seed`, `npx prisma db seed`; usage and
+credentials in the Runbook, Backend → Seed data). It lives under `src/` so `nest build` compiles it
+to `dist/database/seed/` and it runs as plain `node` — no tsx/ts-node, and the Docker runtime image
+(which ships `dist/` only) runs it as-is. It isn't a Nest module and nothing in the app imports it.
+Split in three layers:
+
+- **Pure data** — `seed-users.ts` (30 hand-written profiles + their posts, incl. `demo`),
+  `seed-comments.ts`, and `seed-data.ts`: `buildSeedData()` derives follows, likes, comments and
+  `demo`'s notifications deterministically (no randomness, no faker), with every timestamp an
+  offset in minutes before a `now` chosen by the writer; rows reference each other by natural
+  keys (usernames, post/comment keys). `validateSeedData()` checks it against the app's own rules,
+  imported rather than copied: `posts.rules.ts` (body 1–280 code points) and `username.rules.ts`
+  (username pattern/length/reserved words, bio length, display name), plus no self-follow /
+  self-like / self-comment and no duplicate users (an unknown key throws while building or
+  writing). No I/O.
+- **Writer** — `run-seed.ts`: `runSeed(prisma, { ifEmpty, now })` validates, hashes the shared
+  password once with sign-up's `ARGON2_OPTIONS` (`users.service.ts`), assigns ids, and in one
+  interactive transaction wipes Notification, Comment, Like, Follow, Post, Session, User (children
+  first) and `createMany`s the rows. With `ifEmpty` it returns `skipped` when any user exists.
+  Rows are written directly, so the notifications event listener never runs — the seeded
+  notifications are part of the data set. Takes a `PrismaClient`, so a spec can pass any client.
+- **CLI** — `seed.ts` (compiled `dist/database/seed/seed.js`): parses `--if-empty` (any other
+  argument → usage error), loads `dotenv/config`, builds a `PrismaClient` with the better-sqlite3
+  adapter and `resolveDatabaseUrl(process.env.DATABASE_URL)` from `prisma.service.ts` (so it opens
+  the same file as the app), logs the counts, exits non-zero on failure. This is the one place
+  outside `PrismaService` that constructs a `PrismaClient` — it runs outside Nest.
+
+Wiring: `db:seed` in `package.json` (`nest build && node dist/database/seed/seed.js`),
+`migrations.seed` in `prisma7.config.ts` (`npm run db:seed --`), and `docker-entrypoint.sh` runs
+`node dist/database/seed/seed.js --if-empty` after `prisma db push` unless `SEED_ON_START=false`
+(`compose.yaml`, default `true`). The e2e suite never seeds.
 
 ## Config
 

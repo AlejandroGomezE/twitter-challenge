@@ -26,6 +26,24 @@ $ npm run start:dev
 $ npm run start:prod
 ```
 
+## Seed demo data
+
+```bash
+# reset the database to the demo data set (wipes every user, post, like, follow,
+# comment, notification and session first); needs `npx prisma db push` beforehand
+$ npm run db:seed
+
+# seed only if the database has no users (what Docker runs on start)
+$ npm run db:seed -- --if-empty
+
+# same as `npm run db:seed`, through Prisma
+$ npx prisma db seed
+```
+
+Demo account: `demo@example.com` / `password1234`. Every seed user's password is `password1234`.
+What it creates and more sample credentials:
+[Runbook → Backend → Seed data](../Runbook.md#backend-backend).
+
 ## Run tests
 
 ```bash
