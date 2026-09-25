@@ -83,6 +83,9 @@ feeds). This builds on the domain events added by `notifications`.
 - [ ] Two backend tasks running `npm run test:e2e` at the same time conflict, because globalSetup recreates the shared `prisma/e2e.db` (seen as `SQLITE_READONLY_DBMOVED` and spurious failures). Consider a per-run DB file · process note, found during Build.
 - [ ] `tsc --noEmit` (specs included) now also reports errors in `test/notifications.e2e-spec.ts`, on top of the known ones in `users.controller.spec.ts`, `comments.controller.spec.ts` and `follows.e2e-spec.ts`. `nest build` and vitest are unaffected · carried over from `notifications`.
 
+## PRs
+- #13 · https://github.com/AlejandroGomezE/twitter-challenge/pull/13
+
 ## Log
 - 2026-09-24 · framed
 - 2026-09-25 · built — T1–T6 done: domain events → RealtimeHub + GET /events SSE (session-checked heartbeat) → listeners; frontend RealtimeProvider, live badge, live counts/deletions, new-posts pill (moved into the feed list per Alejandro). be 44 files/553 unit + 7 files/205 e2e, fe 51 files/590 tests, builds + lint green
