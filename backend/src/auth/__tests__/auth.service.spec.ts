@@ -26,6 +26,7 @@ const PUBLIC_USER = {
   id: 'user-1',
   email: 'user@example.test',
   username: 'someone',
+  displayName: 'Some One',
 };
 const NOW = new Date('2026-06-01T12:00:00.000Z');
 
@@ -54,6 +55,7 @@ describe('AuthService', () => {
       id: user.id,
       email: user.email,
       username: user.username,
+      displayName: user.displayName,
     })),
   };
   const sessionsRepository = {
@@ -182,7 +184,7 @@ describe('AuthService', () => {
       },
     );
 
-    it('returns only { id, email, username } for a valid session', async () => {
+    it('returns only { id, email, username, displayName } for a valid session', async () => {
       vi.useFakeTimers({ toFake: ['Date'] });
       vi.setSystemTime(NOW);
       sessionsRepository.findByTokenHash.mockResolvedValue({
@@ -194,6 +196,7 @@ describe('AuthService', () => {
 
       expect(result).toEqual(PUBLIC_USER);
       expect(Object.keys(result ?? {}).sort()).toEqual([
+        'displayName',
         'email',
         'id',
         'username',
@@ -225,12 +228,14 @@ describe('AuthService', () => {
       const result = await service.signUp(
         'user@example.test',
         'someone',
+        'Some One',
         PASSWORD,
       );
 
       expect(usersService.create).toHaveBeenCalledWith(
         'user@example.test',
         'someone',
+        'Some One',
         PASSWORD,
       );
       expect(result.user).toEqual(PUBLIC_USER);
@@ -247,7 +252,7 @@ describe('AuthService', () => {
       );
 
       await expect(
-        service.signUp('user@example.test', 'someone', PASSWORD),
+        service.signUp('user@example.test', 'someone', 'Some One', PASSWORD),
       ).rejects.toBeInstanceOf(ConflictException);
       expect(sessionsRepository.create).not.toHaveBeenCalled();
     });
@@ -260,13 +265,14 @@ describe('AuthService', () => {
       vi.mocked(argon2.verify).mockClear();
     });
 
-    it('returns a fresh session and only { id, email, username } on success', async () => {
+    it('returns a fresh session and only { id, email, username, displayName } on success', async () => {
       usersService.findByEmail.mockResolvedValue(makeUser(storedHash));
 
       const result = await service.signIn('user@example.test', PASSWORD);
 
       expect(result.user).toEqual(PUBLIC_USER);
       expect(Object.keys(result.user).sort()).toEqual([
+        'displayName',
         'email',
         'id',
         'username',

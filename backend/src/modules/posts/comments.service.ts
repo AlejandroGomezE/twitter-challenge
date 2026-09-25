@@ -18,7 +18,7 @@ export interface CommentView {
   id: string;
   body: string;
   createdAt: Date;
-  author: { username: string };
+  author: { username: string; displayName: string | null };
 }
 
 // One page of a post's comments, oldest first. `nextCursor` is null on the
@@ -129,7 +129,10 @@ export class CommentsService {
       id: comment.id,
       body: comment.body,
       createdAt: comment.createdAt,
-      author: { username: comment.author.username },
+      author: {
+        username: comment.author.username,
+        displayName: comment.author.displayName,
+      },
     };
   }
 }

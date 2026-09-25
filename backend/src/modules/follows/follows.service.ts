@@ -23,6 +23,7 @@ import {
 // viewer's own row.
 export interface FollowUserView {
   username: string;
+  displayName: string | null;
   bio: string | null;
   // The viewer follows this user.
   isFollowing: boolean;
@@ -57,6 +58,13 @@ export interface FollowCounts {
 export interface FollowRelation {
   isFollowing: boolean;
   followsYou: boolean;
+}
+
+// How `viewerId` relates to a batch of users: the ids the viewer follows and
+// the ids following the viewer. The viewer's own id is never in either set.
+export interface FollowRelations {
+  followedByViewer: Set<string>;
+  followingViewer: Set<string>;
 }
 
 export const SUGGESTIONS_DEFAULT_LIMIT = 3;
@@ -173,6 +181,16 @@ export class FollowsService {
     };
   }
 
+  // How `viewerId` relates to each of `userIds`, in two queries however many
+  // ids are asked for (none when the batch is empty or only the viewer). The
+  // viewer's own id is dropped, so both booleans are false on their own row.
+  relationsFor(viewerId: string, userIds: string[]): Promise<FollowRelations> {
+    return this.followsRepository.relationsAmong(
+      viewerId,
+      userIds.filter((id) => id !== viewerId),
+    );
+  }
+
   // Keyset page over (follow createdAt, other user's id): one query for the
   // rows (limit + 1 to detect a next page) plus the two relation queries —
   // never one per row. The cursor is validated before any query runs.
@@ -206,13 +224,13 @@ export class FollowsService {
     users: FollowUserRow[],
     viewerId: string,
   ): Promise<FollowUserView[]> {
-    const { followedByViewer, followingViewer } =
-      await this.followsRepository.relationsAmong(
-        viewerId,
-        users.filter((user) => user.id !== viewerId).map((user) => user.id),
-      );
+    const { followedByViewer, followingViewer } = await this.relationsFor(
+      viewerId,
+      users.map((user) => user.id),
+    );
     return users.map((user) => ({
       username: user.username,
+      displayName: user.displayName,
       bio: user.bio,
       isFollowing: followedByViewer.has(user.id),
       followsYou: followingViewer.has(user.id),

@@ -90,6 +90,21 @@ describe('FollowListDialog', () => {
     expect(state.requests).toEqual(['followers -'])
   })
 
+  it("shows a row's display name before its @username", async () => {
+    mockFollowLists({
+      followers: [[followUser('linus', { displayName: 'Linus Torvalds' }), followUser('margaret')]],
+    })
+    const { user } = renderWithProviders(<Harness />)
+
+    await user.click(screen.getByRole('button', { name: 'open followers' }))
+
+    const dialog = await screen.findByRole('dialog', { name: '@grace' })
+    const linus = await within(dialog).findByRole('link', { name: 'Linus Torvalds @linus' })
+    expect(linus).toHaveAttribute('href', '/u/linus')
+    expect(within(linus).getByText('@linus')).toHaveClass('text-muted-foreground')
+    expect(within(dialog).getByRole('link', { name: '@margaret' })).toBeInTheDocument()
+  })
+
   it('fetches nothing while closed', async () => {
     const state = mockFollowLists({})
     renderWithProviders(<Harness />)

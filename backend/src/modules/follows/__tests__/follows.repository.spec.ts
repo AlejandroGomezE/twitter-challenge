@@ -129,7 +129,14 @@ describe('FollowsRepository', () => {
         take: 21,
         select: {
           createdAt: true,
-          follower: { select: { id: true, username: true, bio: true } },
+          follower: {
+            select: {
+              id: true,
+              username: true,
+              displayName: true,
+              bio: true,
+            },
+          },
         },
       });
     });
@@ -186,7 +193,14 @@ describe('FollowsRepository', () => {
         take: 3,
         select: {
           createdAt: true,
-          following: { select: { id: true, username: true, bio: true } },
+          following: {
+            select: {
+              id: true,
+              username: true,
+              displayName: true,
+              bio: true,
+            },
+          },
         },
       });
     });
@@ -232,7 +246,12 @@ describe('FollowsRepository', () => {
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: 3,
-      select: { id: true, username: true, bio: true },
+      select: {
+        id: true,
+        username: true,
+        displayName: true,
+        bio: true,
+      },
     });
   });
 });

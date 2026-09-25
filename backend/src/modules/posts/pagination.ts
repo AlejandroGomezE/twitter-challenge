@@ -9,7 +9,7 @@ import { BadRequestException } from '@nestjs/common';
 export const PAGE_SIZE = 20;
 export const MAX_PAGE_SIZE = 50;
 
-const INVALID_CURSOR_MESSAGE = 'Invalid cursor';
+export const INVALID_CURSOR_MESSAGE = 'Invalid cursor';
 const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 export interface CursorPosition {

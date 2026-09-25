@@ -48,6 +48,7 @@ const ROW = {
   id: 'user-1',
   email: 'user@example.test',
   username: 'someone',
+  displayName: 'Some One',
   bio: 'hello',
   passwordHash: '$argon2id$secret',
   createdAt: CREATED_AT,
@@ -62,9 +63,10 @@ const ROW = {
 };
 
 describe('ProfileResponseDto', () => {
-  it('emits only { username, bio, createdAt, postCount, followerCount, followingCount, isFollowing, followsYou } with createdAt as an ISO string', async () => {
+  it('emits only { username, displayName, bio, createdAt, postCount, followerCount, followingCount, isFollowing, followsYou } with createdAt as an ISO string', async () => {
     await expect(serialize('profile', ROW)).resolves.toEqual({
       username: 'someone',
+      displayName: 'Some One',
       bio: 'hello',
       createdAt: '2026-01-02T03:04:05.678Z',
       postCount: 12,
@@ -75,16 +77,18 @@ describe('ProfileResponseDto', () => {
     });
   });
 
-  it('keeps a null bio as null and false booleans as false', async () => {
+  it('keeps a null bio and display name as null and false booleans as false', async () => {
     await expect(
       serialize('profile', {
         ...ROW,
+        displayName: null,
         bio: null,
         isFollowing: false,
         followsYou: false,
       }),
     ).resolves.toEqual({
       username: 'someone',
+      displayName: null,
       bio: null,
       createdAt: '2026-01-02T03:04:05.678Z',
       postCount: 12,
@@ -97,16 +101,23 @@ describe('ProfileResponseDto', () => {
 });
 
 describe('MyProfileResponseDto', () => {
-  it('emits only { id, email, username, bio, createdAt, postCount, followerCount, followingCount } with createdAt as an ISO string', async () => {
+  it('emits only { id, email, username, displayName, bio, createdAt, postCount, followerCount, followingCount } with createdAt as an ISO string', async () => {
     await expect(serialize('myProfile', ROW)).resolves.toEqual({
       id: 'user-1',
       email: 'user@example.test',
       username: 'someone',
+      displayName: 'Some One',
       bio: 'hello',
       createdAt: '2026-01-02T03:04:05.678Z',
       postCount: 12,
       followerCount: 5,
       followingCount: 7,
     });
+  });
+
+  it('keeps a null display name as null', async () => {
+    await expect(
+      serialize('myProfile', { ...ROW, displayName: null }),
+    ).resolves.toMatchObject({ displayName: null });
   });
 });

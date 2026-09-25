@@ -22,7 +22,7 @@ const POST: PostWithAuthor = {
   authorId: OTHER_ID,
   body: 'a post',
   createdAt: CREATED_AT,
-  author: { username: 'other' },
+  author: { username: 'other', displayName: 'Other' },
 };
 
 const COMMENT: CommentWithAuthor = {
@@ -31,7 +31,7 @@ const COMMENT: CommentWithAuthor = {
   authorId: AUTHOR_ID,
   body: 'nice',
   createdAt: CREATED_AT,
-  author: { username: 'author' },
+  author: { username: 'author', displayName: null },
 };
 
 // `count` comments on post-1, oldest first, all sharing one timestamp so the
@@ -109,7 +109,7 @@ describe('CommentsService', () => {
             id: 'comment-1',
             body: 'nice',
             createdAt: CREATED_AT,
-            author: { username: 'author' },
+            author: { username: 'author', displayName: null },
           },
         ],
         nextCursor: null,
@@ -177,7 +177,7 @@ describe('CommentsService', () => {
         id: 'comment-1',
         body: 'nice',
         createdAt: CREATED_AT,
-        author: { username: 'author' },
+        author: { username: 'author', displayName: null },
       });
     });
 

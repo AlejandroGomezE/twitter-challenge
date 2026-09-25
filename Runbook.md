@@ -29,8 +29,9 @@ their own.
 http://localhost:5173 — you land on `/sign-in`; use "Create an account" (`/sign-up`). First time
 after pulling the auth change, run `npx prisma db push` from `backend/` (see Backend → Auth);
 after pulling the profile change, run `npx prisma db push --force-reset` instead (see Backend →
-Profiles — it wipes the dev DB); after pulling the posts or the follows change, a plain
-`npx prisma db push` is enough (additive — see Backend → Posts / Follows).
+Profiles — it wipes the dev DB); after pulling the posts, the follows or the user-search
+(display names) change, a plain `npx prisma db push` is enough (additive — see Backend → Posts /
+Follows / Search).
 
 ---
 
@@ -105,13 +106,15 @@ from `backend/.env` (create it from `backend/.env.example`; it's git-ignored).
   return Prisma models. 204 endpoints return no body.
 - **Auth** (`src/auth/`, users in `src/modules/users/`) — email + password, server-side
   sessions in an httpOnly `sid` cookie:
-  - `POST /auth/sign-up` `{ email, username, password }` → 201 + cookie, `{ id, email,
-    username }` (409 `Email is already registered` / `Username is already taken`; 400 on an
-    invalid/reserved username; password 12–128 chars).
-  - `POST /auth/sign-in` `{ email, password }` → 200 + cookie, `{ id, email, username }`;
-    generic 401 `Invalid email or password` otherwise.
+  - `POST /auth/sign-up` `{ email, username, displayName, password }` → 201 + cookie, `{ id,
+    email, username, displayName }` (409 `Email is already registered` / `Username is already
+    taken`; 400 on an invalid/reserved username, a missing/blank/invalid `displayName` — see
+    Profiles below; password 12–128 chars).
+  - `POST /auth/sign-in` `{ email, password }` → 200 + cookie, `{ id, email, username,
+    displayName }`; generic 401 `Invalid email or password` otherwise.
   - `POST /auth/sign-out` → 204, revokes the session and clears the cookie (idempotent).
-  - `GET /auth/me` → `{ id, email, username }` or 401.
+  - `GET /auth/me` → `{ id, email, username, displayName }` or 401 (`displayName` is `null` for
+    accounts created before display names existed).
   - **Every other endpoint requires a valid `sid` cookie** — a global
     `AuthGuard` (`APP_GUARD`); opt a route out with `@Public()`. POST/PUT/PATCH/DELETE with
     an `Origin` other than `FRONTEND_ORIGIN` get 403, public routes included.
@@ -119,27 +122,35 @@ from `backend/.env` (create it from `backend/.env.example`; it's git-ignored).
   - **After pulling this change, run `npx prisma db push` from `backend/`** to create the
     `User`/`Session` tables (and `npx prisma generate` if the client is stale).
 - **Profiles** (`src/modules/users/`, `users.controller.ts`) — both routes session-gated:
-  - `GET /users/:username` → `{ username, bio, createdAt, postCount, followerCount,
+  - `GET /users/:username` → `{ username, displayName, bio, createdAt, postCount, followerCount,
     followingCount, isFollowing, followsYou }` (case-insensitive lookup; never the email or id) or
     404 `User not found`. `isFollowing` = you follow them, `followsYou` = they follow you — both
     `false` on your own profile.
-  - `PATCH /users/me` `{ username?, bio? }` → the caller's own `{ id, email, username, bio,
-    createdAt, postCount, followerCount, followingCount }`; 409 `Username is already taken`, 400 on
-    invalid input. The target is always the session user; unknown fields are stripped. Follows key
-    on the user id, so a username change keeps them.
+  - `PATCH /users/me` `{ username?, bio?, displayName? }` → the caller's own `{ id, email,
+    username, displayName, bio, createdAt, postCount, followerCount, followingCount }`; 409
+    `Username is already taken`, 400 on invalid input. The target is always the session user;
+    unknown fields are stripped. Follows key on the user id, so a username change keeps them.
   - **Username:** trimmed + lowercased, 3–20 chars of `a-z0-9_`, not a reserved word (`me`,
     `settings`, `auth`, `users`, `u`, `api`, `admin`, …), unique (any case).
   - **Bio:** optional, trimmed, max 160 chars; an empty string clears it (`null`).
-  - `src/modules/users/username.rules.ts` is authoritative; the frontend copy in
-    `frontend/src/lib/validation/profile-schemas.js` (incl. `RESERVED_USERNAMES`) must match.
+  - **Display name** (`displayName`, shown next to the `@username`): trimmed, then 1–50
+    characters counted as Unicode code points (an emoji counts 1), no line breaks; not unique, any
+    case kept. **Required at sign-up** (missing/blank → 400). `PATCH /users/me` sets or changes it
+    (omitted = unchanged) but **can't clear it**: `''`, whitespace-only or `null` → 400, so once
+    set it stays set. Accounts created before display names existed have `displayName: null` (no
+    backfill) until they set one in Edit profile.
+  - `src/modules/users/username.rules.ts` is authoritative (username, bio and display name); the
+    frontend copy in `frontend/src/lib/validation/profile-schemas.js` (incl. `RESERVED_USERNAMES`)
+    must match.
   - **After pulling this change, run `npx prisma db push --force-reset` from `backend/`.** It
     **wipes the dev DB** (the new required `username` column can't be added to existing rows) —
     re-create your accounts afterwards.
 - **Posts, likes, comments** (`src/modules/posts/`; a user's posts in `src/modules/users/`) — every
   route session-gated (401 without a session; writes with a foreign `Origin` → 403); author/viewer
-  ids come only from the session. `Post` = `{ id, body, createdAt, author: { username }, likeCount,
-  commentCount, likedByMe }`, `Comment` = `{ id, body, createdAt, author: { username } }`, a page =
-  `{ items, nextCursor }` (`nextCursor` null on the last page):
+  ids come only from the session. `Post` = `{ id, body, createdAt, author: { username,
+  displayName }, likeCount, commentCount, likedByMe }`, `Comment` = `{ id, body, createdAt,
+  author: { username, displayName } }` (`displayName` may be `null`), a page = `{ items,
+  nextCursor }` (`nextCursor` null on the last page):
 
   | Method + path | Result | Errors |
   |---|---|---|
@@ -173,8 +184,8 @@ from `backend/.env` (create it from `backend/.env.example`; it's git-ignored).
 - **Follows** (`src/modules/follows/`, routes under `/users` beside `UsersController`) — every route
   session-gated (401 without a session; writes with a foreign `Origin` → 403); the follower is
   always the session user. Usernames in the path are case-insensitive. `FollowUser` = `{ username,
-  bio, isFollowing, followsYou }` (the booleans are relative to you, both `false` on your own row;
-  never an id or email):
+  displayName, bio, isFollowing, followsYou }` (`displayName` may be `null`; the booleans are
+  relative to you, both `false` on your own row; never an id or email):
 
   | Method + path | Result | Errors |
   |---|---|---|
@@ -194,6 +205,27 @@ from `backend/.env` (create it from `backend/.env.example`; it's git-ignored).
     are unaffected. The lists and suggestions aren't limited.
   - **After pulling this change, run `npx prisma db push` from `backend/`** (plain — `Follow` is a
     new table, no reset) and `npx prisma generate` if the client is stale.
+- **Search** (`src/modules/users/search.controller.ts`, in the users module) — session-gated (401
+  without a session). Finds users by username **or** display name:
+
+  | Method + path | Result | Errors |
+  |---|---|---|
+  | `GET /search/users?q=&cursor=&limit=` | 200 page of `FollowUser`, ordered by username | 400 bad `q` / cursor / limit |
+
+  - **`q`:** trimmed, then one leading `@` stripped (`@ada` finds ada), then 1–50 characters
+    (code points); missing, empty, blank, `@`-only, over 50 or repeated (`q=a&q=b`) → 400.
+  - **Matching:** users whose username or display name **contains** `q`. Case-insensitive for
+    ASCII letters only — it's SQLite `LIKE`, which doesn't fold `É`/`é`. `%` and `_` in `q` match
+    literally (not as wildcards). No relevance ranking.
+  - **You're included** when you match, with `isFollowing` / `followsYou` both `false` on your row.
+  - **Paging:** ordered by username ascending, keyset-paged on it (opaque `cursor` — pass back the
+    previous page's `nextCursor`; an empty `cursor=` or a cursor from another listing → 400
+    `Invalid cursor`); `limit` 1–50, default 20. Not rate limited.
+  - The route is `/search/users`, not `/users/search`: `search` isn't a reserved username, so
+    `/users/search` would shadow a user called "search".
+  - **After pulling this change (it also adds `User.displayName`), run `npx prisma db push` from
+    `backend/`** (plain — a new nullable column, no reset; existing users get `null`) and
+    `npx prisma generate` if the client is stale.
 - **Run**: `start:dev` (watch mode, what `scripts/be-local` uses), `start` (no watch),
   `start:debug`, `start:prod` (runs the compiled `dist/`).
 - **Test**: `test` (Vitest unit), `test:watch`, `test:cov` (coverage), `test:debug`,
@@ -228,16 +260,17 @@ shadcn/ui (Radix base, Nova preset), and `react-router` for client-side routing.
   404), and default `GET /feed` / `GET /feed/for-you` / `GET /users/:username/posts` handlers
   return an empty page (`/users/<not ada>/posts` → 404). Follows have defaults too: empty
   suggestions, empty `ada` followers / following (others → 404), and `PUT` / `DELETE
-  /users/:username/follow` answering `followerCount` 1 / 0. Tests routed through `AppRouter` render
+  /users/:username/follow` answering `followerCount` 1 / 0; `GET /search/users` returns no matches
+  for any query. Tests routed through `AppRouter` render
   inside the shell, so scope queries with `within(screen.getByRole('main'))`.
 - **Structure** (`src/`): `app/` (`App.jsx`, `router.jsx`, `NavigationDepthTracker.jsx`,
   `providers.jsx`, `query-client.js`), `components/ui/` (shadcn), `components/layout/` (app shell),
   `components/feed/` (`Composer`, `PostCard`, `CommentComposer`, `CommentItem`,
   `InfiniteListFooter`, `CharacterCounter`, `PostListSkeleton`), `components/AuthLayout.jsx`,
-  `components/BrandMark.jsx`, `components/UserAvatar.jsx`, `components/FollowButton.jsx`,
-  `components/FollowListDialog.jsx`, `hooks/`,
-  `lib/api/` (HTTP client, `users.js`, `posts.js`, `post-cache.js`, `follow-cache.js`,
-  `error-message.js`),
+  `components/BrandMark.jsx`, `components/UserAvatar.jsx`, `components/UserName.jsx`,
+  `components/FollowButton.jsx`, `components/FollowListDialog.jsx`, `hooks/`,
+  `lib/api/` (HTTP client, `users.js`, `posts.js`, `search.js`, `post-cache.js`,
+  `follow-cache.js`, `error-message.js`),
   `lib/text.js`, `lib/format.js`, `lib/composer-focus.js`, `lib/navigation-history.js`,
   `lib/avatar-color.js`,
   `lib/auth/` (`AuthProvider`, `useAuth()`), `lib/validation/` (Zod form schemas),
@@ -263,22 +296,40 @@ shadcn/ui (Radix base, Nova preset), and `react-router` for client-side routing.
   mounted in dev only.
 - **Forms** — `react-hook-form` + `zod` (`@hookform/resolvers`), used by the sign-in,
   sign-up and edit-profile pages; schemas in `src/lib/validation/auth-schemas.js` and
-  `profile-schemas.js` (username/bio rules, mirroring the backend).
+  `profile-schemas.js` (username / bio / display-name rules, mirroring the backend).
 - **Brand + theme** — the app is "The Flock Twitter" (`index.html` title, feather favicon;
   auth pages set `<page> · The Flock Twitter` via `components/AuthLayout.jsx`). Pulse palette
   tokens (light + dark), `--radius: 1rem`, Geist Sans + Geist Mono (`font-mono` for handles,
   timestamps, small-caps labels) live in `src/index.css`. Dark mode follows the OS (no toggle):
-  a custom `dark` variant matches `.dark` or `prefers-color-scheme: dark`.
+  a custom `dark` variant matches `.dark` or `prefers-color-scheme: dark`. `index.css` also sets
+  `scrollbar-gutter: stable` on `html`, so content doesn't shift sideways between pages with and
+  without a vertical scrollbar (with a matching override so opening a dialog doesn't shift it
+  either).
 - **App shell** — every gated page renders inside `components/layout/AppShell.jsx`, a layout
   route (`ProtectedRoute` → `AppShell` → page) in `router.jsx`: left nav rail (`lg`+, labels at
   `xl`), the page in the center column (it renders its own sticky `PageHeader`), right rail
-  (`xl`: search, your profile card, who to follow), and a bottom nav + compose button below
-  `lg`. Nav items are configured once in `layout/nav-items.js`.
+  (`xl`: search, your profile card, who to follow — 366px with 8px inline padding, so the search
+  box's focus ring isn't clipped), and a bottom nav + compose button below `lg`. Nav items are
+  configured once in `layout/nav-items.js`; Explore is a working item (side and bottom nav).
 - **Disabled items** — features without a backend yet are shown but disabled, never with fake
-  counts or users. The nav placeholders (Explore, Notifications, Messages, Bookmarks), the
-  search box, the composer's attachment icons and the post cards' Repost / Bookmark / Share are
-  wrapped in `layout/ComingSoon.jsx`: `aria-disabled` (not native `disabled`, so the "Coming
+  counts or users. The nav placeholders (Notifications, Messages, Bookmarks), the composer's
+  attachment icons and the post cards' Repost / Bookmark / Share are wrapped in
+  `layout/ComingSoon.jsx`: `aria-disabled` (not native `disabled`, so the "Coming
   soon" tooltip stays reachable).
+- **Display names** — everywhere a user appears (profile header, post cards, comments, follow
+  lists, Who to follow, the rail's profile card, search results) `components/UserName.jsx` shows
+  the display name in bold followed by the muted `@username`, or just `@username` when the user has
+  none. Sign-up has a required **Name** field (1–50, counted like the backend); **Edit profile**
+  has a Name field to set or change it — required once set (can't be cleared), may stay empty for
+  a user who never set one.
+- **Search** — the right rail's search box is a typeahead: after a short pause (250ms) it shows up
+  to 5 matching users (by display name or username) in a dropdown; arrow keys + Enter open a user,
+  Enter on the query (or "See all results for …") goes to Explore, Escape or clicking away closes
+  it. **Explore** (`/explore?q=…`, `pages/Explore.jsx`, in the side and bottom nav — the only way
+  to search on phones, where there's no right rail) has its own search box and lists every match,
+  ordered by username, with infinite scroll; each row links to the profile and has a Follow /
+  Follow back / Following button (none on your own row). The URL follows the box as you type
+  (replacing the history entry); states for no query, no results, loading and errors.
 - **Who to follow** (`layout/RightRail.jsx`) — up to 3 users you don't follow (newest accounts
   first), each linking to their profile, with a Follow button; skeleton rows while loading; the card
   is hidden when there's nobody to suggest or the request fails. Following someone flips the row to
@@ -301,8 +352,8 @@ shadcn/ui (Radix base, Nova preset), and `react-router` for client-side routing.
 - **Infinite scroll** — feed, a profile's posts and comments load the next page when the list's
   end gets within 400px of the viewport, with a "Load more" button as the keyboard / fallback
   path and Retry after a failed page.
-- **Posts** — each card: avatar + `@username` (→ profile), relative time (the link to the post),
-  body as plain text, comments (→ detail), a like toggle (optimistic, rolls back on error), and on
+- **Posts** — each card: avatar + display name and `@username` (→ profile), relative time (the
+  link to the post), body as plain text, comments (→ detail), a like toggle (optimistic, rolls back on error), and on
   your own posts a "…" menu → Delete with a confirmation. Clicking the card (not its
   links/buttons) opens the post.
 - **Post detail** (`/u/:username/posts/:id`, `pages/PostDetail.jsx`) — the post, a reply box and
@@ -311,7 +362,8 @@ shadcn/ui (Radix base, Nova preset), and `react-router` for client-side routing.
   in-app page, or to the author's profile when there is none (opened directly — redirects don't
   count, so Back never leaves the app); deleting the post goes to the author's profile.
 - **Profiles** — `/u/:username` (`pages/Profile.jsx`: Pulse layout — banner, avatar,
-  `@username` with the post count, bio, join date, "Edit profile" on your own, Posts tab with the
+  display name (the header title) with `@username` below it, or `@username` alone, the post count,
+  bio, join date, "Edit profile" on your own, Posts tab with the
   user's posts, newest first, same paging) and
   `/settings/profile` (`pages/EditProfile.jsx`), both inside the shell. Someone else's profile has
   a Follow / Follow back / Following button (reads "Unfollow" on hover and focus; one click, no

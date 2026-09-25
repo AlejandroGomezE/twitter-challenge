@@ -50,39 +50,58 @@ async function serialize(
 }
 
 // A user row carrying fields that must never leave the API.
-function leakyUser(username: string): Record<string, unknown> {
+function leakyUser(
+  username: string,
+  displayName: string | null = `Name ${username}`,
+): Record<string, unknown> {
   return {
     id: `id-${username}`,
     email: `${username}@example.test`,
     passwordHash: '$argon2id$secret',
     createdAt: new Date('2026-09-24T10:00:00.000Z'),
     username,
+    displayName,
     bio: null,
     isFollowing: true,
     followsYou: false,
   };
 }
 
-function expectedUser(username: string): Record<string, unknown> {
-  return { username, bio: null, isFollowing: true, followsYou: false };
+function expectedUser(
+  username: string,
+  displayName: string | null = `Name ${username}`,
+): Record<string, unknown> {
+  return {
+    username,
+    displayName,
+    bio: null,
+    isFollowing: true,
+    followsYou: false,
+  };
 }
 
 describe('Follow response DTOs through ResponseSerializerInterceptor', () => {
-  it('FollowUserResponseDto keeps only username, bio and the two booleans', async () => {
+  it('FollowUserResponseDto keeps only username, displayName, bio and the two booleans', async () => {
     await expect(serialize('user', leakyUser('alice'))).resolves.toEqual(
       expectedUser('alice'),
+    );
+  });
+
+  it('FollowUserResponseDto keeps a null displayName as null', async () => {
+    await expect(serialize('user', leakyUser('alice', null))).resolves.toEqual(
+      expectedUser('alice', null),
     );
   });
 
   it('FollowUserPageResponseDto strips extra fields on the page and every item', async () => {
     await expect(
       serialize('page', {
-        items: [leakyUser('alice'), leakyUser('bob')],
+        items: [leakyUser('alice'), leakyUser('bob', null)],
         nextCursor: 'abc_123',
         total: 99,
       }),
     ).resolves.toEqual({
-      items: [expectedUser('alice'), expectedUser('bob')],
+      items: [expectedUser('alice'), expectedUser('bob', null)],
       nextCursor: 'abc_123',
     });
   });

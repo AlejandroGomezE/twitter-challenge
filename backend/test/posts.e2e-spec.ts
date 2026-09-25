@@ -30,6 +30,10 @@ const POST_KEYS = [
 ];
 const COMMENT_KEYS = ['author', 'body', 'createdAt', 'id'];
 const PAGE_KEYS = ['items', 'nextCursor'];
+const AUTHOR_KEYS = ['displayName', 'username'];
+
+// Display name the helper gives every user unless told otherwise.
+const DISPLAY_NAME = 'E2E User';
 
 // Keys that must never appear in any response body.
 const NEVER_EXPOSED_KEYS = new Set(['passwordHash', 'tokenHash']);
@@ -40,7 +44,7 @@ interface PostJson {
   id: string;
   body: string;
   createdAt: string;
-  author: { username: string };
+  author: { username: string; displayName: string | null };
   likeCount: number;
   commentCount: number;
   likedByMe: boolean;
@@ -50,7 +54,7 @@ interface CommentJson {
   id: string;
   body: string;
   createdAt: string;
-  author: { username: string };
+  author: { username: string; displayName: string | null };
 }
 
 interface PageJson<T> {
@@ -61,6 +65,7 @@ interface PageJson<T> {
 interface TestUser {
   userId: string;
   username: string;
+  displayName: string | null;
   email: string;
   token: string;
 }
@@ -181,15 +186,35 @@ describe('Posts (e2e)', () => {
     return `e2e_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
   }
 
-  async function createUserWithSession(): Promise<TestUser> {
+  // `displayName: null` creates a user without one (like an account from
+  // before display names): sign-up requires it, so it's cleared afterwards.
+  async function createUserWithSession(
+    displayName: string | null = DISPLAY_NAME,
+  ): Promise<TestUser> {
     const email = `e2e-${randomUUID()}@example.test`;
     const user = await app
       .get(UsersService)
-      .create(email, uniqueUsername(), 'correct-horse-battery');
+      .create(
+        email,
+        uniqueUsername(),
+        displayName ?? DISPLAY_NAME,
+        'correct-horse-battery',
+      );
     createdUserIds.push(user.id);
     createdEmails.push(email);
+    if (displayName === null) {
+      await app
+        .get(PrismaService)
+        .user.update({ where: { id: user.id }, data: { displayName: null } });
+    }
     const { token } = await app.get(AuthService).createSession(user.id);
-    return { userId: user.id, username: user.username, email, token };
+    return {
+      userId: user.id,
+      username: user.username,
+      displayName,
+      email,
+      token,
+    };
   }
 
   // Sends one request and records its body for the serialization guard.
@@ -300,7 +325,7 @@ describe('Posts (e2e)', () => {
 
   function expectPostShape(post: unknown): void {
     expect(Object.keys(post as object).sort()).toEqual(POST_KEYS);
-    expect(Object.keys((post as PostJson).author).sort()).toEqual(['username']);
+    expect(Object.keys((post as PostJson).author).sort()).toEqual(AUTHOR_KEYS);
   }
 
   it('the serialization guard sees every recorded response (self-check)', async () => {
@@ -313,7 +338,7 @@ describe('Posts (e2e)', () => {
   });
 
   describe('POST /posts', () => {
-    it('returns 201 with exactly the post fields, author { username } only, body trimmed', async () => {
+    it('returns 201 with exactly the post fields, author { username, displayName } only, body trimmed', async () => {
       const me = await createUserWithSession();
       const res = await call('post', '/posts', {
         token: me.token,
@@ -326,7 +351,7 @@ describe('Posts (e2e)', () => {
         id: expect.any(String),
         body: 'hello\nworld',
         createdAt: expect.any(String),
-        author: { username: me.username },
+        author: { username: me.username, displayName: DISPLAY_NAME },
         likeCount: 0,
         commentCount: 0,
         likedByMe: false,
@@ -389,7 +414,10 @@ describe('Posts (e2e)', () => {
         body: { body: 'mine', authorId: other.userId },
       });
       expect(res.status).toBe(201);
-      expect((res.body as PostJson).author).toEqual({ username: me.username });
+      expect((res.body as PostJson).author).toEqual({
+        username: me.username,
+        displayName: DISPLAY_NAME,
+      });
       const row = await app
         .get(PrismaService)
         .post.findUniqueOrThrow({ where: { id: (res.body as PostJson).id } });
@@ -1115,7 +1143,7 @@ describe('Posts (e2e)', () => {
         id: expect.any(String),
         body: 'nice\npost',
         createdAt: expect.any(String),
-        author: { username: me.username },
+        author: { username: me.username, displayName: DISPLAY_NAME },
       });
       const row = await app.get(PrismaService).comment.findUniqueOrThrow({
         where: { id: (res.body as CommentJson).id },
@@ -1204,7 +1232,7 @@ describe('Posts (e2e)', () => {
       expect(byLimit4.items.map((c) => c.id)).toEqual(expected);
       for (const comment of byLimit4.items) {
         expect(Object.keys(comment).sort()).toEqual(COMMENT_KEYS);
-        expect(Object.keys(comment.author)).toEqual(['username']);
+        expect(Object.keys(comment.author).sort()).toEqual(AUTHOR_KEYS);
       }
 
       const byDefault = await walk<CommentJson>(path, commenter.token);
@@ -1362,6 +1390,73 @@ describe('Posts (e2e)', () => {
           .get(PrismaService)
           .comment.count({ where: { postId: post.id } }),
       ).toBe(0);
+    });
+  });
+
+  describe('author display name', () => {
+    it("every post listing and the comments carry the author's display name, null for a user without one", async () => {
+      const named = await createUserWithSession('Ada Lovelace');
+      const unnamed = await createUserWithSession(null);
+      const followed = await call('put', `/users/${unnamed.username}/follow`, {
+        token: named.token,
+      });
+      expect(followed.status).toBe(200);
+
+      const namedPost = await createPost(named, 'by ada');
+      const unnamedPost = await createPost(unnamed, 'by nobody');
+      const expectedAuthor = new Map<string, PostJson['author']>([
+        [
+          namedPost.id,
+          { username: named.username, displayName: 'Ada Lovelace' },
+        ],
+        [unnamedPost.id, { username: unnamed.username, displayName: null }],
+      ]);
+      expect(namedPost.author).toEqual(expectedAuthor.get(namedPost.id));
+      expect(unnamedPost.author).toEqual(expectedAuthor.get(unnamedPost.id));
+
+      const expectAuthors = (posts: PostJson[]): void => {
+        const ours = posts.filter((p) => expectedAuthor.has(p.id));
+        expect(ours).toHaveLength(2);
+        for (const post of ours) {
+          expectPostShape(post);
+          expect(post.author).toEqual(expectedAuthor.get(post.id));
+        }
+      };
+      expectAuthors((await walk<PostJson>('/feed', named.token)).items);
+      expectAuthors((await walk<PostJson>('/feed/for-you', named.token)).items);
+      expectAuthors([
+        ...(await walk<PostJson>(`/users/${named.username}/posts`, named.token))
+          .items,
+        ...(
+          await walk<PostJson>(`/users/${unnamed.username}/posts`, named.token)
+        ).items,
+      ]);
+      expect((await getPost(named, unnamedPost.id)).author).toEqual({
+        username: unnamed.username,
+        displayName: null,
+      });
+
+      const namedComment = await createComment(named, namedPost.id, 'hi');
+      const unnamedComment = await createComment(unnamed, namedPost.id, 'yo');
+      expect(namedComment.author).toEqual({
+        username: named.username,
+        displayName: 'Ada Lovelace',
+      });
+      expect(unnamedComment.author).toEqual({
+        username: unnamed.username,
+        displayName: null,
+      });
+      const comments = await walk<CommentJson>(
+        `/posts/${namedPost.id}/comments`,
+        unnamed.token,
+      );
+      expect(comments.items.map((c) => c.author)).toEqual([
+        { username: named.username, displayName: 'Ada Lovelace' },
+        { username: unnamed.username, displayName: null },
+      ]);
+      for (const comment of comments.items) {
+        expect(Object.keys(comment.author).sort()).toEqual(AUTHOR_KEYS);
+      }
     });
   });
 });

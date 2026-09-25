@@ -45,6 +45,7 @@ export class AuthController {
     const { user, session } = await this.authService.signUp(
       dto.email,
       dto.username,
+      dto.displayName,
       dto.password,
     );
     setSessionCookie(res, session.token, session.expiresAt, this.isSecure());

@@ -23,16 +23,19 @@ const withCursor = (path, cursor) =>
 
 const userPath = (username) => `/users/${encodeURIComponent(username)}`;
 
-// Resolves to `{ username, bio, createdAt, postCount, followerCount, followingCount, isFollowing,
-// followsYou }`; rejects with an ApiError (404 for an unknown user).
+// Resolves to `{ username, displayName, bio, createdAt, postCount, followerCount, followingCount,
+// isFollowing, followsYou }` (`displayName` null until the user sets one); rejects with an ApiError
+// (404 for an unknown user).
 export const fetchProfile = (username) => apiClient.get(userPath(username));
 
-// `PATCH /users/me` with `{ username?, bio? }` (bio `''` clears it). Resolves to the caller's
-// `{ id, email, username, bio, createdAt }`; rejects with an ApiError (409 taken username, 400).
+// `PATCH /users/me` with `{ username?, bio?, displayName? }` (bio `''` clears it; a display name
+// can be set or changed but not cleared — `''` is a 400). Resolves to the caller's `{ id, email,
+// username, displayName, bio, createdAt, postCount, followerCount, followingCount }`; rejects with
+// an ApiError (409 taken username, 400).
 export const updateMyProfile = (patch) => apiClient.patch('/users/me', patch);
 
-// `FollowUser` = `{ username, bio, isFollowing, followsYou }` (the booleans are relative to the
-// signed-in user). A follow page = `{ items: FollowUser[], nextCursor }`, most recent follow first.
+// `FollowUser` = `{ username, displayName, bio, isFollowing, followsYou }` (`displayName` may be
+// null; the booleans are relative to the signed-in user). A follow page = `{ items: FollowUser[], nextCursor }`, most recent follow first.
 
 // `PUT` / `DELETE /users/:username/follow` → `{ following, followerCount }`. Both are idempotent,
 // so sending the intended final state (rather than "toggle") is safe to repeat. 404 unknown user,

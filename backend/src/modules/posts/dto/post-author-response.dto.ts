@@ -5,4 +5,8 @@ import { Expose } from 'class-transformer';
 export class PostAuthorResponseDto {
   @Expose()
   username: string;
+
+  // null until the author sets one.
+  @Expose()
+  displayName: string | null;
 }

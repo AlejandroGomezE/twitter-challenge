@@ -3,14 +3,15 @@ import { PrismaService } from '../../database/prisma.service.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 import type { CursorPosition } from './pagination.js';
 
-// Columns every comment read needs: the comment plus its author's username.
+// Columns every comment read needs: the comment plus its author's username
+// and display name (fetched in the same query, never one lookup per row).
 const COMMENT_WITH_AUTHOR_SELECT = {
   id: true,
   postId: true,
   authorId: true,
   body: true,
   createdAt: true,
-  author: { select: { username: true } },
+  author: { select: { username: true, displayName: true } },
 } satisfies Prisma.CommentSelect;
 
 export type CommentWithAuthor = Prisma.CommentGetPayload<{
