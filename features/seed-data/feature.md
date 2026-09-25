@@ -23,7 +23,7 @@ in the Runbook).
   - docs: `Runbook.md` (how to seed, reset, sample credentials; Docker note), `backend/README.md`,
     `knowledge/infra/backend-architecture.md` (where the seed lives).
 - Data shape:
-  - 12 users with hand-written, plausible profiles (username, displayName, bio), emails on
+  - 30 users with hand-written, plausible profiles (username, displayName, bio), emails on
     `example.com`, all with the same password `password1234` (meets the 12–128 rule), hashed with
     argon2 using the **same options as sign-up** (reuse the existing constant, don't copy it). One
     is the documented demo account: `demo@example.com` / `password1234` (username `demo`).
@@ -37,7 +37,7 @@ in the Runbook).
   - Deterministic: fixed content and fixed offsets from "now" (no random, no faker dependency).
 - Acceptance criteria:
   1. From a fresh clone following the Runbook (`npm install`, `cp .env.example .env`,
-     `npx prisma db push`, `npm run db:seed`), the DB has ≥ 10 users, each with posts, plus
+     `npx prisma db push`, `npm run db:seed`), the DB has 30 users, each with posts, plus
      follows, cross-likes and comments; `npx prisma db seed` does the same.
   2. Signing in as `demo@example.com` / `password1234` shows a non-empty Following feed (paginates
      via infinite scroll), a For-you feed, like counters > 0, profiles with followers/following
@@ -81,8 +81,9 @@ in the Runbook).
   data; `down -v` gives a fresh seeded stack.
 - 2026-09-25 · framed · Hand-written deterministic content instead of faker: reads as realistic,
   no extra dependency, and the docs can reference concrete users.
+- 2026-09-25 · framed · 30 seed users rather than the 12 first proposed (Alejandro) — well over the §5.2 minimum of 10, enough for search, follow lists and suggestions to feel populated. Posts stay at 5–8 per user.
 - 2026-09-25 · framed · Tests are written at Close (per `WORKFLOW.md`): a unit spec on the data
-  module's invariants (≥ 10 users, unique usernames/emails, bodies ≤ 280, no self-follow/self-like,
+  module's invariants (30 users, unique usernames/emails, bodies ≤ 280, no self-follow/self-like,
   every user has posts) and an e2e spec that runs `runSeed` against the e2e DB and signs in as
   `demo`.
 
