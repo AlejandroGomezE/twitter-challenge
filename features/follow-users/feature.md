@@ -2,7 +2,7 @@
 slug: follow-users
 status: verifying
 scope: full-stack
-next: /review-feature follow-users
+next: /close-feature follow-users
 ---
 # Follow users
 
@@ -111,7 +111,16 @@ on profiles, a working "Following" feed tab, and the "Who to follow" card.
 - [ ] Close: `follows/dto/follow-user-page-response.dto.ts` comment cites a non-existent
   `follow-user-page-response.dto.spec.ts`; the coverage lives in `follow-user-response.dto.spec.ts`.
 
+- [ ] `scripts/down-be` stops any backend from this repo on the port (it stopped a pre-existing
+  `backend/dist/main` during Verify); the Runbook says foreign processes are only reported · flow
+  tooling, not this feature.
+- [ ] Verify seeded dev-DB users `va_f8zdd`, `vb2_f8zdd`, `vc_f8zdd` (+ posts/follows/like) · clean
+  up if unwanted.
+- [ ] Follow-list dialog opens with a visible focus ring on the selected tab (Radix autofocus) ·
+  cosmetic.
+
 ## Log
 - 2026-09-24 · framed
 - 2026-09-24 · built — follow/unfollow (idempotent, throttled), followers/following lists + dialog, profile counts + Follows you, Following (default) / For you feeds, Who to follow; docs. BE 29 suites / 334 unit + 4 suites / 137 e2e, FE 37 suites / 381, build/lint green.
 - 2026-09-24 · built — T11: profile counts refetch every time a profile is shown (incl. on focus), follow-list tabs refetch on open/switch (not on focus/toggle), optimistic follows survive mid-flight refetches (target + own followingCount). BE 29 suites / 334 unit + 4 / 137 e2e, FE 37 suites / 391, build/lint green.
+- 2026-09-24 · verified — all 4 ACs + T11 driven in headless Chrome + API (follow/unfollow/Follow back/Follows you, counts + dialog tabs/rows/nav, Following default vs For you feeds, Who to follow, fresh counts on return); likes, Posts tab, username change and 390px width intact
