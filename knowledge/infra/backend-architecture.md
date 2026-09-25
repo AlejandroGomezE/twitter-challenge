@@ -391,9 +391,5 @@ nor an `email` key or any test user's email address — except `PATCH /users/me`
   `SessionsRepository` (`auth/`). Repositories are the only layer injecting
   `PrismaService` (plain `@Injectable()` classes — no interface, no injection token),
   enforced by `.claude/review-contract.md` §B.
-- The global `ValidationPipe` has `enableImplicitConversion`, so a JSON number in a string field
-  is coerced before `@IsString()` runs (`POST /posts { body: 123 }` → 201 with body `"123"`).
-  App-wide; Alejandro to decide: drop implicit conversion (adding explicit `@Type(() => Number)`
-  where query numbers need it) or accept it.
 - Throttling keys on the client IP as Express sees it; there's no `trust proxy` setting,
   so behind a reverse proxy every client would share one bucket. Revisit when deployed.

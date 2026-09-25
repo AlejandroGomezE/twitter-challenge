@@ -346,6 +346,8 @@ describe('Posts (e2e)', () => {
       ['whitespace-only', '  \n\t  '],
       ['281 code points', 'a'.repeat(281)],
       ['281 emoji', '😀'.repeat(281)],
+      // A JSON number is not a string: no implicit conversion to "123".
+      ['number', 123],
     ])('rejects a %s body with 400', async (_label, body) => {
       const me = await createUserWithSession();
       const res = await call('post', '/posts', {
@@ -996,7 +998,7 @@ describe('Posts (e2e)', () => {
       const post = await createPost(author, 'rules');
       const path = `/posts/${post.id}/comments`;
 
-      for (const body of ['', '   \n ', 'a'.repeat(281), '😀'.repeat(281)]) {
+      for (const body of ['', '   \n ', 'a'.repeat(281), '😀'.repeat(281), 123]) {
         const res = await call('post', path, {
           token: author.token,
           body: { body },
