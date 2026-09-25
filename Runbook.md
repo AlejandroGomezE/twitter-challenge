@@ -46,10 +46,13 @@ Profiles — it wipes the dev DB); after pulling the posts or the follows change
   default port **5173** — Vite picks the next free port if it's taken).
 - **`scripts/down-be`** / **`scripts/down-fe`** — stop everything `be-local` / `fe-local`
   (or a plain `npm run start:dev` / `npm run dev`) left behind: every `node` process whose
-  command line points into `backend/` / `frontend/`, killed with its whole process tree
-  (`nest --watch` watchers, Vite's esbuild service), then checks the port (`PORT` from
-  `backend/.env` or 3000 / 5173) is free. Anything else holding the port is reported, not
-  killed. Safe to run when nothing is up. Shared logic lives in `scripts/lib/stop-dev.sh`.
+  command line points into `backend/node_modules/` / `frontend/node_modules/` (the nest / vite
+  CLIs), killed with its whole process tree (so the `node dist/main` a `nest --watch` spawned,
+  and Vite's esbuild service, go with it), then checks the port (`PORT` from `backend/.env` or
+  3000 / 5173) is free. A backend started some other way (e.g. `npm run start:prod`, `node
+  dist/main`) is reported and left running, as is anything else holding the port — the script
+  then exits non-zero. Safe to run when nothing is up. Shared logic lives in
+  `scripts/lib/stop-dev.sh`.
 
 ---
 
