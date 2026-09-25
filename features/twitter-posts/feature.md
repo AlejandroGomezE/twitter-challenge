@@ -153,7 +153,7 @@ next: /review-feature twitter-posts
 - 2026-09-24 · building · A reply posted while older comment pages aren't loaded shows "Reply posted.
   Load more comments to see it." (the cache only appends when the list is fully loaded).
 - 2026-09-24 · building · New shared components outside the plan: `CharacterCounter`,
-  `PostListSkeleton` — sign-off **pending Alejandro**. Close: tighten the navigation-history
+  `PostListSkeleton` — **signed off by Alejandro** (2026-09-24). Close: tighten the navigation-history
   idempotency test (it can't currently distinguish depth 1 from 2).
 
 ## Follow-ups
