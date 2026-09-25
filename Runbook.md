@@ -32,7 +32,8 @@ after pulling the auth change, run `npx prisma db push` from `backend/` (see Bac
 after pulling the profile change, run `npx prisma db push --force-reset` instead (see Backend →
 Profiles — it wipes the dev DB); after pulling the posts, the follows, the user-search
 (display names) or the notifications change, a plain `npx prisma db push` is enough (additive — see
-Backend → Posts / Follows / Search / Notifications).
+Backend → Posts / Follows / Search / Notifications). The realtime change needs nothing extra (no
+schema change — see Backend → Realtime).
 
 ---
 
@@ -277,6 +278,33 @@ from `backend/.env` (create it from `backend/.env.example`; it's git-ignored).
     `cursor=` → 400). Not rate limited.
   - **After pulling this change, run `npx prisma db push` from `backend/`** (plain — `Notification`
     is a new table, no reset) and `npx prisma generate` if the client is stale.
+- **Realtime** (`src/modules/realtime/`) — `GET /events`, one Server-Sent Events stream per tab
+  (`text/event-stream`), session-gated by the `sid` cookie like every other route (401 without a
+  live session, before any stream opens). Not rate limited — `EventSource` reconnects on its own.
+  Messages are `event: <name>` + `data: <json>`; payloads never carry user ids or other user data:
+
+  | Event | Data | Who receives it |
+  |---|---|---|
+  | `post.created` | `{ id, following }` — `following`: you follow the author | every connected user but the author |
+  | `post.deleted` | `{ id }` | every connected user but the author |
+  | `post.counts` | `{ id, likeCount, commentCount }` — after a like / unlike / comment / comment delete | every connected user but the actor |
+  | `notifications.changed` | `{ unreadCount }` — after one of your notifications is created, removed by an unlike / unfollow, or marked read | the recipient only |
+
+  - **Heartbeat:** a `: ping` comment every 25s. Each one re-validates the session, so after
+    sign-out or expiry the stream closes within 25s (the frontend stops reconnecting once signed
+    out).
+  - **Limits:** at most 5 open streams per user (≈ tabs); opening a 6th closes the oldest.
+  - **No replay:** events missed while disconnected aren't resent; the client refetches instead.
+    Notifications removed by a cascade (a post, comment or user deleted) emit no
+    `notifications.changed` — the badge catches up on its next refetch.
+  - **Single instance only:** the hub that tracks open streams is in memory. Running more than one
+    backend instance would need a shared pub/sub (e.g. Redis) to fan events out — not built.
+  - **Watch it by hand:** copy the `sid` cookie from a signed-in browser (DevTools → Application →
+    Cookies) and run `curl -N -H 'Origin: http://localhost:5173' --cookie 'sid=<token>'
+    http://localhost:3000/events` — you'll see a `: ping` every 25s, and events as other users
+    post, like, comment or delete (your own posts, likes and comments aren't echoed back to you). The `Origin`
+    header is optional for this GET; without a valid cookie it's a 401.
+  - **After pulling this change: nothing to run** — no schema change, no new env var.
 - **Run**: `start:dev` (watch mode, what `scripts/be-local` uses), `start` (no watch),
   `start:debug`, `start:prod` (runs the compiled `dist/`).
 - **Test**: `test` (Vitest unit), `test:watch`, `test:cov` (coverage), `test:debug`,

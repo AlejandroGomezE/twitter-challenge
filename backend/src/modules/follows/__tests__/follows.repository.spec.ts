@@ -111,6 +111,29 @@ describe('FollowsRepository', () => {
     });
   });
 
+  describe('followerIdsAmong', () => {
+    it('reads the followers of the user among the candidates in one query', async () => {
+      prisma.follow.findMany.mockResolvedValue([
+        { followerId: 'b' },
+        { followerId: 'c' },
+      ]);
+
+      await expect(
+        repository.followerIdsAmong('a', ['b', 'c', 'd']),
+      ).resolves.toEqual(['b', 'c']);
+      expect(prisma.follow.findMany).toHaveBeenCalledTimes(1);
+      expect(prisma.follow.findMany).toHaveBeenCalledWith({
+        where: { followingId: 'a', followerId: { in: ['b', 'c', 'd'] } },
+        select: { followerId: true },
+      });
+    });
+
+    it('runs no query for an empty batch', async () => {
+      await expect(repository.followerIdsAmong('a', [])).resolves.toEqual([]);
+      expect(prisma.follow.findMany).not.toHaveBeenCalled();
+    });
+  });
+
   describe('findFollowersPage', () => {
     it('reads newest follow first (createdAt, follower id), limit + 1, without email', async () => {
       const createdAt = new Date('2026-09-24T10:00:00.000Z');

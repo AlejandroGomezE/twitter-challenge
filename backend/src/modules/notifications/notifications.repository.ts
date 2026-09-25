@@ -55,9 +55,13 @@ export class NotificationsRepository {
     await this.prisma.notification.create({ data, select: { id: true } });
   }
 
-  // Deleting nothing is fine (idempotent).
-  async deleteMatching(match: NotificationMatch): Promise<void> {
-    await this.prisma.notification.deleteMany({ where: match });
+  // Deleting nothing is fine (idempotent). Returns how many rows were
+  // deleted.
+  async deleteMatching(match: NotificationMatch): Promise<number> {
+    const { count } = await this.prisma.notification.deleteMany({
+      where: match,
+    });
+    return count;
   }
 
   // `recipientId`'s notifications, newest first (createdAt DESC, id DESC),
@@ -88,14 +92,16 @@ export class NotificationsRepository {
 
   // Marks `recipientId`'s unread notifications created at or before `until`
   // as read at `readAt`; already-read rows keep their original readAt.
+  // Returns how many rows were updated.
   async markReadUntil(
     recipientId: string,
     until: Date,
     readAt: Date,
-  ): Promise<void> {
-    await this.prisma.notification.updateMany({
+  ): Promise<number> {
+    const { count } = await this.prisma.notification.updateMany({
       where: { recipientId, readAt: null, createdAt: { lte: until } },
       data: { readAt },
     });
+    return count;
   }
 }

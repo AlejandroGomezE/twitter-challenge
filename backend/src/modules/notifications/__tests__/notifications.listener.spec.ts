@@ -48,6 +48,7 @@ describe('NotificationsListener', () => {
           provide: NotificationsRepository,
           useValue: notificationsRepository,
         },
+        { provide: EventEmitter2, useValue: { emit: vi.fn() } },
       ],
     }).compile();
     listener = moduleRef.get(NotificationsListener);

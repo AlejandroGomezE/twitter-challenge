@@ -8,10 +8,12 @@ import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { usePostRemovalFocus } from '@/hooks/use-post-removal-focus';
 import { useFeed, useForYouFeed } from '@/hooks/use-posts';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { focusComposer } from '@/lib/composer-focus';
+import { useNewPosts, useShowNewPosts } from '@/lib/realtime/use-new-posts';
 import { cn } from '@/lib/utils';
-import { Feather, Users } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { ArrowUp, Feather, Users } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router';
 
 const FOLLOWING = 'following';
@@ -122,6 +124,96 @@ function useFocusComposerFromNavigation() {
   }, [shouldFocus, navigate, location.pathname, location.search, location.hash]);
 }
 
+// "1 new post" / "N new posts", capped at "99+".
+const newPostsLabel = (count) => `${count > 99 ? '99+' : count} new ${count === 1 ? 'post' : 'posts'}`;
+
+// How long the pending count must hold still before the live region reads it out, so a burst of
+// posts is announced once, with its final count.
+const ANNOUNCE_DELAY_MS = 1000;
+
+// The "N new posts" pill for the selected tab, plus a polite live region announcing its count.
+// New posts are never inserted on their own: they wait here until the pill is clicked, which
+// reloads that feed from the first page, scrolls to the top and moves focus to the top of the feed
+// panel.
+//
+// Layout — two siblings, direct children of the feed panel, between the composer and the feed:
+// - The row: a grid whose single track animates `grid-template-rows` 0fr -> 1fr (its content,
+//   clipped by an `overflow-hidden` cell, is a fixed h-14), so it opens to its natural height when
+//   the first post arrives and closes when the pill clears. This is the only layout change: later
+//   posts only change the label, so the list moves once on open and once on close.
+// - The pill: a zero-height `position: sticky` overlay placed just before the row, whose button
+//   hangs down into the row's space (mt-2.5 + h-9 = centred in 56px). It is NOT inside the row: a
+//   sticky box can only travel within its parent (the row is 56px tall), and an `overflow-hidden`
+//   ancestor would become its scroll container and stop it sticking to the page. As a sibling its
+//   containing block is the whole feed panel (no clipping ancestors up to the page), so it sits in
+//   the row at the top of the page and, once scrolled, docks under the sticky PageHeader.
+//   `top-[101px]` is that header's height, the same at every width: border-b 1px + title row pt-4
+//   16px + text-xl h1 28px + tabs mt-3 12px + tab py-3/text-sm 44px (nothing wraps).
+// While closing, the pill stays mounted with its last count so it can fade out, but it is inert,
+// aria-hidden, untabbable and ignores the pointer. `prefers-reduced-motion` drops the transitions.
+// The fade/slide transform lives on a wrapper, so it never fights the Button's own
+// `active:translate-y-px`.
+function NewPostsPill({ tab, onShown }) {
+  const { count } = useNewPosts(tab);
+  const show = useShowNewPosts(tab);
+  const announcedCount = useDebouncedValue(count, ANNOUNCE_DELAY_MS);
+  const open = count > 0;
+
+  // The last non-zero count, kept for the fade-out (updated during render, not in an effect).
+  const [shownCount, setShownCount] = useState(count);
+  if (open && count !== shownCount) setShownCount(count);
+  const label = newPostsLabel(open ? count : shownCount);
+
+  const handleClick = () => {
+    onShown();
+    show();
+  };
+
+  return (
+    <>
+      <div role="status" className="sr-only">
+        {announcedCount > 0 ? `${newPostsLabel(announcedCount)} available` : ''}
+      </div>
+      <div className="pointer-events-none sticky top-[101px] z-10 flex h-0 items-start justify-center overflow-visible px-4">
+        <div
+          data-testid="new-posts-pill"
+          inert={!open}
+          aria-hidden={open ? undefined : true}
+          className={cn(
+            'mt-2.5 transition duration-200 ease-out motion-reduce:transition-none',
+            open ? 'translate-y-0 opacity-100' : '-translate-y-1 opacity-0',
+          )}
+        >
+          <Button
+            onClick={handleClick}
+            aria-label={`Show ${label}`}
+            tabIndex={open ? undefined : -1}
+            className={cn(
+              'h-9 rounded-full px-4 font-semibold shadow-lg shadow-primary/20',
+              open ? 'pointer-events-auto' : 'pointer-events-none',
+            )}
+          >
+            <ArrowUp aria-hidden="true" />
+            {label}
+          </Button>
+        </div>
+      </div>
+      <div
+        data-testid="new-posts-row"
+        aria-hidden="true"
+        className={cn(
+          'grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none',
+          open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
+        )}
+      >
+        <div className="overflow-hidden">
+          <div className="h-14 border-b border-border" />
+        </div>
+      </div>
+    </>
+  );
+}
+
 function FollowingEmpty({ onShowForYou }) {
   return (
     <div className="grid place-items-center gap-2 px-6 py-16 text-center">
@@ -213,6 +305,14 @@ function ForYouFeed() {
 export function Home() {
   useFocusComposerFromNavigation();
   const [tab, setTab] = useFeedTab();
+  const panelRef = useRef(null);
+
+  // After the pill: back to the top, with focus on the feed panel (the pill unmounts), so the next
+  // Tab / reading step reaches the composer and then the new posts.
+  const handleNewPostsShown = () => {
+    window.scrollTo({ top: 0 });
+    panelRef.current?.focus({ preventScroll: true });
+  };
 
   return (
     <>
@@ -220,10 +320,12 @@ export function Home() {
         <FeedTabs tab={tab} onSelect={setTab} />
       </PageHeader>
 
-      <div id={PANEL_ID} role="tabpanel" aria-labelledby={tabId(tab)}>
+      <div ref={panelRef} id={PANEL_ID} role="tabpanel" aria-labelledby={tabId(tab)} tabIndex={-1} className="outline-none">
         <div className="border-b border-border">
           <Composer />
         </div>
+
+        <NewPostsPill key={tab} tab={tab} onShown={handleNewPostsShown} />
 
         {tab === FOR_YOU ? <ForYouFeed /> : <FollowingFeed onShowForYou={() => setTab(FOR_YOU)} />}
       </div>

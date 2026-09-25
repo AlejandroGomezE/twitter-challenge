@@ -130,6 +130,24 @@ export class PostsRepository {
     return this.prisma.like.count({ where: { postId } });
   }
 
+  // The post's current like and comment totals in one query; null when the
+  // post doesn't exist (e.g. deleted meanwhile).
+  async activityCounts(
+    postId: string,
+  ): Promise<{ likeCount: number; commentCount: number } | null> {
+    const post = await this.prisma.post.findUnique({
+      where: { id: postId },
+      select: { _count: { select: { likes: true, comments: true } } },
+    });
+    if (!post) {
+      return null;
+    }
+    return {
+      likeCount: post._count.likes,
+      commentCount: post._count.comments,
+    };
+  }
+
   // Like/comment counts and the viewer's like state for many posts in three
   // queries regardless of how many posts are asked for (no N+1). Posts with
   // no likes/comments get zeros; every requested id has an entry.

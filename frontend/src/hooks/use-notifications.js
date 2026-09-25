@@ -6,8 +6,15 @@ import {
   markNotificationsRead,
   notificationKeys,
 } from '@/lib/api/notifications';
+import { REALTIME_STATUS } from '@/lib/realtime/realtime-context';
+import {
+  useRealtimeEvent,
+  useRealtimeReconnect,
+  useRealtimeStatus,
+} from '@/lib/realtime/use-realtime';
 
-// How often the unread count is polled while the app is open (there is no live push yet).
+// How often the unread count is polled while the realtime stream is not connected (a fallback:
+// while it is open, `notifications.changed` pushes the count).
 export const UNREAD_COUNT_REFETCH_INTERVAL = 30_000;
 
 // The session user's notifications, newest first, paged by cursor.
@@ -20,15 +27,36 @@ export function useNotifications() {
   });
 }
 
-// The session user's unread notification count (`data` = `{ count }`), for the nav badge. Polled
-// every 30s and refetched on window focus.
+// The session user's unread notification count (`data` = `{ count }`), for the nav badge.
+// Refetched on window focus, and polled every 30s only while the realtime stream isn't open.
 export function useUnreadNotificationCount() {
+  const streamOpen = useRealtimeStatus() === REALTIME_STATUS.open;
   return useQuery({
     queryKey: notificationKeys.unreadCount(),
     queryFn: fetchUnreadNotificationCount,
     refetchOnWindowFocus: true,
-    refetchInterval: UNREAD_COUNT_REFETCH_INTERVAL,
+    refetchInterval: streamOpen ? false : UNREAD_COUNT_REFETCH_INTERVAL,
   });
+}
+
+// Keeps the notification caches in step with the realtime stream (mount once, inside the
+// RealtimeProvider): `notifications.changed` writes the pushed unread count and marks the list
+// stale (an open /notifications page refetches it, so a new row shows up; that page marks read
+// only once per visit and keeps its highlights across refetches). After a reconnect, the count is
+// refetched, since events missed while offline are not replayed.
+export function useNotificationsRealtimeSync() {
+  const queryClient = useQueryClient();
+
+  useRealtimeEvent('notifications.changed', (data) => {
+    if (typeof data?.unreadCount === 'number') {
+      queryClient.setQueryData(notificationKeys.unreadCount(), { count: data.unreadCount });
+    }
+    queryClient.invalidateQueries({ queryKey: notificationKeys.list(), exact: true });
+  });
+
+  useRealtimeReconnect(() =>
+    queryClient.invalidateQueries({ queryKey: notificationKeys.unreadCount(), exact: true }),
+  );
 }
 
 // `mutate(until)` where `until` is the newest `createdAt` shown. On success only the unread count

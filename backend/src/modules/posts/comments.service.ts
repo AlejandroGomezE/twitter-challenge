@@ -109,7 +109,8 @@ export class CommentsService {
 
   // 404 if the comment is missing or belongs to another post; 403 if it is
   // someone else's. The delete itself is scoped to the author, so a
-  // concurrent delete surfaces as a 404.
+  // concurrent delete surfaces as a 404. Emits `comment.removed` only after a
+  // successful delete.
   async delete(
     postId: string,
     commentId: string,
@@ -129,6 +130,11 @@ export class CommentsService {
     if (deleted === 0) {
       throw new NotFoundException(COMMENT_NOT_FOUND_MESSAGE);
     }
+    emitDomainEvent(this.eventEmitter, DomainEvent.CommentRemoved, {
+      actorId: userId,
+      postId,
+      commentId,
+    });
   }
 
   private async assertPostExists(postId: string): Promise<void> {

@@ -177,6 +177,12 @@ export class FollowsService {
     return this.followsRepository.followedIds(userId);
   }
 
+  // Of `candidateIds`, the ones following `userId` — one query however many
+  // candidates (for the realtime `post.created` `following` flag).
+  followerIdsAmong(userId: string, candidateIds: string[]): Promise<string[]> {
+    return this.followsRepository.followerIdsAmong(userId, candidateIds);
+  }
+
   async counts(userId: string): Promise<FollowCounts> {
     const [followerCount, followingCount] = await Promise.all([
       this.followsRepository.followerCount(userId),
