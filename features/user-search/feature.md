@@ -1,8 +1,8 @@
 ---
 slug: user-search
-status: framed
+status: verifying
 scope: full-stack
-next: /implement user-search
+next: /review-feature user-search
 ---
 # User search (with display names)
 
@@ -58,33 +58,37 @@ name or username: a typeahead dropdown under the right-rail search box, plus a f
   rendering and likes, fail-closed serialization (no id/email in any response).
 
 ## Tasks
-- [ ] (T1, be) Prisma `User.displayName String?` + `db push`/`generate` (existing rows stay `null`).
+- [x] (T1, be) Prisma `User.displayName String?` + `db push`/`generate` (existing rows stay `null`).
   Display-name rules as shared constants (like the username/bio rules); `POST /auth/sign-up` requires
   it and stores it; auth user responses expose it; `PATCH /users/me` sets/changes it (no clearing);
   `ProfileResponseDto` + `MyProfileResponseDto` expose it. Unit + e2e specs.
-- [ ] (T2, be, after: T1) Expose `displayName` in the post/comment author DTO (`posts` module) and in
+- [x] (T2, be, after: T1) Expose `displayName` in the post/comment author DTO (`posts` module) and in
   `FollowUserResponseDto` (`follows` module), without extra queries per row. Update specs.
-- [ ] (T3, be, after: T1, T2) `GET /search/users` per the contract, in its own controller
+- [x] (T3, be, after: T1, T2) `GET /search/users` per the contract, in its own controller
   (`@Controller('search')`), reusing the follows relation batch lookup and `pagination.ts`; query DTO
   with `@Type` for `limit`. Unit + e2e specs (matching on each field, case-insensitivity, `@` strip,
   paging, 400s, no id/email).
-- [ ] (T4, fe) Display names in the UI: `displayName` rule in `profile-schemas.js`, a required Name
+- [x] (T4, fe) Display names in the UI: `displayName` rule in `profile-schemas.js`, a required Name
   field on the sign-up page (+ its schema), Edit profile field (set/change, not clear), and a small shared name component (display name + @username, falling back to @username)
   used on the profile header, PostCard, CommentItem, FollowListDialog rows, and the RightRail
   profile card + Who to follow rows. Tests.
-- [ ] (T5, fe) Search data layer: `lib/api` function + query keys and `hooks/use-user-search.js`
+- [x] (T5, fe) Search data layer: `lib/api` function + query keys and `hooks/use-user-search.js`
   (debounced typeahead query, limit 5; infinite query for Explore); disabled for an empty query; MSW
   default handler for `/search/users`. Tests.
-- [ ] (T6, fe, after: T4, T5) RightRail search box becomes a working combobox typeahead (the
+- [x] (T6, fe, after: T4, T5) RightRail search box becomes a working combobox typeahead (the
   "Coming soon" wrapper goes), with a dropdown of up to 5 users, keyboard navigation, "See all
   results" → `/explore?q=`, closing on Escape and click-away. Fix the clipped focus outline (the rail
   is an `overflow-y-auto` container that cuts off the input's 3px ring; e.g. give the rail inline
   padding or inset the ring). Tests.
-- [ ] (T7, fe, after: T4, T5) Explore page at `/explore` (`?q=` in the URL, replaced while typing):
+- [x] (T7, fe, after: T4, T5) Explore page at `/explore` (`?q=` in the URL, replaced while typing):
   search input, infinite results list with `FollowButton` rows, states for no query, no results,
   loading and errors; route in `router.jsx`; Explore enabled in `nav-items.js` (desktop + mobile).
   Tests.
-- [ ] (T8, fe, after: T1, T2, T3, T4, T6, T7) Docs: Runbook endpoints and rules, backend + frontend
+- [x] (T9, fe) No layout shift when the page gains or loses a vertical scrollbar (e.g. Home → a short
+  page): reserve the scrollbar gutter globally (`scrollbar-gutter: stable` on the root scroller in
+  `index.css`), check sticky/fixed parts (side nav, right rail, mobile bottom bar, dialogs' scroll
+  lock) don't jump either. Tests where practical.
+- [x] (T8, fe, after: T1, T2, T3, T4, T6, T7, T9) Docs: Runbook endpoints and rules, backend + frontend
   architecture, UI component inventory.
 
 ## Decisions
@@ -99,7 +103,24 @@ name or username: a typeahead dropdown under the right-rail search box, plus a f
 - 2026-09-24 · framed · Case-insensitive matching uses SQLite `LIKE`, which only folds ASCII case;
   good enough for now. Results are ordered by username (no relevance ranking).
 
+- 2026-09-24 · building · New shared component `components/UserName.jsx` (display name bold + muted
+  @username, falls back to @username) — **signed off by Alejandro**.
+- 2026-09-24 · building · When a display name is set, profile links' accessible names are "Display
+  Name @username" (e.g. Who to follow rows); plain "@username" otherwise — **kept** (Alejandro).
+
+- 2026-09-24 · building · The right rail is 16px wider (`w-[366px] px-2`) so the search box's focus
+  ring isn't clipped; the center column gives up to 16px at max width — fine (Alejandro).
+- 2026-09-24 · building · Added T9: no content shift when a vertical scrollbar appears/disappears
+  between pages (Alejandro).
+
+- 2026-09-24 · building · The page reserves its scrollbar gutter (`scrollbar-gutter: stable` +
+  a `body[data-scroll-locked]` override so dialogs don't double-compensate); the right rail's own
+  scrollbar is left without a gutter — it only shifts content inside the rail (Alejandro).
+
 ## Follow-ups
+- [ ] `ExploreRow` (`pages/Explore.jsx`) and `FollowListRow` (`components/FollowListDialog.jsx`) are
+  near-identical user rows (avatar, UserName, bio, FollowButton) · could become one shared row.
 
 ## Log
 - 2026-09-24 · framed
+- 2026-09-24 · built — display names (required at sign-up, set/change in Edit profile, shown via UserName everywhere), GET /search/users (username or display name, literal %/_), right-rail typeahead, Explore page + nav, unclipped search focus ring (wider rail), stable scrollbar gutter; docs. BE 35 suites / 437 unit + 5 / 182 e2e, FE 43 suites / 492, build/lint green.
