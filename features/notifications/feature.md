@@ -1,8 +1,8 @@
 ---
 slug: notifications
-status: verifying
+status: done
 scope: full-stack
-next: /close-feature notifications
+next: —
 ---
 # Notifications
 
@@ -86,3 +86,4 @@ with an unread badge. Live push over SSE is out of scope: it becomes its own fea
 - 2026-09-24 · framed
 - 2026-09-24 · built — T1–T6 done: events → listener → Notification rows, 3 endpoints, nav badge, /notifications page. be 41 files/494 tests, fe 46 files/539 tests, builds + lint green
 - 2026-09-24 · verified — all 5 ACs pass on the running app: 32/32 API checks (3 users) + headless Chromium at 1440/800/390px (badge, list, highlight, mark-read, empty, error+Retry); approved by Alejandro
+- 2026-09-24 · closed — PR #12, merged
