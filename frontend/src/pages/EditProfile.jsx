@@ -122,7 +122,7 @@ function EditProfileForm({ currentUsername, currentDisplayName, currentBio }) {
       // store it.
       queryClient.setQueryData(AUTH_ME_QUERY_KEY, { id, email, username, displayName });
       if (currentUsername.toLowerCase() !== username.toLowerCase()) {
-        queryClient.removeQueries({ queryKey: profileQueryKey(currentUsername), exact: true });
+        removeQueryOnceUnobserved(queryClient, profileQueryKey(currentUsername));
       }
       navigate(`/u/${username}`, { replace: true });
     },
@@ -233,6 +233,30 @@ function EditProfileForm({ currentUsername, currentDisplayName, currentBio }) {
       </FieldGroup>
     </form>
   );
+}
+
+// Drops the (exact) query for `queryKey` once no component observes it any more — right away if
+// nothing does. Used for the old username's profile after a rename: this page and the right rail's
+// profile card still observe it until the new `me` reaches them (TanStack Query notifies React on a
+// later tick, while the navigation re-renders the shell sooner). Removing it while observed let the
+// card's next render (still on the old username) re-create it and refetch it into a 404.
+function removeQueryOnceUnobserved(queryClient, queryKey) {
+  const queryCache = queryClient.getQueryCache();
+  const query = queryCache.find({ queryKey, exact: true });
+  if (!query) return;
+  if (query.getObserversCount() === 0) {
+    queryCache.remove(query);
+    return;
+  }
+  const unsubscribe = queryCache.subscribe((event) => {
+    if (event.query !== query) return;
+    if (event.type === 'removed') {
+      unsubscribe();
+    } else if (event.type === 'observerRemoved' && query.getObserversCount() === 0) {
+      unsubscribe();
+      queryCache.remove(query);
+    }
+  });
 }
 
 // Inside the app shell's center column: sticky header (back to your profile) + padded content.
