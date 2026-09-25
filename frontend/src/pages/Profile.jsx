@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/empty';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
+import { usePostRemovalFocus } from '@/hooks/use-post-removal-focus';
 import { useUserPosts } from '@/hooks/use-posts';
 import { useProfile } from '@/hooks/use-profile';
 import { ApiError } from '@/lib/api/client';
@@ -159,6 +160,8 @@ function postCountLabel(postCount) {
 // someone else's.
 function ProfilePosts({ username, isOwnProfile }) {
   const posts = useUserPosts(username);
+  const items = posts.data?.pages.flatMap((page) => page.items);
+  const handleDeleted = usePostRemovalFocus(items);
 
   if (posts.isPending) return <PostListSkeleton />;
 
@@ -182,8 +185,6 @@ function ProfilePosts({ username, isOwnProfile }) {
     );
   }
 
-  const items = posts.data.pages.flatMap((page) => page.items);
-
   if (items.length === 0) {
     return (
       <div className="grid place-items-center gap-2 px-6 py-16 text-center">
@@ -204,7 +205,7 @@ function ProfilePosts({ username, isOwnProfile }) {
     <>
       <h2 className="sr-only">Posts</h2>
       {items.map((post) => (
-        <PostCard key={post.id} post={post} />
+        <PostCard key={post.id} post={post} onDeleted={() => handleDeleted(post.id)} />
       ))}
       <InfiniteListFooter
         query={posts}

@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
+import { usePostRemovalFocus } from '@/hooks/use-post-removal-focus';
 import { useFeed } from '@/hooks/use-posts';
 import { focusComposer } from '@/lib/composer-focus';
 import { cn } from '@/lib/utils';
@@ -53,6 +54,8 @@ function useFocusComposerFromNavigation() {
 // posts (newest first) with infinite scroll and "You're all caught up" at the end.
 function Feed() {
   const feed = useFeed();
+  const posts = feed.data?.pages.flatMap((page) => page.items);
+  const handleDeleted = usePostRemovalFocus(posts);
 
   if (feed.isPending) return <PostListSkeleton />;
 
@@ -70,8 +73,6 @@ function Feed() {
     );
   }
 
-  const posts = feed.data.pages.flatMap((page) => page.items);
-
   if (posts.length === 0) {
     return (
       <div className="grid place-items-center gap-2 px-6 py-16 text-center">
@@ -88,7 +89,7 @@ function Feed() {
     <>
       <h2 className="sr-only">Posts</h2>
       {posts.map((post) => (
-        <PostCard key={post.id} post={post} />
+        <PostCard key={post.id} post={post} onDeleted={() => handleDeleted(post.id)} />
       ))}
       <InfiniteListFooter
         query={feed}

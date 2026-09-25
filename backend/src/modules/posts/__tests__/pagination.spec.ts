@@ -2,7 +2,6 @@ import { BadRequestException } from '@nestjs/common';
 import {
   decodeCursor,
   encodeCursor,
-  MAX_PAGE_SIZE,
   PAGE_SIZE,
   resolvePageSize,
 } from '../pagination.js';
@@ -50,15 +49,7 @@ describe('resolvePageSize', () => {
     expect(PAGE_SIZE).toBe(20);
   });
 
-  it('clamps to 1..MAX_PAGE_SIZE', () => {
-    expect(resolvePageSize(0)).toBe(1);
+  it('uses a requested (DTO-validated) size as is', () => {
     expect(resolvePageSize(35)).toBe(35);
-    expect(resolvePageSize(500)).toBe(MAX_PAGE_SIZE);
-    expect(MAX_PAGE_SIZE).toBe(50);
-  });
-
-  it('falls back to PAGE_SIZE for a non-integer', () => {
-    expect(resolvePageSize(2.5)).toBe(PAGE_SIZE);
-    expect(resolvePageSize(Number.NaN)).toBe(PAGE_SIZE);
   });
 });

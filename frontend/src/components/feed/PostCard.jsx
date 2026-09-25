@@ -51,7 +51,8 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
 // selectable text.
 //
 // `variant="detail"` (the post detail page): larger body, full timestamp, not clickable as a
-// whole. `onDeleted` runs after a successful delete (the detail page navigates away).
+// whole. `onDeleted` runs after a successful delete (the detail page navigates away; lists move
+// focus with usePostRemovalFocus).
 // Needs a `TooltipProvider` above it (AppShell provides one) for the "Coming soon" actions.
 export function PostCard({ post, variant = 'card', onDeleted, className }) {
   const navigate = useNavigate();
@@ -82,6 +83,7 @@ export function PostCard({ post, variant = 'card', onDeleted, className }) {
   return (
     // The click handler is a mouse shortcut; keyboard users open the post via the timestamp link.
     <article
+      data-post-id={post.id}
       onClick={handleCardClick}
       className={cn(
         'flex gap-3.5 border-b border-border px-5 py-4 transition-colors sm:px-6',
@@ -109,6 +111,7 @@ export function PostCard({ post, variant = 'card', onDeleted, className }) {
                 </span>
                 <Link
                   to={detailPath}
+                  data-post-link
                   aria-label={`Open post by @${username}, ${fullDate}`}
                   className="rounded-sm font-mono text-muted-foreground outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
                 >

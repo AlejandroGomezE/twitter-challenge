@@ -315,19 +315,19 @@ describe('PostsService', () => {
       });
     });
 
-    it('passes the decoded cursor and the clamped page size to the repository', async () => {
+    it('passes the decoded cursor and the requested page size to the repository', async () => {
       postsRepository.findPage.mockResolvedValue([]);
       const position = { createdAt: CREATED_AT, id: 'post-050' };
 
       await service.feed(AUTHOR_ID, {
         cursor: encodeCursor(position),
-        limit: 500,
+        limit: 35,
       });
 
       expect(postsRepository.findPage).toHaveBeenCalledWith({
         authorIds: [AUTHOR_ID],
         cursor: position,
-        limit: 50,
+        limit: 35,
       });
     });
 

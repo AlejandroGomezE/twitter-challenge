@@ -2,7 +2,8 @@ import { Type } from 'class-transformer';
 import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 import { MAX_PAGE_SIZE } from '../pagination.js';
 
-// Query of a paged post listing (GET /feed, GET /users/:username/posts).
+// Query of every paged listing: GET /feed, GET /users/:username/posts and
+// GET /posts/:postId/comments.
 // The cursor's contents are checked by the service (400 `Invalid cursor`).
 export class ListPostsQueryDto {
   // Opaque `nextCursor` of the previous page; omitted for the first page.

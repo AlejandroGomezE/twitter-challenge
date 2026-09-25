@@ -174,6 +174,31 @@ describe('Home', () => {
       expect(await screen.findByText("You're all caught up")).toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument()
     })
+
+    // The deleted card (and the dialog's return-focus target) unmounts, so focus moves to a
+    // neighbouring post instead of dropping to <body>.
+    it.each([
+      ['the next post', 'p2', 'p1'],
+      ['the previous post when the last one is deleted', 'p1', 'p2'],
+    ])('deletes a post after confirmation and focuses %s', async (_label, deletedId, focusedId) => {
+      mockFeed([[post('p2', { body: 'Second thoughts' }), post('p1', { body: 'First light' })]])
+      server.use(http.delete(apiUrl('/posts/:id'), () => new HttpResponse(null, { status: 204 })))
+      const { user } = renderHome()
+
+      const articles = await within(main()).findAllByRole('article')
+      const deleted = articles.find((article) => article.dataset.postId === deletedId)
+      await user.click(within(deleted).getByRole('button', { name: 'More options' }))
+      await user.click(await screen.findByRole('menuitem', { name: 'Delete' }))
+      const dialog = await screen.findByRole('alertdialog', { name: 'Delete post?' })
+      await user.click(within(dialog).getByRole('button', { name: 'Delete' }))
+
+      await waitFor(() => expect(within(main()).getAllByRole('article')).toHaveLength(1))
+      const remaining = within(main()).getByRole('article')
+      expect(remaining.dataset.postId).toBe(focusedId)
+      await waitFor(() =>
+        expect(within(remaining).getByRole('link', { name: /Open post by @ada/ })).toHaveFocus(),
+      )
+    })
   })
 
   describe('composer focus', () => {
