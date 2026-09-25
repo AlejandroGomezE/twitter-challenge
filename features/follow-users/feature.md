@@ -77,6 +77,9 @@ on profiles, a working "Following" feed tab, and the "Who to follow" card.
   skeleton while loading, hidden when there are none.
 - [x] (T10, fe, after: T2, T3, T4, T6, T7, T8, T9) Docs: Runbook endpoints, backend + frontend
   architecture, UI component inventory.
+- [x] (T11, fe) Always-fresh profile counts: the Profile page refetches the profile every time it's
+  shown (mount and `:username` change, even within the 30s `staleTime`), and each follow-list dialog
+  tab refetches whenever it's opened; cached data stays on screen while refetching.
 
 ## Decisions
 - 2026-09-24 · framed · Profiles are already viewable at `/u/:username` and post cards link there;
@@ -101,6 +104,8 @@ on profiles, a working "Following" feed tab, and the "Who to follow" card.
   request is in flight (no spinner), like the like button; bursts settle on the last confirmed state.
 - 2026-09-24 · building · Unfollowing from an open follow list keeps the row (now "Follow"), like
   Twitter: those lists are marked stale, not refetched. FollowListDialog has no end-of-list line.
+- 2026-09-24 · building · Profile counts and follow lists always refetch when shown, so they
+  never show stale followers/following (Alejandro).
 
 ## Follow-ups
 - [ ] Close: `follows/dto/follow-user-page-response.dto.ts` comment cites a non-existent
@@ -109,3 +114,4 @@ on profiles, a working "Following" feed tab, and the "Who to follow" card.
 ## Log
 - 2026-09-24 · framed
 - 2026-09-24 · built — follow/unfollow (idempotent, throttled), followers/following lists + dialog, profile counts + Follows you, Following (default) / For you feeds, Who to follow; docs. BE 29 suites / 334 unit + 4 suites / 137 e2e, FE 37 suites / 381, build/lint green.
+- 2026-09-24 · built — T11: profile counts refetch every time a profile is shown (incl. on focus), follow-list tabs refetch on open/switch (not on focus/toggle), optimistic follows survive mid-flight refetches (target + own followingCount). BE 29 suites / 334 unit + 4 / 137 e2e, FE 37 suites / 391, build/lint green.
