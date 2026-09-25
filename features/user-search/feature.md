@@ -127,6 +127,9 @@ name or username: a typeahead dropdown under the right-rail search box, plus a f
   (likely by a build agent, against CONVENTIONS §10) · stop them; consider telling implementers to
   never leave servers running.
 
+## PRs
+- https://github.com/AlejandroGomezE/twitter-challenge/pull/11
+
 ## Log
 - 2026-09-24 · framed
 - 2026-09-24 · built — display names (required at sign-up, set/change in Edit profile, shown via UserName everywhere), GET /search/users (username or display name, literal %/_), right-rail typeahead, Explore page + nav, unclipped search focus ring (wider rail), stable scrollbar gutter; docs. BE 35 suites / 437 unit + 5 / 182 e2e, FE 43 suites / 492, build/lint green.
