@@ -421,7 +421,7 @@ describe('App (e2e)', () => {
         await getProfile(username).expect(401);
       });
 
-      it("returns another user's public profile only: { username, bio, createdAt }", async () => {
+      it("returns another user's public profile only: { username, bio, createdAt, postCount }", async () => {
         const viewer = await createUserWithSession();
         const target = await createUserWithSession();
 
@@ -429,12 +429,14 @@ describe('App (e2e)', () => {
         expect(Object.keys(res.body as object).sort()).toEqual([
           'bio',
           'createdAt',
+          'postCount',
           'username',
         ]);
         expect(res.body).toEqual({
           username: target.username,
           bio: null,
           createdAt: expect.any(String),
+          postCount: 0,
         });
         const createdAt = (res.body as { createdAt: string }).createdAt;
         expect(new Date(createdAt).toISOString()).toBe(createdAt);
@@ -489,6 +491,7 @@ describe('App (e2e)', () => {
           'createdAt',
           'email',
           'id',
+          'postCount',
           'username',
         ]);
         expect(res.body).toEqual({
@@ -497,6 +500,7 @@ describe('App (e2e)', () => {
           username: me.username,
           bio: 'Hello there',
           createdAt: expect.any(String),
+          postCount: 0,
         });
 
         const profile = await getProfile(me.username, viewer.token).expect(200);

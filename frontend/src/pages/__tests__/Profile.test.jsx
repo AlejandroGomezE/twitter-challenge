@@ -10,9 +10,20 @@ import { apiUrl, server } from '@/test/server'
 const CREATED_AT = '2026-09-15T12:00:00.000Z'
 
 const PROFILES = {
-  ada: { username: 'ada', bio: 'Math & engines', createdAt: CREATED_AT },
-  grace: { username: 'grace', bio: null, createdAt: CREATED_AT },
+  ada: { username: 'ada', bio: 'Math & engines', createdAt: CREATED_AT, postCount: 0 },
+  grace: { username: 'grace', bio: null, createdAt: CREATED_AT, postCount: 0 },
 }
+
+const post = (id, overrides = {}) => ({
+  id,
+  body: `post ${id}`,
+  createdAt: '2026-09-24T12:00:00.000Z',
+  author: { username: 'ada' },
+  likeCount: 0,
+  commentCount: 0,
+  likedByMe: false,
+  ...overrides,
+})
 
 function LocationDisplay() {
   const location = useLocation()
@@ -31,9 +42,26 @@ function renderApp(route) {
 
 // Serves `GET /users/:username` (case-insensitive) from `profiles`; `state.status` forces an error
 // status for the next requests. `state.requests` lists the requested usernames.
-function mockProfiles(profiles = PROFILES) {
-  const state = { status: 200, requests: [] }
+// Also serves `GET /users/:username/posts`: `posts[username]` is a list of pages (page i →
+// `nextCursor: 'c<i+1>'`, the last `null`), default one empty page; unknown users → 404;
+// `state.postsStatus` forces an error status for the next posts requests.
+function mockProfiles(profiles = PROFILES, posts = {}) {
+  const state = { status: 200, postsStatus: 200, requests: [] }
   server.use(
+    http.get(apiUrl('/users/:username/posts'), ({ params, request }) => {
+      if (state.postsStatus !== 200) {
+        return HttpResponse.json({ message: 'Server error' }, { status: state.postsStatus })
+      }
+      const key = params.username.toLowerCase()
+      if (!profiles[key]) return HttpResponse.json({ message: 'User not found' }, { status: 404 })
+      const pages = posts[key] ?? [[]]
+      const cursor = new URL(request.url).searchParams.get('cursor')
+      const index = cursor ? Number(cursor.slice(1)) : 0
+      return HttpResponse.json({
+        items: pages[index],
+        nextCursor: index < pages.length - 1 ? `c${index + 1}` : null,
+      })
+    }),
     http.get(apiUrl('/users/:username'), ({ params }) => {
       state.requests.push(params.username)
       if (state.status !== 200) {
@@ -92,7 +120,8 @@ describe('Profile', () => {
     expect(page.queryByText('No bio yet.')).not.toBeInTheDocument()
     expect(page.getByRole('link', { name: 'Back to home' })).toHaveAttribute('href', '/')
     expect(page.getByRole('tab', { name: 'Posts' })).toHaveAttribute('aria-selected', 'true')
-    expect(page.getByText('No posts yet')).toBeInTheDocument()
+    // Was "No posts yet" before posts existed; your own empty profile now says so in your words.
+    expect(await page.findByRole('heading', { name: "You haven't posted yet" })).toBeInTheDocument()
   })
 
   it('renders the bio as plain text, keeping line breaks and never interpreting HTML', async () => {
@@ -174,5 +203,97 @@ describe('Profile', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
     expect(screen.getByTestId('location')).toHaveTextContent('/u/ada')
+  })
+  describe('posts tab', () => {
+    it("lists the user's posts as served (newest first) with the post count in the header", async () => {
+      mockProfiles(
+        { ...PROFILES, ada: { ...PROFILES.ada, postCount: 2 } },
+        { ada: [[post('p2', { body: 'Newer thoughts' }), post('p1', { body: 'Older thoughts' })]] },
+      )
+
+      renderApp('/u/ada')
+
+      const panel = await screen.findByRole('tabpanel', { name: 'Posts' })
+      const articles = await within(panel).findAllByRole('article')
+      expect(articles).toHaveLength(2)
+      expect(articles[0]).toHaveTextContent('Newer thoughts')
+      expect(articles[1]).toHaveTextContent('Older thoughts')
+      expect(within(screen.getByRole('main')).getByText('2 posts')).toBeInTheDocument()
+      expect(within(panel).getByText("That's all of @ada's posts")).toBeInTheDocument()
+      expect(within(panel).queryByRole('heading', { name: "You haven't posted yet" })).not.toBeInTheDocument()
+    })
+
+    it("says '1 post' (singular) and '@grace hasn't posted yet' on someone else's empty profile", async () => {
+      mockProfiles({ ...PROFILES, grace: { ...PROFILES.grace, postCount: 1 } })
+
+      renderApp('/u/grace')
+
+      expect(await screen.findByRole('heading', { name: "@grace hasn't posted yet" })).toBeInTheDocument()
+      expect(screen.getByText('1 post')).toBeInTheDocument()
+      expect(screen.queryByText("You haven't posted yet")).not.toBeInTheDocument()
+    })
+
+    it('shows no post count until the profile carries one', async () => {
+      mockProfiles({ ...PROFILES, ada: { ...PROFILES.ada, postCount: undefined } })
+
+      renderApp('/u/ada')
+
+      expect(await screen.findByRole('heading', { name: "You haven't posted yet" })).toBeInTheDocument()
+      expect(within(screen.getByRole('main')).queryByText(/\d+ posts?$/)).not.toBeInTheDocument()
+    })
+
+    it('shows skeletons while the posts load', async () => {
+      let release
+      const gate = new Promise((resolve) => {
+        release = resolve
+      })
+      mockProfiles()
+      server.use(
+        http.get(apiUrl('/users/:username/posts'), async () => {
+          await gate
+          return HttpResponse.json({ items: [post('p1', { body: 'Arrived' })], nextCursor: null })
+        }),
+      )
+
+      renderApp('/u/ada')
+
+      expect(await screen.findByRole('status', { name: 'Loading posts' })).toBeInTheDocument()
+      release()
+      expect(await screen.findByText('Arrived')).toBeInTheDocument()
+      expect(screen.queryByRole('status', { name: 'Loading posts' })).not.toBeInTheDocument()
+    })
+
+    it('shows an error with Retry when the posts fail to load, and recovers', async () => {
+      const profiles = mockProfiles(PROFILES, { ada: [[post('p1', { body: 'Back again' })]] })
+      profiles.postsStatus = 500
+
+      const { user } = renderApp('/u/ada')
+
+      expect(await screen.findByText(/Couldn't load posts/)).toBeInTheDocument()
+      // The profile itself still rendered.
+      expect(screen.getByRole('heading', { name: '@ada' })).toBeInTheDocument()
+
+      profiles.postsStatus = 200
+      await user.click(screen.getByRole('button', { name: 'Retry' }))
+
+      expect(await screen.findByText('Back again')).toBeInTheDocument()
+      expect(screen.queryByText(/Couldn't load posts/)).not.toBeInTheDocument()
+    })
+
+    it('loads the next page with "Load more"', async () => {
+      mockProfiles(PROFILES, {
+        ada: [[post('p2', { body: 'Page one' })], [post('p1', { body: 'Page two' })]],
+      })
+
+      const { user } = renderApp('/u/ada')
+
+      expect(await screen.findByText('Page one')).toBeInTheDocument()
+      expect(screen.queryByText("That's all of @ada's posts")).not.toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: 'Load more' }))
+
+      expect(await screen.findByText('Page two')).toBeInTheDocument()
+      expect(await screen.findByText("That's all of @ada's posts")).toBeInTheDocument()
+    })
   })
 })
