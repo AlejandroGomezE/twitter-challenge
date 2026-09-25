@@ -1,7 +1,7 @@
 ---
 title: Frontend architecture
 type: infra
-summary: Vite + React SPA (frontend/) structure and current implementation state — TanStack Query, shadcn/ui, react-router, HTTP client, cookie-session auth (useAuth, ProtectedRoute), Pulse theme (tokens, OS dark mode), the app shell layout route with "Coming soon" disabled items, the Home page with Following / For you feed tabs, user profiles (view + edit, avatar placeholder, display names, follow counts and lists), posts (feeds, profile posts, post detail + comments, likes), follows (follow button, follow lists, who to follow) user search (right-rail typeahead, Explore page), notifications, and realtime updates (one SSE stream per signed-in tab, live counts, the "N new posts" pill) with infinite queries and race-safe cache updates.
+summary: Vite + React + strict TypeScript SPA (frontend/) structure and current implementation state — TanStack Query, shadcn/ui, react-router, HTTP client, cookie-session auth (useAuth, ProtectedRoute), Pulse theme (tokens, OS dark mode), the app shell layout route with "Coming soon" disabled items, the Home page with Following / For you feed tabs, user profiles (view + edit, avatar placeholder, display names, follow counts and lists), posts (feeds, profile posts, post detail + comments, likes), follows (follow button, follow lists, who to follow) user search (right-rail typeahead, Explore page), notifications, and realtime updates (one SSE stream per signed-in tab, live counts, the "N new posts" pill) with infinite queries and race-safe cache updates.
 status: active
 last-verified: 2026-09-25
 tags: [frontend, react, vite, architecture, tanstack-query, shadcn, auth, theme, layout, posts, follows, search, notifications, realtime]
@@ -13,60 +13,62 @@ Organize by feature, once there are features to organize:
 
 ```text
 frontend/src/
-├── main.jsx
+├── main.tsx
 ├── app/
-│   ├── App.jsx
-│   ├── router.jsx
-│   ├── NavigationDepthTracker.jsx # records every navigation for lib/navigation-history.js;
+│   ├── App.tsx
+│   ├── router.tsx
+│   ├── NavigationDepthTracker.tsx # records every navigation for lib/navigation-history.ts;
 │   │                   #   wraps AppRouter's <Routes>, renders nothing of its own
-│   ├── providers.jsx   # QueryClientProvider + AuthProvider (+ devtools in dev)
-│   └── query-client.js # createQueryClient() — central 401 handling
+│   ├── providers.tsx   # QueryClientProvider + AuthProvider (+ devtools in dev)
+│   └── query-client.ts # createQueryClient() — central 401 handling
 ├── components/
 │   ├── ui/           # shadcn/ui primitives — see [[UI component inventory]]
 │   ├── layout/         # the app shell — AppShell, SideNav, MobileNav, RightRail, ComingSoon,
-│   │                   #   PageHeader, nav-items.js (see "App shell" below)
+│   │                   #   PageHeader, nav-items.ts (see "App shell" below)
 │   ├── feed/           # Composer, PostCard, CommentComposer, CommentItem, InfiniteListFooter,
 │   │                   #   CharacterCounter, PostListSkeleton (see "Posts" below)
-│   ├── AuthLayout.jsx  # frame for /sign-in, /sign-up, /sign-out (brand + document.title)
-│   ├── BrandMark.jsx   # the feather logo mark (used by SideNav and AuthLayout)
-│   ├── UserAvatar.jsx  # avatar placeholder (shadcn Avatar + AvatarFallback)
-│   ├── UserName.jsx    # display name (bold) + muted @username, or @username alone (see Profiles)
-│   ├── FollowButton.jsx     # Follow / Follow back / Following (→ Unfollow) toggle (see Follows)
-│   └── FollowListDialog.jsx # the profile's Following / Followers lists in a Dialog
+│   ├── AuthLayout.tsx  # frame for /sign-in, /sign-up, /sign-out (brand + document.title)
+│   ├── BrandMark.tsx   # the feather logo mark (used by SideNav and AuthLayout)
+│   ├── UserAvatar.tsx  # avatar placeholder (shadcn Avatar + AvatarFallback)
+│   ├── UserName.tsx    # display name (bold) + muted @username, or @username alone (see Profiles)
+│   ├── FollowButton.tsx     # Follow / Follow back / Following (→ Unfollow) toggle (see Follows)
+│   └── FollowListDialog.tsx # the profile's Following / Followers lists in a Dialog
 ├── features/           # not created yet
-├── hooks/              # use-profile.js — useProfile(username); use-posts.js — useFeed,
+├── hooks/              # use-profile.ts — useProfile(username); use-posts.ts — useFeed,
 │                       #   useForYouFeed, useUserPosts, usePost, useCreatePost, useDeletePost,
-│                       #   useToggleLike; use-follows.js — useFollowers, useFollowing,
-│                       #   useSuggestions, useToggleFollow; use-comments.js;
-│                       #   use-user-search.js — useUserTypeahead, useUserSearch;
-│                       #   use-debounced-value.js; use-retry-unless-not-found.js;
-│                       #   use-open-composer.js; use-post-removal-focus.js;
-│                       #   use-notifications.js (+ useNotificationsRealtimeSync);
-│                       #   use-posts-realtime.js — usePostsRealtimeSync (see Realtime)
+│                       #   useToggleLike; use-follows.ts — useFollowers, useFollowing,
+│                       #   useSuggestions, useToggleFollow; use-comments.ts;
+│                       #   use-user-search.ts — useUserTypeahead, useUserSearch;
+│                       #   use-debounced-value.ts; use-retry-unless-not-found.ts;
+│                       #   use-open-composer.ts; use-post-removal-focus.ts;
+│                       #   use-notifications.ts (+ useNotificationsRealtimeSync);
+│                       #   use-posts-realtime.ts — usePostsRealtimeSync (see Realtime)
 ├── lib/
-│   ├── api/            # client.js — apiClient, ApiError; users.js — profileQueryKey,
-│   │                   #   fetchProfile, updateMyProfile, followKeys + follow calls; posts.js —
-│   │                   #   postKeys + post/like/comment calls; search.js — searchKeys,
-│   │                   #   normalizeSearchQuery, searchUsers; post-cache.js — post cache
-│   │                   #   helpers; follow-cache.js — follow cache helpers; error-message.js —
+│   ├── api/            # types.ts — the API's response shapes (Post, Profile, Page<T>, …,
+│   │                   #   mirroring the backend DTOs); client.ts — apiClient (generic
+│   │                   #   get<T>/post<T>/…), ApiError; users.ts — profileQueryKey,
+│   │                   #   fetchProfile, updateMyProfile, followKeys + follow calls; posts.ts —
+│   │                   #   postKeys + post/like/comment calls; search.ts — searchKeys,
+│   │                   #   normalizeSearchQuery, searchUsers; post-cache.ts — post cache
+│   │                   #   helpers; follow-cache.ts — follow cache helpers; error-message.ts —
 │   │                   #   getApiErrorMessage
-│   ├── auth/           # AuthProvider.jsx, use-auth.js, auth-context.js, auth-error-message.js
-│   ├── realtime/       # RealtimeProvider.jsx, realtime-context.js, use-realtime.js — the SSE
-│   │                   #   stream; NewPostsProvider.jsx, new-posts-store.js, use-new-posts.js —
+│   ├── auth/           # AuthProvider.tsx, use-auth.ts, auth-context.ts, auth-error-message.ts
+│   ├── realtime/       # RealtimeProvider.tsx, realtime-context.ts, use-realtime.ts — the SSE
+│   │                   #   stream; NewPostsProvider.tsx, new-posts-store.ts, use-new-posts.ts —
 │   │                   #   Home's "N new posts" pill (see Realtime)
-│   ├── validation/     # auth-schemas.js (sign-in / sign-up), profile-schemas.js (username, bio,
+│   ├── validation/     # auth-schemas.ts (sign-in / sign-up), profile-schemas.ts (username, bio,
 │   │                   #   display name)
-│   ├── avatar-color.js # getAvatarColor / getAvatarInitial for the avatar placeholder
-│   ├── text.js         # POST_MAX_LENGTH, countCodePoints, measureBody, limitAnnouncement,
+│   ├── avatar-color.ts # getAvatarColor / getAvatarInitial for the avatar placeholder
+│   ├── text.ts         # POST_MAX_LENGTH, countCodePoints, measureBody, limitAnnouncement,
 │   │                   #   isSubmitShortcut — shared by both composers (+ the display-name rule)
-│   ├── navigation-history.js # per-entry in-app depth store + useCanGoBackInApp() (Back buttons)
-│   ├── format.js       # formatCount ("1.2K"), formatRelativeShort ("3h"), formatFullDate
-│   └── composer-focus.js # COMPOSER_TEXTAREA_ID, FOCUS_COMPOSER_STATE, focusComposer()
+│   ├── navigation-history.ts # per-entry in-app depth store + useCanGoBackInApp() (Back buttons)
+│   ├── format.ts       # formatCount ("1.2K"), formatRelativeShort ("3h"), formatFullDate
+│   └── composer-focus.ts # COMPOSER_TEXTAREA_ID, FOCUS_COMPOSER_STATE, focusComposer()
 ├── pages/              # Home (feed), SignIn, SignUp, SignOut, Profile, EditProfile, PostDetail,
 │                       #   Explore (user search), Notifications
-├── routes/             # ProtectedRoute.jsx, PublicOnlyRoute.jsx
-└── test/               # shared test helpers — setup.js, server.js (MSW), render.jsx,
-                        #   fake-event-source.js (see Realtime)
+├── routes/             # ProtectedRoute.tsx, PublicOnlyRoute.tsx
+└── test/               # shared test helpers — setup.ts, server.ts (MSW), render.tsx,
+                        #   fake-event-source.ts (see Realtime)
 ```
 
 Each feature, once one exists, should follow:
@@ -91,7 +93,7 @@ that `<title>`, the feather `favicon.svg`, `<meta name="color-scheme" content="l
 - **Tokens.** `index.css` replaces shadcn's neutral defaults with Pulse's palette as CSS
   variables: a warm off-white `--background`, coral `--primary` (`oklch(0.585 0.196 30)`), warm
   borders/muted, and `--chart-1…5` carrying Pulse's accent hues (nothing outside
-  `components/ui/` uses the chart tokens; the avatar tints in `avatar-color.js` borrow those
+  `components/ui/` uses the chart tokens; the avatar tints in `avatar-color.ts` borrow those
   hues as fixed `oklch(...)` values). The dark palette is defined twice with the
   same values — under `.dark`, and under `@media (prefers-color-scheme: dark)` for
   `:root:not(.light)`. `--radius` is `1rem` (the `--radius-*` scale derives from it).
@@ -114,14 +116,14 @@ that `<title>`, the feather `favicon.svg`, `<meta name="color-scheme" content="l
   left. `html body[data-scroll-locked]` therefore zeroes `margin-right` and the
   `--removed-body-scroll-bar-size` variable, both `!important` — inside Tailwind's `@layer base`
   an important declaration beats the library's unlayered rule, a normal one wouldn't.
-- **Avatar tints** (`src/lib/avatar-color.js`) are fixed Pulse colours (primary coral + chart
+- **Avatar tints** (`src/lib/avatar-color.ts`) are fixed Pulse colours (primary coral + chart
   hues, plus teal / violet / ochre), not theme tokens, so each carries its own text colour —
   white on the darker tints, a warm near-black on the lighter ones — clearing WCAG AA 4.5:1 in
   both themes (Pulse's `text-background` was ~2.7:1 on the amber tint).
 
 ## App shell (`src/components/layout/`)
 
-- **Layout route.** In `router.jsx`, every gated route is nested
+- **Layout route.** In `router.tsx`, every gated route is nested
   `ProtectedRoute` → `AppShell` → the page (via `<Outlet />`). Auth pages sit outside it.
 - **Columns.** `AppShell` centres a `max-w-[1290px]` row of three columns:
   - left rail — a `<header>` (the `banner` landmark) holding `SideNav`; hidden below `lg`,
@@ -142,7 +144,7 @@ that `<title>`, the feather `favicon.svg`, `<meta name="color-scheme" content="l
   as the page's `h1`), `subtitle` (small muted mono line), `leading` (e.g. a back button),
   `trailing` (e.g. an icon), `children` (full-width row below the title, e.g. tabs),
   `className`.
-- **Nav config (`nav-items.js`)** is the single source for `SideNav` and `MobileNav`. An item
+- **Nav config (`nav-items.ts`)** is the single source for `SideNav` and `MobileNav`. An item
   with a `to` builder is a working route (Home `/`, Explore `/explore`, Profile `/u/<me>` — left
   out while there's no username, Notifications `/notifications`, Settings `/settings/profile`); an
   item without one is a disabled placeholder (Messages, Bookmarks). A working item may name a
@@ -154,8 +156,8 @@ that `<title>`, the feather `favicon.svg`, `<meta name="color-scheme" content="l
   `getNavItems(username, { mobile })` resolves the list to
   `{ key, label, icon, to, end, disabled }`.
 - **"New post"** (rail button + mobile compose button) calls `useOpenComposer()`
-  (`hooks/use-open-composer.js`): on `/` it focuses the composer at once (`focusComposer()` in
-  `lib/composer-focus.js`, by the textarea's `id="composer"`); elsewhere it navigates to `/` with
+  (`hooks/use-open-composer.ts`): on `/` it focuses the composer at once (`focusComposer()` in
+  `lib/composer-focus.ts`, by the textarea's `id="composer"`); elsewhere it navigates to `/` with
   `state.focusComposer`, and Home focuses the composer once rendered, then replaces the entry
   with `state: null` so a reload or Back doesn't refocus.
 - **Disabled "Coming soon" pattern (`ComingSoon`).** Features we show but don't have yet — the
@@ -180,7 +182,7 @@ that `<title>`, the feather `favicon.svg`, `<meta name="color-scheme" content="l
   error box). Following someone flips their row to "Following" optimistically; the suggestions
   refetch after the follow settles, which drops them.
 
-## HTTP client (`src/lib/api/client.js`)
+## HTTP client (`src/lib/api/client.ts`)
 
 Centralized `apiClient` (`get` / `post` / `put` / `patch` / `delete`) — no component calls
 `fetch` directly. It:
@@ -198,13 +200,13 @@ Centralized `apiClient` (`get` / `post` / `put` / `patch` / `delete`) — no com
 
 ## TanStack Query
 
-`QueryClientProvider` lives in `src/app/providers.jsx` (wrapping `AuthProvider`), which
-wraps `<BrowserRouter>` + `<App>` in `main.jsx`. React Query Devtools mount in dev only
+`QueryClientProvider` lives in `src/app/providers.tsx` (wrapping `AuthProvider`), which
+wraps `<BrowserRouter>` + `<App>` in `main.tsx`. React Query Devtools mount in dev only
 (`import.meta.env.DEV`). Use it for queries, mutations, cache invalidation,
 loading/error states, and retries — don't hand-roll any of that with `useEffect` +
 `useState`.
 
-The client comes from `createQueryClient()` (`src/app/query-client.js`), which owns the
+The client comes from `createQueryClient()` (`src/app/query-client.ts`), which owns the
 **central 401 handling**: a 401 from any query (other than `['auth', 'me']` itself) or
 any mutation means the session expired, so it sets the cached user to `null` (which
 makes `ProtectedRoute` redirect to `/sign-in`) and removes every other cached query.
@@ -220,7 +222,7 @@ means signed out: any other `/auth/me` failure (500, network) leaves the query i
 error state (`retry: false` — the user retries via the Retry button). A session
 survives a reload because the cookie does.
 
-`useAuth()` (`use-auth.js`; throws outside `AuthProvider`) returns:
+`useAuth()` (`use-auth.ts`; throws outside `AuthProvider`) returns:
 
 ```js
 {
@@ -240,8 +242,8 @@ survives a reload because the cookie does.
 ```
 
 `signIn` / `signUp` reject with the `ApiError`; pages turn it into text with
-`getAuthErrorMessage()` (`auth-error-message.js`, now a re-export of the generic
-`getApiErrorMessage()` in `src/lib/api/error-message.js` — friendlier 429 text, joins Nest
+`getAuthErrorMessage()` (`auth-error-message.ts`, now a re-export of the generic
+`getApiErrorMessage()` in `src/lib/api/error-message.ts` — friendlier 429 text, joins Nest
 validation message arrays; also used by the edit-profile page). This deliberately differs
 from the `getAccessToken()` shape sketched in [[Code quality]]: with an httpOnly cookie
 session there's no token for JS to fetch or attach.
@@ -250,28 +252,28 @@ session there's no token for JS to fetch or attach.
 
 React Hook Form for form state, Zod for the schema and validation messages,
 `zodResolver` from `@hookform/resolvers` to bridge the two. Schemas live in
-`src/lib/validation/` — `auth-schemas.js` (`signInSchema`, `signUpSchema` with
+`src/lib/validation/` — `auth-schemas.ts` (`signInSchema`, `signUpSchema` with
 `displayName`, `confirmPassword` and `username`) mirrors the backend DTO rules (password 12–128 on
-sign-up); `profile-schemas.js` (`usernameSchema`, `bioSchema`, `displayNameSchema`,
+sign-up); `profile-schemas.ts` (`usernameSchema`, `bioSchema`, `displayNameSchema`,
 `optionalDisplayNameSchema`, `RESERVED_USERNAMES`, `DISPLAY_NAME_MAX_LENGTH`)
 mirrors `backend/src/modules/users/username.rules.ts` — username trimmed + lowercased,
 3–20 chars of `[a-z0-9_]`, not reserved; bio trimmed, max 160; display name ("Name") trimmed,
-1–50 code points (`countCodePoints` from `lib/text.js`, so an emoji is 1, like the backend — not
+1–50 code points (`countCodePoints` from `lib/text.ts`, so an emoji is 1, like the backend — not
 zod's `.max`, which counts UTF-16 units), no line breaks — and its reserved list must
 match the backend's. `displayNameSchema` requires a name ("Name is required": sign-up, and edit
 profile once a name is set — it can be changed, never cleared); `optionalDisplayNameSchema` has
-the same rules but accepts `''`, for edit profile while the user has no name yet. The backend stays the source of truth. Used by `SignIn.jsx`,
-`SignUp.jsx` and `EditProfile.jsx`, which show field errors inline and the server error in
+the same rules but accepts `''`, for edit profile while the user has no name yet. The backend stays the source of truth. Used by `SignIn.tsx`,
+`SignUp.tsx` and `EditProfile.tsx`, which show field errors inline and the server error in
 a shadcn `Alert`.
 
 ## Routes
 
-`src/app/router.jsx` holds the `<Routes>` tree, wrapped in `NavigationDepthTracker` (see
+`src/app/router.tsx` holds the `<Routes>` tree, wrapped in `NavigationDepthTracker` (see
 PostDetail's Back rule under Posts) so it sees every navigation, the auth pages' redirects
 included:
 
 - `/sign-in`, `/sign-up` — inside `PublicOnlyRoute`: signed-in users go to
-  `getRedirectTarget(location.state.from)` (`src/lib/auth/redirect-target.js` — in-app
+  `getRedirectTarget(location.state.from)` (`src/lib/auth/redirect-target.ts` — in-app
   paths only; `//host`, `/\host`, non-strings → `/`), else `/`. Because signIn/signUp
   seed `['auth', 'me']`, this is what sends a freshly signed-in user back.
 - `/sign-out` — public; the app's single sign-out path (calls `signOut()` once on
@@ -295,18 +297,18 @@ boundary).
 
 ## Profiles
 
-- **Data.** `useProfile(username)` (`src/hooks/use-profile.js`) is a `useQuery` over
+- **Data.** `useProfile(username)` (`src/hooks/use-profile.ts`) is a `useQuery` over
   `fetchProfile` (`GET /users/:username` → `{ username, displayName, bio, createdAt, postCount,
   followerCount, followingCount, isFollowing, followsYou }`), keyed by
   `profileQueryKey(username)` = `['users', username.toLowerCase(), 'profile']`
-  (`src/lib/api/users.js`) — lowercased so `/u/Ada` and `/u/ada` share one entry. A 404 is
-  never retried (`useRetryUnlessNotFound()`, `hooks/use-retry-unless-not-found.js` — shared with
+  (`src/lib/api/users.ts`) — lowercased so `/u/Ada` and `/u/ada` share one entry. A 404 is
+  never retried (`useRetryUnlessNotFound()`, `hooks/use-retry-unless-not-found.ts` — shared with
   the post / comment queries); other failures use the QueryClient's default retry.
-  `useProfile(username, { alwaysFresh: true })` (only `Profile.jsx` opts in; the right rail card
+  `useProfile(username, { alwaysFresh: true })` (only `Profile.tsx` opts in; the right rail card
   and EditProfile keep the 30s default) sets `staleTime: 0` on that observer, so the profile
   refetches on every mount and every `:username` change — even back to a profile cached seconds
   ago — while the cached profile stays on screen (no skeleton).
-- **`/u/:username`** (`Profile.jsx`) — Pulse's profile layout: a `PageHeader` with a back
+- **`/u/:username`** (`Profile.tsx`) — Pulse's profile layout: a `PageHeader` with a back
   button (→ `/`) and the display name as the `h1` (the mono `@username` when there's none), a
   `bg-primary/10` banner, the large avatar overlapping it, an "Edit profile" link (→
   `/settings/profile`) only when the username matches `useAuth().user.username`
@@ -327,7 +329,7 @@ boundary).
   have is shown — no location or website. The dialog's open tab is Profile state
   (`'following' | 'followers' | null`); since Profile stays mounted when only `:username` changes
   (a row link in the dialog), the tab is reset to closed during render when the username changes.
-- **`/settings/profile`** (`EditProfile.jsx`) — inside the shell under a `PageHeader` "Edit
+- **`/settings/profile`** (`EditProfile.tsx`) — inside the shell under a `PageHeader` "Edit
   profile" with a back button (→ your profile); loads the current bio and display name via
   `useProfile(user.username)` (the `me` payload has no bio), then a react-hook-form + zod
   form — Name, Username, Bio — with a trimmed-length `n/160` bio counter. The Name field uses
@@ -339,7 +341,7 @@ boundary).
   `{ id, email, username, displayName }`, removes the old username's profile entry if it changed, and
   navigates (`replace`) to `/u/<new username>` — no stale username left in the cache. The
   PATCH response carries `postCount`, `followerCount` and `followingCount` too.
-- **Display names — `UserName`** (`src/components/UserName.jsx`). Every place a user is shown —
+- **Display names — `UserName`** (`src/components/UserName.tsx`). Every place a user is shown —
   the profile's name line, `PostCard`, `CommentItem`, `FollowListDialog` rows, Who to follow, the
   rail's profile card, the typeahead options and Explore rows — renders `UserName({ username,
   displayName, stacked, className, nameClassName, usernameClassName, fallbackClassName })`: the
@@ -354,15 +356,15 @@ boundary).
   holds a `UserAvatar` (whose `role="img"` label is `@username` and would otherwise be read too) —
   the Who to follow rows and the typeahead options — set the same string as an explicit
   `aria-label`.
-- **Avatar placeholder** — no image upload. `UserAvatar` (`src/components/UserAvatar.jsx`)
+- **Avatar placeholder** — no image upload. `UserAvatar` (`src/components/UserAvatar.tsx`)
   composes shadcn `Avatar` + `AvatarFallback`: the username's first character uppercased in
   `font-mono`, on one of 8 Pulse tint / text-colour pairs (see Theme) picked by a hash of the
-  lowercased username (`src/lib/avatar-color.js`), so the same user always gets the same
+  lowercased username (`src/lib/avatar-color.ts`), so the same user always gets the same
   colour. The root has
   `role="img"` and `aria-label="@username"`; the letter is `aria-hidden`. **Sizing:** for a
   custom size keep the default `size` and pass a `size-*` class (e.g. `className="size-12"`);
   combined with `size="lg"` / `"sm"`, a `size-*` class loses to shadcn's
-  `data-[size=lg]:size-10` / `data-[size=sm]:size-6` (`components/ui/avatar.jsx`).
+  `data-[size=lg]:size-10` / `data-[size=sm]:size-6` (`components/ui/avatar.tsx`).
 
 ## Pages
 
@@ -395,8 +397,8 @@ boundary).
 
 ## Posts
 
-**Data layer** (`lib/api/posts.js`, `lib/api/post-cache.js`, `hooks/use-posts.js`,
-`hooks/use-comments.js`).
+**Data layer** (`lib/api/posts.ts`, `lib/api/post-cache.ts`, `hooks/use-posts.ts`,
+`hooks/use-comments.ts`).
 
 - **Keys.** `postKeys`: `all` `['posts']`; every list under `lists()` `['posts', 'list']` —
   `feed()` `['posts', 'list', 'feed']` (Following), `forYou()` `['posts', 'list', 'for-you']`
@@ -408,7 +410,7 @@ boundary).
   `useInfiniteQuery`s (`initialPageParam: null`, `getNextPageParam` = `nextCursor ?? undefined`);
   `usePost(id)` is a `useQuery`. The API functions only append `?cursor=` when there is one — the
   backend rejects an empty `cursor=` with 400. Lookups that can 404 use `useRetryUnlessNotFound()`.
-- **`post-cache.js` is the single place for "update a post everywhere it's cached"** (every list
+- **`post-cache.ts` is the single place for "update a post everywhere it's cached"** (every list
   + its detail): `updatePostInCaches`, `removePostFromCaches` (also drops its detail and comments
   entries), `prependPostToList` (only into a loaded list, skipped if already there),
   `bumpProfilePostCount`, `bumpCommentCount`, `setLikeInCaches`, `findPostInCaches`. Helpers
@@ -453,7 +455,7 @@ starting would only join the refetch and never load page 2 (a refetch that start
 renders never flips `isFetching` as React sees it). A short page keeps loading until the list
 fills the viewport, stopping at the last page or a failed one.
 
-**Composers** (`Composer` on Home, `CommentComposer` on the detail page) share `lib/text.js`
+**Composers** (`Composer` on Home, `CommentComposer` on the detail page) share `lib/text.ts`
 and `CharacterCounter`: `measureBody(body)` gives the trimmed body, its code-point length,
 `remaining` and `isValid` (not blank, ≤ 280) — the backend's count. No `maxLength` (it counts
 UTF-16), so over-limit text stays visible; the counter turns destructive over 280 and its sr-only
@@ -488,7 +490,7 @@ URL; 404 → `Empty` "Post not found" + "Back to home"; other errors → `Alert`
 rule:** Back is `navigate(-1)` only when an in-app entry is behind this one
 (`useCanGoBackInApp()(location.key)`), else it goes to the author's profile — so a redirect
 (sign-in's return, the canonical redirect) never makes Back leave the app. The depth comes from
-`lib/navigation-history.js`: a store that records, per `location.key`, how many app entries
+`lib/navigation-history.ts`: a store that records, per `location.key`, how many app entries
 precede it — PUSH = previous + 1, REPLACE = same as previous, POP keeps the recorded value, an
 unknown key (first entry, anything from before a reload) = 0. `NavigationDepthTracker`
 (`app/`, at the top of `AppRouter`) feeds it from `useLocation` / `useNavigationType` in an
@@ -499,9 +501,9 @@ left the list.
 
 ## Follows
 
-**Data layer** (`lib/api/users.js`, `lib/api/follow-cache.js`, `hooks/use-follows.js`).
+**Data layer** (`lib/api/users.ts`, `lib/api/follow-cache.ts`, `hooks/use-follows.ts`).
 
-- **Keys.** `followKeys` (`users.js`): `all` `['follows']`; `lists()` `['follows', 'list']` —
+- **Keys.** `followKeys` (`users.ts`): `all` `['follows']`; `lists()` `['follows', 'list']` —
   `followers(username)` and `following(username)` (lowercased, like `profileQueryKey`);
   `suggestions()` `['follows', 'suggestions']`. One prefix reaches every row a user can be listed
   in — the same idea as `postKeys.lists()`.
@@ -517,21 +519,21 @@ left the list.
   reconnect (`refetchOnWindowFocus` / `refetchOnReconnect: false`), so an open list keeps an
   unfollowed row. The profile page's `alwaysFresh` profile does refetch on focus.
   `useSuggestions()` is a plain `useQuery`. Profile and list fetches pass their result through
-  `withPendingFollow` (use-follows.js): a response landing while a follow burst of that user is in
+  `withPendingFollow` (use-follows.ts): a response landing while a follow burst of that user is in
   flight keeps the burst's optimistic `isFollowing` (`followerCount` moved by the flip), and the
   signed-in user's own profile gets `followingCount` moved by the net optimistic delta of their
   in-flight bursts (±1 per burst whose shown state differs from its last confirmed one). Such a
   burst is flagged `ownCountFetched` and, when it settles, invalidates (refetches) the caller's
   profile — the same fallback as an unknown starting state — since whether the server had already
   applied the request can't be known.
-- **`follow-cache.js` is the single place for "change a user's follow state everywhere it's
+- **`follow-cache.ts` is the single place for "change a user's follow state everywhere it's
   cached"**: the target's profile (`isFollowing`, `followerCount`), the signed-in user's profile
   (`followingCount`), every followers / following list row, the suggestions and every user search
   result row under `searchKeys.all` — the typeahead's single `{ items, nextCursor }` page or
   Explore's infinite `{ pages, pageParams }` (`isFollowing`).
   Helpers: `followQueryFilters(username, me)` (what to cancel / restart), `findFollowState`
   (profile first, else any listed row), `setFollowInProfile`, `setFollowingInLists`,
-  `bumpProfileFollowingCount`. It reuses `post-cache.js`'s `profileQueryFilters` and `mapPages`
+  `bumpProfileFollowingCount`. It reuses `post-cache.ts`'s `profileQueryFilters` and `mapPages`
   and follows the same rules: unchanged objects are returned as-is, and the race rules
   (`cancelLoadedFetches` / `writeAfterServerChange`) are post-cache's.
 - **`useToggleFollow`** (`mutate({ username, following })` with the intended final state; PUT or
@@ -571,7 +573,7 @@ and refocuses that element if it's still connected.
 
 ## Search
 
-**Data layer** (`lib/api/search.js`, `hooks/use-user-search.js`, `hooks/use-debounced-value.js`).
+**Data layer** (`lib/api/search.ts`, `hooks/use-user-search.ts`, `hooks/use-debounced-value.ts`).
 
 - **Normalizer.** `normalizeSearchQuery(raw)` → `{ query, searchable }` does what the server's
   `SearchUsersQueryDto` does — trim, strip one leading `@` — then caps the query at
@@ -588,7 +590,7 @@ and refocuses that element if it's still connected.
   `a–z`), so `@Ada`, ` ada ` and `ADA` share an entry, but `É` and `é` don't: the server matches
   with SQLite `LIKE`, which only folds ASCII case, so those are different searches with different
   results — folding them with `toLowerCase()` would serve one's cached results for the other. One
-  `['search']` prefix lets `follow-cache.js` reach every result row (see Follows).
+  `['search']` prefix lets `follow-cache.ts` reach every result row (see Follows).
 - **Hooks.** `useUserTypeahead(rawQuery)` — the rail's `useQuery`: the input debounced by
   `TYPEAHEAD_DEBOUNCE_MS` (250) via `useDebouncedValue(value, delayMs)` (a timer restarted on
   every change, so a burst of keystrokes yields one update), `limit` `TYPEAHEAD_LIMIT` (5),
@@ -599,7 +601,7 @@ and refocuses that element if it's still connected.
   retry a 400 (nor a 404; other errors use the default policy), and pass each page through
   `withPendingFollow` so a page landing mid-follow keeps the optimistic state.
 
-**Right-rail typeahead** (`SearchBox` in `layout/RightRail.jsx`). A WAI-ARIA 1.2 combobox: focus
+**Right-rail typeahead** (`SearchBox` in `layout/RightRail.tsx`). A WAI-ARIA 1.2 combobox: focus
 stays on the input (`role="combobox"`, `aria-expanded`, `aria-controls`, `aria-activedescendant`)
 over a `listbox` of up to 5 user options (avatar, `UserName`, one line of bio) plus a last "See
 all results for “q”" option. ArrowDown / ArrowUp move the active option (wrapping; opening the
@@ -616,7 +618,7 @@ sets the input's value — with its own filtering; `popover` (Radix) renders a `
 layer that fights the input over focus and outside clicks. Here the server matches and choosing
 navigates, so a plain panel is the simpler fit.
 
-**Explore** (`pages/Explore.jsx`, `/explore`). `PageHeader` "Explore" with a `role="search"` box
+**Explore** (`pages/Explore.tsx`, `/explore`). `PageHeader` "Explore" with a `role="search"` box
 (`aria-label` "Search users"; autofocused only when arriving without a query), then the results.
 - **URL state.** The query lives in `?q=`. The input is local state so typing stays instant; the
   URL follows it once typing has paused for `TYPEAHEAD_DEBOUNCE_MS` (`useDebouncedValue`),
@@ -642,22 +644,22 @@ Live updates come over one Server-Sent Events stream, `GET /events` (contract in
   ends `CLOSED` (a 401, server gone) is reopened with capped exponential backoff (1s, 2s, 4s …
   30s, reset on open), only while signed in. Without `window.EventSource` (jsdom) it renders its
   children and does nothing else. Outside the provider every hook below is a no-op.
-- **Hooks (`use-realtime.js`)** — `useRealtimeEvent(name, handler)` calls `handler(data)` with the
+- **Hooks (`use-realtime.ts`)** — `useRealtimeEvent(name, handler)` calls `handler(data)` with the
   parsed JSON of each `name` message (malformed bodies dropped; the latest handler is used, no
   resubscribe per render); `useRealtimeReconnect(handler)` fires on every open **after** the
   first — events aren't replayed, so refresh what may have been missed there;
   `useRealtimeStatus()` → `'connecting' | 'open' | 'closed'`.
 - **Who handles what** — mount each sync hook once (the first two live in `AppShell`):
-  - `useNotificationsRealtimeSync` (`hooks/use-notifications.js`) ← `notifications.changed`:
+  - `useNotificationsRealtimeSync` (`hooks/use-notifications.ts`) ← `notifications.changed`:
     writes the pushed unread count and marks the notifications list stale; refetches the count on
     reconnect. The nav badge's `useUnreadNotificationCount` refetches on window focus and polls
     every 30s **only while the stream isn't open** (a fallback, not the primary path).
-  - `usePostsRealtimeSync` (`hooks/use-posts-realtime.js`) ← `post.counts` (live like / comment
+  - `usePostsRealtimeSync` (`hooks/use-posts-realtime.ts`) ← `post.counts` (live like / comment
     counts) and `post.deleted` (removes the post from the caches). Neither is sent to the user who
     caused it.
   - `NewPostsProvider` / `useNewPosts(tab)` ← `post.created` `{ id, following }` and
     `post.deleted`: tracks pending post ids per Home tab (For you always, Following only when
-    `following`) in `new-posts-store.js`. Mounted in `ProtectedRoute` (inside
+    `following`) in `new-posts-store.ts`. Mounted in `ProtectedRoute` (inside
     `RealtimeProvider`), so counts build up while you're on another page. `syncNewPostsWithFeeds`
     drops ids the feed cache now shows, and ids pending when a first-page fetch started once it
     succeeds ("load more" and manual cache writes don't count). `useShowNewPosts(tab)` is the
@@ -670,25 +672,25 @@ Live updates come over one Server-Sent Events stream, `GET /events` (contract in
   Home (border 1 + pt-4 16 + h1 28 + tabs mt-3 12 + tab 44). **If PageHeader or Home's tabs change
   height, update that value.** Clicking it scrolls to the top and focuses the feed panel.
   `motion-reduce:` drops the transitions.
-- **Tests** — `src/test/fake-event-source.js`: `installFakeEventSource()` puts a controllable
+- **Tests** — `src/test/fake-event-source.ts`: `installFakeEventSource()` puts a controllable
   `FakeEventSource` on `window` (instances in `FakeEventSource.instances` / `.latest`); drive a
   stream with `open()`, `emit(event, data)`, `drop()` (transient) and `fail()` (ends `CLOSED`),
   each wrapped in `act`; uninstall after the test. Store logic is tested without rendering —
-  `lib/realtime/__tests__/new-posts-store.test.js` uses a real `QueryClient` + MSW.
+  `lib/realtime/__tests__/new-posts-store.test.ts` uses a real `QueryClient` + MSW.
 
 ## Tests
 
-Vitest + jsdom + React Testing Library + MSW (`npm test`; config in `vite.config.js`'s
+Vitest + jsdom + React Testing Library + MSW (`npm test`; config in `vite.config.ts`'s
 `test` block). Tests live in a `__tests__/` folder next to the file they cover
-(`pages/Home.jsx` → `pages/__tests__/Home.test.jsx`). Render through `renderWithProviders(ui, { route })`
-(`src/test/render.jsx` — a fresh `createQueryClient()` with no retries, so the central
+(`pages/Home.tsx` → `pages/__tests__/Home.test.tsx`). Render through `renderWithProviders(ui, { route })`
+(`src/test/render.tsx` — a fresh `createQueryClient()` with no retries, so the central
 401 handling applies, plus `AuthProvider` and a `MemoryRouter`) and fake the backend
-with MSW handlers from `src/test/server.js` (`server.use(http.get(apiUrl('/path'), …))`)
+with MSW handlers from `src/test/server.ts` (`server.use(http.get(apiUrl('/path'), …))`)
 — never mock `apiClient` or `fetch`, so the real client (URL building, JSON parsing,
 `ApiError`) is exercised. Unhandled requests fail the test. Tests render **signed in**
 by default (the default `GET /auth/me` handler returns a user); override it with a 401
 to render signed out. `src/components/ui/*` (shadcn) isn't tested. Reference tests:
-`src/pages/__tests__/Home.test.jsx`, `src/lib/api/__tests__/client.test.js`.
+`src/pages/__tests__/Home.test.tsx`, `src/lib/api/__tests__/client.test.ts`.
 
 Shell-related gotchas:
 
@@ -696,10 +698,10 @@ Shell-related gotchas:
   and roles can appear twice (`@ada` in the rail and on the page, a "Sign out" link in the
   rail and the bottom bar). Scope queries: `within(screen.getByRole('main'))` for the page,
   `within(screen.getByRole('banner'))` for the left rail.
-- The right rail fetches the signed-in user's profile, so `server.js` has a default
+- The right rail fetches the signed-in user's profile, so `server.ts` has a default
   `GET /users/:username` handler: `ada` (any case) → `{ username: 'ada', bio: null,
   createdAt }`, anything else → 404 `User not found`. Override it per test as usual.
-- Home and the profile page load posts, so `server.js` also has default `GET /feed` and
+- Home and the profile page load posts, so `server.ts` also has default `GET /feed` and
   `GET /feed/for-you` (empty page `{ items: [], nextCursor: null }`) and
   `GET /users/:username/posts` (`ada` → empty page, others → 404) handlers.
 - The right rail loads suggestions and profiles can open follow lists, so there are follow
@@ -713,8 +715,8 @@ Shell-related gotchas:
 - jsdom has no `IntersectionObserver`, so `InfiniteListFooter` skips auto-loading there and tests
   use "Load more". To test the observer, `vi.stubGlobal('IntersectionObserver', …)` with a small
   fake class (always in view, or controllable) and `vi.unstubAllGlobals()` in `afterEach` — see
-  `components/feed/__tests__/InfiniteListFooter.test.jsx`.
-- Race tests hold a response with a **gated handler**: `hooks/__tests__/use-posts.test.jsx` has
+  `components/feed/__tests__/InfiniteListFooter.test.tsx`.
+- Race tests hold a response with a **gated handler**: `hooks/__tests__/use-posts.test.tsx` has
   a local `gate()` helper returning `{ promise, open }`; the MSW handler does
   `await g.promise` and the test calls `g.open()` when it wants the response to land, so a stale
   refetch or a like request can be made to arrive before / after a cache write.
@@ -726,17 +728,17 @@ Shell-related gotchas:
 
 ## Current state vs. this doc
 
-**Implemented:** `app/` (`App.jsx`, `router.jsx` with the `AppShell` layout route,
-`NavigationDepthTracker.jsx`, `providers.jsx`, `query-client.js`), the Pulse theme (`index.css`, `index.html`),
+**Implemented:** `app/` (`App.tsx`, `router.tsx` with the `AppShell` layout route,
+`NavigationDepthTracker.tsx`, `providers.tsx`, `query-client.ts`), the Pulse theme (`index.css`, `index.html`),
 `components/ui/` (shadcn, see [[UI component inventory]]), `components/layout/` (the app
 shell), `components/feed/` (posts, comments, composers, infinite lists),
-`components/AuthLayout.jsx`, `components/BrandMark.jsx`, `components/UserAvatar.jsx`,
-`components/UserName.jsx`, `components/FollowButton.jsx`, `components/FollowListDialog.jsx`,
-`hooks/`, `lib/api/` (`client.js`, `users.js`, `posts.js`, `search.js`, `post-cache.js`,
-`follow-cache.js`, `notifications.js`, `error-message.js`),
-`lib/auth/`, `lib/realtime/` (SSE stream, new-posts pill), `lib/validation/`, `lib/text.js`, `lib/format.js`, `lib/composer-focus.js`,
-`lib/navigation-history.js`,
-`lib/avatar-color.js`, `lib/utils.js`, `routes/` (`ProtectedRoute`, `PublicOnlyRoute`), `test/`
+`components/AuthLayout.tsx`, `components/BrandMark.tsx`, `components/UserAvatar.tsx`,
+`components/UserName.tsx`, `components/FollowButton.tsx`, `components/FollowListDialog.tsx`,
+`hooks/`, `lib/api/` (`client.ts`, `users.ts`, `posts.ts`, `search.ts`, `post-cache.ts`,
+`follow-cache.ts`, `notifications.ts`, `error-message.ts`),
+`lib/auth/`, `lib/realtime/` (SSE stream, new-posts pill), `lib/validation/`, `lib/text.ts`, `lib/format.ts`, `lib/composer-focus.ts`,
+`lib/navigation-history.ts`,
+`lib/avatar-color.ts`, `lib/utils.ts`, `routes/` (`ProtectedRoute`, `PublicOnlyRoute`), `test/`
 (Vitest + RTL + MSW helpers), and `pages/` — `SignIn`, `SignUp`, `SignOut`, `Home` (Following /
 For you feeds), `Profile` (with follows), `EditProfile`, `PostDetail`, `Explore` (user
 search, also the right rail's typeahead) and `Notifications`. Live updates (unread count, post

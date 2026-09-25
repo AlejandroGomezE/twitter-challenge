@@ -340,7 +340,7 @@ running server.
   counts and relation concurrently. The target id comes only from `@CurrentUser()`; unknown
   fields are stripped by the `ValidationPipe` whitelist; an empty body is a no-op.
 - **Rules** (`username.rules.ts`, authoritative; the frontend mirror
-  `frontend/src/lib/validation/profile-schemas.js` must match, `RESERVED_USERNAMES`
+  `frontend/src/lib/validation/profile-schemas.ts` must match, `RESERVED_USERNAMES`
   included — the two are duplicated because the repo-root `shared/` folder is wired into
   neither build). Username: trimmed + lowercased, 3–20 chars of `[a-z0-9_]`, not reserved
   (`me`, `settings`, `sign-in`, `sign-up`, `sign-out`, `auth`, `users`, `u`, `api`,
@@ -386,7 +386,7 @@ session-gated (no `@Public()`); author and viewer ids come only from `@CurrentUs
   404 `Comment not found`. `GET /users/:username` and `PATCH /users/me` gain `postCount`
   (`PostsService.countByAuthor`). The comments routes have one more segment than `:id` and a
   literal `comments` where the like routes have `like`, so the controllers never clash.
-- **Body rules** (`posts.rules.ts`, shared by posts and comments; the frontend's `lib/text.js`
+- **Body rules** (`posts.rules.ts`, shared by posts and comments; the frontend's `lib/text.ts`
   counts the same way). `@IsPostBody()` = a trimming `@Transform` + `@IsString()` + a
   `ValidateBy` of 1–280 **code points** (`Array.from(value).length`, so an emoji is 1).
   class-validator's `@Length` / `@MaxLength` count UTF-16 units, hence not used. A blank body is
