@@ -1,10 +1,12 @@
 import { Search, UserPlus } from 'lucide-react'
 import { useId } from 'react'
 import { Link } from 'react-router'
+import { FollowButton } from '@/components/FollowButton'
 import { UserAvatar } from '@/components/UserAvatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useSuggestions } from '@/hooks/use-follows'
 import { useProfile } from '@/hooks/use-profile'
 import { useAuth } from '@/lib/auth/use-auth'
 import { ComingSoon } from './ComingSoon'
@@ -12,11 +14,10 @@ import { ComingSoon } from './ComingSoon'
 const labelClassName = 'font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground'
 const cardClassName = 'rounded-2xl border border-border bg-card p-5'
 
-// Right rail (xl only): a disabled search box, the signed-in user's profile card and a disabled
-// "Who to follow" card (no suggested users until follows exist).
+// Right rail (xl only): a disabled search box, the signed-in user's profile card and a "Who to
+// follow" card suggesting up to 3 users to follow.
 export function RightRail() {
   const { user } = useAuth()
-  const whoToFollowId = useId()
 
   return (
     <div className="flex flex-col gap-5">
@@ -38,15 +39,7 @@ export function RightRail() {
 
       {user?.username && <ProfileCard username={user.username} />}
 
-      <section aria-labelledby={whoToFollowId} className={cardClassName}>
-        <div className="flex items-center justify-between">
-          <h2 id={whoToFollowId} className={labelClassName}>
-            Who to follow
-          </h2>
-          <UserPlus className="size-4 text-muted-foreground" aria-hidden="true" />
-        </div>
-        <p className="mt-4 text-sm text-muted-foreground">Coming soon</p>
-      </section>
+      <WhoToFollowCard />
     </div>
   )
 }
@@ -77,5 +70,76 @@ function ProfileCard({ username }) {
         <Link to={`/u/${encodeURIComponent(username)}`}>View profile</Link>
       </Button>
     </section>
+  )
+}
+
+const SKELETON_ROWS = 3
+
+// "Who to follow": up to 3 users the signed-in user doesn't follow, each linking to their profile
+// with a Follow button. Skeleton rows while loading; the whole card is hidden when there's nobody to
+// suggest or the request fails (a sidebar nicety, not worth an error box). Following someone flips
+// their row to "Following" (optimistic, via useToggleFollow) until the suggestions refetch drops it.
+function WhoToFollowCard() {
+  const titleId = useId()
+  const { data, isPending, isError } = useSuggestions()
+  const suggestions = data?.items ?? []
+
+  if (isError || (!isPending && suggestions.length === 0)) return null
+
+  return (
+    <section aria-labelledby={titleId} aria-busy={isPending} className={cardClassName}>
+      <div className="flex items-center justify-between">
+        <h2 id={titleId} className={labelClassName}>
+          Who to follow
+        </h2>
+        <UserPlus className="size-4 text-muted-foreground" aria-hidden="true" />
+      </div>
+      {isPending ? (
+        <ul className="mt-4 flex flex-col gap-4" aria-hidden="true">
+          {Array.from({ length: SKELETON_ROWS }, (_, index) => (
+            <li key={index} data-testid="suggestion-skeleton" className="flex items-center gap-3">
+              <Skeleton className="size-10 shrink-0 rounded-full" />
+              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                <Skeleton className="h-3.5 w-24" />
+                <Skeleton className="h-3 w-32" />
+              </div>
+              <Skeleton className="h-9 w-24 shrink-0 rounded-full" />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <ul className="mt-4 flex flex-col gap-4">
+          {suggestions.map((suggestion) => (
+            <SuggestionRow key={suggestion.username} suggestion={suggestion} />
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+function SuggestionRow({ suggestion }) {
+  const { username, bio, isFollowing, followsYou } = suggestion
+
+  return (
+    <li className="flex items-center gap-3">
+      <Link
+        to={`/u/${encodeURIComponent(username)}`}
+        aria-label={`@${username}`}
+        className="flex min-w-0 flex-1 items-center gap-3 rounded-lg focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+      >
+        <UserAvatar username={username} className="size-10 shrink-0" />
+        <div className="min-w-0">
+          <p className="truncate font-mono text-sm font-medium">@{username}</p>
+          {bio && <p className="line-clamp-1 text-xs break-words text-muted-foreground">{bio}</p>}
+        </div>
+      </Link>
+      <FollowButton
+        username={username}
+        isFollowing={isFollowing}
+        followsYou={followsYou}
+        className="h-9 shrink-0"
+      />
+    </li>
   )
 }

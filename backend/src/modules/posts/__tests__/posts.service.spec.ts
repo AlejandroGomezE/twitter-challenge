@@ -5,12 +5,14 @@ import {
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Prisma } from '../../../generated/prisma/client.js';
+import { FollowsService } from '../../follows/follows.service.js';
 import { decodeCursor, encodeCursor } from '../pagination.js';
 import { PostsRepository, type PostWithAuthor } from '../posts.repository.js';
 import { PostsService } from '../posts.service.js';
 
 const AUTHOR_ID = 'user-author';
 const OTHER_ID = 'user-other';
+const FOLLOWED_ID = 'user-followed';
 const CREATED_AT = new Date('2026-09-24T10:00:00.000Z');
 
 const POST: PostWithAuthor = {
@@ -45,12 +47,16 @@ describe('PostsService', () => {
     likeCount: vi.fn(),
   };
 
+  const followsService = { followedIds: vi.fn() };
+
   beforeEach(async () => {
     vi.resetAllMocks();
+    followsService.followedIds.mockResolvedValue([]);
     const moduleRef = await Test.createTestingModule({
       providers: [
         PostsService,
         { provide: PostsRepository, useValue: postsRepository },
+        { provide: FollowsService, useValue: followsService },
       ],
     }).compile();
     service = moduleRef.get(PostsService);
@@ -268,16 +274,33 @@ describe('PostsService', () => {
       );
     });
 
-    it("pages the viewer's own posts only (the feed author set is [viewer])", async () => {
+    it("pages only the viewer's posts when they follow no one", async () => {
       postsRepository.findPage.mockResolvedValue([]);
 
       await service.feed(AUTHOR_ID, {});
 
+      expect(followsService.followedIds).toHaveBeenCalledWith(AUTHOR_ID);
       expect(postsRepository.findPage).toHaveBeenCalledWith({
         authorIds: [AUTHOR_ID],
         cursor: undefined,
         limit: 20,
       });
+    });
+
+    it('includes the users the viewer follows, and no one else', async () => {
+      followsService.followedIds.mockResolvedValue([FOLLOWED_ID]);
+      postsRepository.findPage.mockResolvedValue([]);
+
+      await service.feed(AUTHOR_ID, {});
+
+      expect(postsRepository.findPage).toHaveBeenCalledTimes(1);
+      const [params] = postsRepository.findPage.mock.calls[0] as [
+        { authorIds: string[] },
+      ];
+      expect([...params.authorIds].sort()).toEqual(
+        [AUTHOR_ID, FOLLOWED_ID].sort(),
+      );
+      expect(params.authorIds).not.toContain(OTHER_ID);
     });
 
     it('returns an empty last page when there are no posts', async () => {
@@ -364,6 +387,71 @@ describe('PostsService', () => {
 
     it('rejects an invalid cursor with 400 Invalid cursor before querying', async () => {
       const promise = service.feed(AUTHOR_ID, { cursor: 'not a cursor' });
+
+      await expect(promise).rejects.toBeInstanceOf(BadRequestException);
+      await expect(promise).rejects.toThrow('Invalid cursor');
+      expect(postsRepository.findPage).not.toHaveBeenCalled();
+      expect(followsService.followedIds).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('forYou', () => {
+    it("pages every author's posts (no author filter) with counts for the viewer", async () => {
+      const rows = [
+        { ...POST, id: 'post-3', authorId: OTHER_ID },
+        { ...POST, id: 'post-2', authorId: FOLLOWED_ID },
+        { ...POST, id: 'post-1', authorId: AUTHOR_ID },
+      ];
+      postsRepository.findPage.mockResolvedValue(rows);
+      postsRepository.countsFor.mockResolvedValue(
+        new Map([
+          ['post-3', { likeCount: 1, commentCount: 0, likedByMe: true }],
+        ]),
+      );
+      const position = { createdAt: CREATED_AT, id: 'post-900' };
+
+      const page = await service.forYou(AUTHOR_ID, {
+        cursor: encodeCursor(position),
+        limit: 3,
+      });
+
+      expect(postsRepository.findPage).toHaveBeenCalledWith({
+        authorIds: undefined,
+        cursor: position,
+        limit: 3,
+      });
+      expect(followsService.followedIds).not.toHaveBeenCalled();
+      expect(postsRepository.countsFor).toHaveBeenCalledTimes(1);
+      expect(postsRepository.countsFor).toHaveBeenCalledWith(
+        ['post-3', 'post-2', 'post-1'],
+        AUTHOR_ID,
+      );
+      expect(page.items.map((item) => item.id)).toEqual([
+        'post-3',
+        'post-2',
+        'post-1',
+      ]);
+      expect(page.items[0]).toMatchObject({ likeCount: 1, likedByMe: true });
+      expect(page.items[1]).toMatchObject({ likeCount: 0, likedByMe: false });
+      expect(page.nextCursor).toBeNull();
+    });
+
+    it('returns a cursor when `limit + 1` rows come back', async () => {
+      const rows = postRows(4);
+      postsRepository.findPage.mockResolvedValue(rows);
+      postsRepository.countsFor.mockResolvedValue(new Map());
+
+      const page = await service.forYou(AUTHOR_ID, { limit: 3 });
+
+      expect(page.items).toHaveLength(3);
+      expect(decodeCursor(page.nextCursor ?? '')).toEqual({
+        createdAt: CREATED_AT,
+        id: rows[2].id,
+      });
+    });
+
+    it('rejects an invalid cursor with 400 Invalid cursor before querying', async () => {
+      const promise = service.forYou(AUTHOR_ID, { cursor: 'not a cursor' });
 
       await expect(promise).rejects.toBeInstanceOf(BadRequestException);
       await expect(promise).rejects.toThrow('Invalid cursor');

@@ -22,7 +22,9 @@ export interface CreatePostData {
 }
 
 export interface FindPageParams {
-  authorIds: string[];
+  // Only posts by these authors; omitted for every author's posts (the
+  // "for you" listing), which then walks the `createdAt` index alone.
+  authorIds?: string[];
   // Position of the last post of the previous page; omitted for the first.
   cursor?: CursorPosition;
   limit: number;
@@ -56,12 +58,14 @@ export class PostsRepository {
     });
   }
 
-  // Posts by any of `authorIds`, newest first (`createdAt DESC, id DESC`),
-  // strictly after `cursor` in that order. Returns up to `limit + 1` rows:
-  // the extra row only tells the caller that a next page exists.
+  // Posts by any of `authorIds` (or by anyone when omitted), newest first
+  // (`createdAt DESC, id DESC`), strictly after `cursor` in that order.
+  // Returns up to `limit + 1` rows: the extra row only tells the caller that
+  // a next page exists.
   findPage(params: FindPageParams): Promise<PostWithAuthor[]> {
     const { authorIds, cursor, limit } = params;
-    const where: Prisma.PostWhereInput = { authorId: { in: authorIds } };
+    const where: Prisma.PostWhereInput =
+      authorIds === undefined ? {} : { authorId: { in: authorIds } };
     if (cursor) {
       where.OR = [
         { createdAt: { lt: cursor.createdAt } },
