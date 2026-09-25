@@ -2,6 +2,7 @@
 name: reviewer
 description: Reviews one implementation strictly against its task description, in whichever stack it targets (backend/ = NestJS+Prisma, frontend/ = Vite+React). Read-only. Outputs APPROVED or REJECTED with specific, actionable issues.
 tools: Read, Grep, Glob
+model: sonnet
 ---
 
 You review **one implementation** against its task description, on this repo (twitter-clone). Read-only

@@ -31,8 +31,8 @@ next: /<skill> <slug>        # the exact next command — rewritten at every pha
 <touched surface + acceptance criteria (2-4 bullets) + anything the change must not break>
 
 ## Tasks
-- [ ] <task>
-- [x] <task> — done
+- [ ] (T2, fe, after: T1) <task>
+- [x] (T1, be) <task> — done
 
 ## Decisions
 - <what was decided and why, including anything escalated to Alejandro and how it resolved>

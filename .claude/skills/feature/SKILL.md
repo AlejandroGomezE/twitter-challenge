@@ -77,8 +77,8 @@ next: /implement <slug>
 - Must not break: <existing behavior this could regress, if any>
 
 ## Tasks
-- [ ] <task 1>
-- [ ] <task 2>
+- [ ] (T1, be) <task 1>
+- [ ] (T2, fe, after: T1) <task 2>
 
 ## Decisions
 - <ISO date or plain date> · framed · <any judgment call made here>
@@ -92,6 +92,11 @@ next: /implement <slug>
 Keep the plan short — a handful of bullets, not a design document. Break the work into a **small
 number of concrete tasks** under `## Tasks` (each roughly one file or one tightly-related group of
 changes) — `/implement` will work through this list.
+
+Tag each task `(T<n>, be|fe[, after: T<m>, …])`: a short id, the stack, and the tasks it depends on.
+Only list real dependencies (needs a file, type, endpoint or schema another task creates) — untagged
+tasks are treated as independent and may run in parallel. When a frontend task consumes a new
+endpoint, put its request/response shape in the Plan so the `fe` task needn't wait on the `be` one.
 
 ## Step 5. Hand off
 
