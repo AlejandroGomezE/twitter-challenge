@@ -450,7 +450,7 @@ left the list.
   `suggestions()` `['follows', 'suggestions']`. One prefix reaches every row a user can be listed
   in — the same idea as `postKeys.lists()`.
 - **API.** `setFollowing(username, following)` → `PUT` or `DELETE /users/:username/follow`
-  (`followUser` / `unfollowUser` wrap it); `fetchFollowers` / `fetchFollowing(username, cursor)`
+  (idempotent — send the intended final state); `fetchFollowers` / `fetchFollowing(username, cursor)`
   (`?cursor=` only when there is one); `fetchSuggestions()` → `GET /users/me/suggestions` (the
   server's default of 3).
 - **Queries.** `useFollowers(username, { enabled })` / `useFollowing(…)` are `useInfiniteQuery`s
