@@ -25,6 +25,7 @@ their own.
 | Run the **frontend** locally (`:5173`) | `scripts/fe-local` |
 | Stop the **backend** (incl. orphaned watchers) | `scripts/down-be` |
 | Stop the **frontend** | `scripts/down-fe` |
+| Run the **whole stack in Docker** (`:8080` + `:3000`) | `docker compose up --build` — see [Run with Docker](#run-with-docker) |
 
 **Try it locally:** run `scripts/be-local` and `scripts/fe-local`, open
 http://localhost:5173 — you land on `/sign-in`; use "Create an account" (`/sign-up`). First time
@@ -54,7 +55,8 @@ cd ..
 scripts/be-local                  # should boot on :3000 with no Prisma errors
 ```
 
-- No database server is needed (no Docker, no Postgres). The Prisma CLI picks up
+- No database server is needed (no Postgres). Docker is optional; see
+  [Run with Docker](#run-with-docker). The Prisma CLI picks up
   `prisma7.config.ts` on its own, so you don't need a `--config` flag.
 - This schema has no migrations folder. `db push` syncs the schema into the database directly.
 - The "after pulling the X change, run `db push`…" notes further down are for existing
@@ -68,11 +70,59 @@ scripts/be-local                  # should boot on :3000 with no Prisma errors
 
 ---
 
+## Run with Docker
+
+The whole stack in containers, with only Docker installed (no host Node, npm or Prisma step).
+Run from the repo root:
+
+```bash
+docker compose up --build         # builds both images, then starts backend + frontend
+docker compose down               # stop; the database is kept
+docker compose down -v            # stop and wipe the database (removes the volume)
+```
+
+- **URLs:** the app is at http://localhost:8080 (nginx serving the built SPA; deep links like
+  `/u/ada` reload fine). The API is at http://localhost:3000, and the browser calls it
+  directly (no `/api` proxy). The frontend container waits for the backend's healthcheck.
+- **Production-like, not a dev setup:** these are built images (`node dist/main` and a static
+  bundle), with no hot reload. For development use `scripts/be-local` and `scripts/fe-local`.
+  The two setups are independent. Docker doesn't touch `backend/prisma/dev.db` or
+  `backend/.env`.
+- **Data:** SQLite at `/data/app.db` on the named volume `twitter-clone_db-data` (the compose
+  project name is fixed, so the name is the same whatever the checkout is called).
+  `down` keeps it and `down -v` resets it.
+- **Schema:** each backend start runs `prisma db push` (no migrations, same as local). This
+  does nothing when the schema is already in sync. A push that would lose data is **not** forced.
+  The backend container fails (check `docker compose logs backend`) and nothing is wiped. To
+  get past it, reset with `docker compose down -v`, or change the schema so the push is additive.
+- **Changing the API URL / origin:** `VITE_API_URL` is baked into the bundle at build time, so
+  changing it needs `--build`. Change `FRONTEND_ORIGIN` along with it. It must equal the origin the
+  browser loads the frontend from **exactly** (scheme + host + port, no trailing slash), or CORS
+  and the auth Origin check reject every request. Both are read from the host environment. For
+  example:
+  `VITE_API_URL=http://192.168.1.10:3000 FRONTEND_ORIGIN=http://192.168.1.10:8080 docker compose up --build`.
+- **`NODE_ENV` defaults to `development`.** In this backend, `NODE_ENV` only sets the session
+  cookie's `Secure` flag. Over plain `http://localhost`, some browsers (Safari) drop `Secure`
+  cookies and sign-in silently fails. Set `NODE_ENV=production` only when the stack is behind
+  HTTPS.
+- **Observe APM (optional):** `OBSERVE_APP_KEY` / `OBSERVE_APP_SECRET` pass through from the
+  host environment when set there. Otherwise APM stays off, as it does locally.
+- **Images:** the backend build stages use the full `node:22-bookworm` because `better-sqlite3@13`
+  compiles from source (needs python3/make/g++). The runtime stage is `node:22-bookworm-slim`
+  plus `openssl` (so Prisma picks its openssl-3 engine) and runs as the non-root `node` user.
+  The frontend is built on `node:22-bookworm-slim` and served by `nginx:alpine`, with long-cache
+  `/assets/*` and a no-cache `index.html`.
+  Details are in the comments of `compose.yaml`, `backend/Dockerfile`, `backend/docker-entrypoint.sh`,
+  `frontend/Dockerfile` and `frontend/nginx.conf`.
+
+---
+
 ## Scripts index
 
 - **`scripts/check-env`** — checks Node (>=20.11, `frontend/vite.config.ts` uses
   `import.meta.dirname`) and npm are installed, that `backend/node_modules` and
-  `frontend/node_modules` are present, and that `backend/.env` exists. Read-only.
+  `frontend/node_modules` are present, and that `backend/.env` exists. It also reports whether
+  Docker (optional, for [Run with Docker](#run-with-docker)) is available. Read-only.
 - **`scripts/be-local`** — `npm run start:dev` in `backend/` (foreground, logs, watch
   mode). Port comes from `PORT` in `backend/.env` if set, otherwise `src/main.ts` falls
   back to **3000**.

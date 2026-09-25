@@ -188,7 +188,9 @@ Centralized `apiClient` (`get` / `post` / `put` / `patch` / `delete`) — no com
 `fetch` directly. It:
 
 - Reads `VITE_API_URL` (`frontend/.env`, defaults to `http://localhost:3000` if unset;
-  Vite only exposes `VITE_`-prefixed vars to client code)
+  Vite only exposes `VITE_`-prefixed vars to client code). In the Docker image
+  (`docker compose up --build`, Runbook → Run with Docker) it's a build arg baked into the
+  bundle, so changing it means rebuilding.
 - Sets `Content-Type: application/json` and JSON-encodes request bodies
 - Parses the response by its actual `content-type` (JSON vs. text) rather than
   assuming JSON
