@@ -1,8 +1,8 @@
 ---
 slug: spec-gaps
-status: verifying
+status: done
 scope: frontend
-next: /close-feature spec-gaps
+next: —
 ---
 # Spec gaps: tablet layout, browser E2E for auth, Runbook order
 
@@ -68,6 +68,9 @@ opens with history instead of setup steps.
 - [x] (T2, fe) Playwright auth E2E: add `@playwright/test`, `playwright.config.ts` (own backend on 3100 + Vite on 5174, dedicated `playwright.db` reset per run), `e2e/auth.spec.ts`, `test:e2e` script, `.gitignore` for `test-results/`, `playwright-report/`, `playwright.db*`
 - [x] (T3, fe, after: T2) Runbook restructure: evaluator intro, First-time setup first, remove every "after pulling X" note, add the Playwright run + `npx playwright install chromium` to Run all tests and prerequisites; update README Testing section for the browser E2E and the responsive row for the tablet layout
 
+## PRs
+- https://github.com/AlejandroGomezE/twitter-challenge/pull/22
+
 ## Decisions
 - 2026-09-25 · framed · One feature for the three gaps (all found in the same spec review, all small).
 - 2026-09-25 · framed · Tablet switch at `sm` (640px), the spec's own tablet boundary, rather than
@@ -88,3 +91,4 @@ opens with history instead of setup steps.
 - 2026-09-25 · framed
 - 2026-09-25 · built — tablet layout from sm, Playwright auth E2E (2 passed, own servers + playwright.db), Runbook opens with First-time setup and has no "after pulling" notes; frontend build, 52 suites / 606 tests, lint green
 - 2026-09-25 · verified — layout measured in Chromium at 375–1440px (icon rail + centred 620px column at 640–1279, phone and desktop unchanged, tablet rail nav works); Playwright suite 2 passed with dev.db untouched; fresh clone following the Runbook: setup + seed OK, backend 609 unit / 213 e2e, frontend 606, browser E2E 2, all passed; Docker not exercised (no Docker files changed)
+- 2026-09-25 · closed — PR #22, merged
