@@ -18,27 +18,65 @@ function LocationDisplay() {
   return <p data-testid="location">{location.pathname}</p>
 }
 
-// Serves `GET /users/:username` from `profiles` (404 otherwise).
+// A fake of the API's user profiles, created per test so no state leaks between tests. `GET
+// /users/:username` reads it and a successful `PATCH /users/me` writes to it, so the profile page's
+// refetch after "Save" returns the saved profile, like the real API.
+function createProfileStore(profiles) {
+  const byUsername = new Map(
+    Object.values(profiles).map((profile) => [profile.username.toLowerCase(), { ...profile }]),
+  )
+  // The signed-in user (the default `GET /auth/me` handler signs in as ada).
+  let me = 'ada'
+  return {
+    // Every profile request served, in order: `GET /users/<username>` and `PATCH /users/me`.
+    log: [],
+    get: (username) => byUsername.get(username.toLowerCase()),
+    me: () => byUsername.get(me),
+    // Applies a saved `PATCH /users/me` response to the signed-in user's profile, moving it to the
+    // new username on a rename (the old one is unknown afterwards).
+    save(saved) {
+      const current = byUsername.get(me)
+      const next = {
+        username: saved.username ?? current.username,
+        displayName: 'displayName' in saved ? saved.displayName : current.displayName,
+        bio: 'bio' in saved ? saved.bio : current.bio,
+        createdAt: saved.createdAt ?? current.createdAt,
+      }
+      byUsername.delete(me)
+      me = next.username.toLowerCase()
+      byUsername.set(me, next)
+    },
+  }
+}
+
+// Serves `GET /users/:username` from a fresh store seeded with `profiles` (404 otherwise), and
+// returns that store for `mockPatch`.
 function mockProfiles(profiles = { ada: ADA_PROFILE }) {
+  const store = createProfileStore(profiles)
   server.use(
     http.get(apiUrl('/users/:username'), ({ params }) => {
-      const profile = profiles[params.username.toLowerCase()]
+      store.log.push(`GET /users/${params.username}`)
+      const profile = store.get(params.username)
       if (!profile) return HttpResponse.json({ message: 'User not found' }, { status: 404 })
       return HttpResponse.json(profile)
     }),
   )
+  return store
 }
 
-// Records every `PATCH /users/me` body. By default echoes a successful update of ada's profile.
+// Records every `PATCH /users/me` body. `respond(body, me)` builds the response (`me` is the
+// signed-in user's stored profile); by default it echoes a successful update. A successful (2xx)
+// response's saved values are applied to `store`.
 function mockPatch(
-  respond = (body) =>
+  store,
+  respond = (body, me) =>
     HttpResponse.json({
       id: 'u1',
       email: 'ada@example.com',
-      username: body.username ?? 'ada',
-      displayName: body.displayName ?? null,
-      bio: 'bio' in body ? body.bio || null : ADA_PROFILE.bio,
-      createdAt: CREATED_AT,
+      username: body.username ?? me.username,
+      displayName: 'displayName' in body ? body.displayName : me.displayName,
+      bio: 'bio' in body ? body.bio || null : me.bio,
+      createdAt: me.createdAt,
     }),
 ) {
   const requests = []
@@ -46,7 +84,10 @@ function mockPatch(
     http.patch(apiUrl('/users/me'), async ({ request }) => {
       const body = await request.json()
       requests.push(body)
-      return respond(body)
+      store.log.push('PATCH /users/me')
+      const response = await respond(body, store.me())
+      if (response.ok) store.save(await response.clone().json())
+      return response
     }),
   )
   return requests
@@ -136,8 +177,8 @@ describe('EditProfile', () => {
     })
 
     it('turns destructive over 160 characters and blocks saving', async () => {
-      mockProfiles()
-      const requests = mockPatch()
+      const profiles = mockProfiles()
+      const requests = mockPatch(profiles)
       const { user } = await renderEditProfile()
 
       await replaceText(user, 'Bio', 'a'.repeat(160))
@@ -162,8 +203,8 @@ describe('EditProfile', () => {
       ['ab', 'Username must be at least 3 characters'],
       ['ada-l', 'Only letters, numbers and underscores'],
     ])('rejects the username %j', async (username, message) => {
-      mockProfiles()
-      const requests = mockPatch()
+      const profiles = mockProfiles()
+      const requests = mockPatch(profiles)
       const { user } = await renderEditProfile()
 
       await replaceText(user, 'Username', username)
@@ -177,8 +218,8 @@ describe('EditProfile', () => {
 
   describe('submitting', () => {
     it('sends only the bio when only the bio changed', async () => {
-      mockProfiles()
-      const requests = mockPatch()
+      const profiles = mockProfiles()
+      const requests = mockPatch(profiles)
       const { user } = await renderEditProfile()
 
       await replaceText(user, 'Bio', '  New bio  ')
@@ -190,8 +231,8 @@ describe('EditProfile', () => {
     })
 
     it('sends only the normalized username when only the username changed', async () => {
-      mockProfiles()
-      const requests = mockPatch()
+      const profiles = mockProfiles()
+      const requests = mockPatch(profiles)
       const { user } = await renderEditProfile()
 
       await replaceText(user, 'Username', '  Ada_L ')
@@ -201,8 +242,8 @@ describe('EditProfile', () => {
     })
 
     it('sends bio "" when the bio is cleared', async () => {
-      mockProfiles()
-      const requests = mockPatch()
+      const profiles = mockProfiles()
+      const requests = mockPatch(profiles)
       const { user } = await renderEditProfile()
 
       await replaceText(user, 'Bio', '')
@@ -215,8 +256,8 @@ describe('EditProfile', () => {
     it.each(['ada', 'ADA'])(
       'goes to your profile without a PATCH when nothing changed (username %j)',
       async (username) => {
-        mockProfiles()
-        const requests = mockPatch()
+        const profiles = mockProfiles()
+        const requests = mockPatch(profiles)
         const { user } = await renderEditProfile()
 
         await replaceText(user, 'Username', username)
@@ -229,8 +270,8 @@ describe('EditProfile', () => {
     )
 
     it('shows the server error when the username is taken', async () => {
-      mockProfiles()
-      mockPatch(() => HttpResponse.json({ message: 'Username is already taken' }, { status: 409 }))
+      const profiles = mockProfiles()
+      mockPatch(profiles, () => HttpResponse.json({ message: 'Username is already taken' }, { status: 409 }))
       const { user } = await renderEditProfile()
 
       await replaceText(user, 'Username', 'grace')
@@ -242,12 +283,12 @@ describe('EditProfile', () => {
     })
 
     it('disables Save and shows a spinner while saving', async () => {
-      mockProfiles()
+      const profiles = mockProfiles()
       let release
       const gate = new Promise((resolve) => {
         release = resolve
       })
-      mockPatch(async (body) => {
+      mockPatch(profiles, async (body) => {
         await gate
         return HttpResponse.json({ id: 'u1', email: 'ada@example.com', username: 'ada', bio: body.bio, createdAt: CREATED_AT })
       })
@@ -267,8 +308,8 @@ describe('EditProfile', () => {
     })
 
     it('after a username change lands on /u/<new> with the new data and no stale username cached', async () => {
-      mockProfiles()
-      const requests = mockPatch()
+      const profiles = mockProfiles()
+      const requests = mockPatch(profiles)
       const { user, queryClient } = await renderEditProfile()
       expect(queryClient.getQueryData(profileQueryKey('ada'))).toEqual(ADA_PROFILE)
 
@@ -296,14 +337,36 @@ describe('EditProfile', () => {
         bio: 'Renamed',
         createdAt: CREATED_AT,
       })
+      // The old username's entry goes once nothing observes it: when the right rail's profile card
+      // has moved to the new username too.
+      await waitFor(() =>
+        expect(screen.getByRole('link', { name: 'View profile' })).toHaveAttribute('href', '/u/ada_l'),
+      )
       expect(queryClient.getQueryState(profileQueryKey('ada'))).toBeUndefined()
+    })
+
+    it("after a username change never requests the old username (it isn't re-created by a stale observer)", async () => {
+      const profiles = mockProfiles()
+      mockPatch(profiles)
+      const { user, queryClient } = await renderEditProfile()
+
+      await replaceText(user, 'Username', 'ada_l')
+      await save(user)
+
+      expect(await screen.findByRole('heading', { name: '@ada_l' })).toBeInTheDocument()
+      await waitFor(() =>
+        expect(screen.getByRole('link', { name: 'View profile' })).toHaveAttribute('href', '/u/ada_l'),
+      )
+      expect(queryClient.getQueryState(profileQueryKey('ada'))).toBeUndefined()
+      const afterPatch = profiles.log.slice(profiles.log.indexOf('PATCH /users/me') + 1)
+      expect(afterPatch).not.toContain('GET /users/ada')
     })
   })
 
   describe('name', () => {
     it('is empty for a user without a name, who can save other changes without setting one', async () => {
-      mockProfiles()
-      const requests = mockPatch()
+      const profiles = mockProfiles()
+      const requests = mockPatch(profiles)
       const { user } = await renderEditProfile()
 
       expect(screen.getByLabelText('Name')).toHaveValue('')
@@ -317,8 +380,8 @@ describe('EditProfile', () => {
     })
 
     it('ignores a whitespace-only name for a user without one (never sends "")', async () => {
-      mockProfiles()
-      const requests = mockPatch()
+      const profiles = mockProfiles()
+      const requests = mockPatch(profiles)
       const { user } = await renderEditProfile()
 
       await replaceText(user, 'Name', '   ')
@@ -330,13 +393,9 @@ describe('EditProfile', () => {
     })
 
     it('sets a name for a user without one and shows it on the profile', async () => {
-      // The server keeps the saved name, so the profile page's refetch returns it too.
-      const profiles = { ada: { ...ADA_PROFILE } }
-      mockProfiles(profiles)
-      const requests = mockPatch((body) => {
-        profiles.ada.displayName = body.displayName
-        return HttpResponse.json({ id: 'u1', email: 'ada@example.com', ...profiles.ada })
-      })
+      // The store keeps the saved name, so the profile page's refetch returns it too.
+      const profiles = mockProfiles()
+      const requests = mockPatch(profiles)
       const { user, queryClient } = await renderEditProfile()
 
       await replaceText(user, 'Name', '  Ada Lovelace  ')
@@ -355,8 +414,8 @@ describe('EditProfile', () => {
     })
 
     it('is prefilled and can be changed', async () => {
-      mockProfiles({ ada: NAMED_ADA_PROFILE })
-      const requests = mockPatch()
+      const profiles = mockProfiles({ ada: NAMED_ADA_PROFILE })
+      const requests = mockPatch(profiles)
       const { user } = await renderEditProfile()
 
       expect(screen.getByLabelText('Name')).toHaveValue('Ada Lovelace')
@@ -371,8 +430,8 @@ describe('EditProfile', () => {
     })
 
     it("isn't sent when unchanged", async () => {
-      mockProfiles({ ada: NAMED_ADA_PROFILE })
-      const requests = mockPatch((body) =>
+      const profiles = mockProfiles({ ada: NAMED_ADA_PROFILE })
+      const requests = mockPatch(profiles, (body) =>
         HttpResponse.json({
           id: 'u1',
           email: 'ada@example.com',
@@ -392,8 +451,8 @@ describe('EditProfile', () => {
     })
 
     it.each(['', '   '])("can't be cleared once set (%j)", async (value) => {
-      mockProfiles({ ada: NAMED_ADA_PROFILE })
-      const requests = mockPatch()
+      const profiles = mockProfiles({ ada: NAMED_ADA_PROFILE })
+      const requests = mockPatch(profiles)
       const { user } = await renderEditProfile()
 
       await replaceText(user, 'Name', value)
@@ -408,8 +467,8 @@ describe('EditProfile', () => {
     })
 
     it('rejects a name longer than 50 characters', async () => {
-      mockProfiles()
-      const requests = mockPatch()
+      const profiles = mockProfiles()
+      const requests = mockPatch(profiles)
       const { user } = await renderEditProfile()
 
       await replaceText(user, 'Name', 'a'.repeat(51))
@@ -421,8 +480,8 @@ describe('EditProfile', () => {
   })
 
   it('Cancel goes back to your own profile', async () => {
-    mockProfiles()
-    const requests = mockPatch()
+    const profiles = mockProfiles()
+    const requests = mockPatch(profiles)
     const { user } = await renderEditProfile()
 
     const cancel = screen.getByRole('link', { name: 'Cancel' })
