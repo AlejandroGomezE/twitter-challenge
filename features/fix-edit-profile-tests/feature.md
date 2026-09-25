@@ -50,6 +50,9 @@ wrong. Separately, the rename test ("no stale username cached") may be showing a
 
 ## Follow-ups
 
+## PRs
+- #14 · https://github.com/AlejandroGomezE/twitter-challenge/pull/14
+
 ## Log
 - 2026-09-25 · framed
 - 2026-09-25 · built — stateful test mock (T1) + rename stale-cache fix with a pinning test (T2). EditProfile 25/25 on 5 extra consecutive runs; full suite 52 files / 607 tests green twice; build + lint green
