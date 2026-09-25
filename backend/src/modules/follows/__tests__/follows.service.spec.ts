@@ -56,6 +56,7 @@ describe('FollowsService', () => {
     followerCount: vi.fn(),
     followingCount: vi.fn(),
     followedIds: vi.fn(),
+    followerIdsAmong: vi.fn(),
     findFollowersPage: vi.fn(),
     findFollowingPage: vi.fn(),
     relationsAmong: vi.fn(),
@@ -357,6 +358,18 @@ describe('FollowsService', () => {
   });
 
   describe('exports for other modules', () => {
+    it('followerIdsAmong delegates to the repository', async () => {
+      followsRepository.followerIdsAmong.mockResolvedValue(['b']);
+
+      await expect(
+        service.followerIdsAmong(VIEWER_ID, ['b', 'c']),
+      ).resolves.toEqual(['b']);
+      expect(followsRepository.followerIdsAmong).toHaveBeenCalledWith(
+        VIEWER_ID,
+        ['b', 'c'],
+      );
+    });
+
     it('followedIds delegates to the repository', async () => {
       followsRepository.followedIds.mockResolvedValue(['a', 'b']);
 

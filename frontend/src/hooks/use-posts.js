@@ -149,6 +149,12 @@ export function resetLikeBursts(queryClient) {
   likeBursts.delete(queryClient);
 }
 
+// Whether post `postId` has a like burst that hasn't finished yet (requests in flight, or the
+// final reconcile still pending). Read-only; lets realtime count updates stay out of its way.
+export function hasLikeInFlight(queryClient, postId) {
+  return likeBursts.get(queryClient)?.has(postId) ?? false;
+}
+
 const applyLike = (liked) => (post) =>
   post.likedByMe === liked
     ? post

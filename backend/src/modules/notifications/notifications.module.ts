@@ -8,7 +8,8 @@ import { NotificationsService } from './notifications.service.js';
 // NotificationsListener from the domain events (common/events/) that the
 // posts and follows modules emit, so this module imports neither of them and
 // they stay unaware of it. PrismaService and EventEmitter2 come from global
-// modules.
+// modules. NotificationsService is exported for the realtime module (the
+// unread count pushed on `notification.changed`).
 @Module({
   controllers: [NotificationsController],
   providers: [
@@ -16,5 +17,6 @@ import { NotificationsService } from './notifications.service.js';
     NotificationsService,
     NotificationsListener,
   ],
+  exports: [NotificationsService],
 })
 export class NotificationsModule {}

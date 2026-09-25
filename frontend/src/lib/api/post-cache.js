@@ -103,13 +103,18 @@ export function updatePostInCaches(queryClient, id, updater) {
   queryClient.setQueryData(postKeys.detail(id), (post) => (post ? updater(post) : post));
 }
 
-// Drops post `id` from every list and removes its detail and comments entries.
-export function removePostFromCaches(queryClient, id) {
+// Drops post `id` from every list (its detail and comments entries are left alone).
+export function removePostFromLists(queryClient, id) {
   queryClient.setQueriesData({ queryKey: postKeys.lists() }, (data) =>
     mapPages(data, (items) =>
       items.some((post) => post.id === id) ? items.filter((post) => post.id !== id) : items,
     ),
   );
+}
+
+// Drops post `id` from every list and removes its detail and comments entries.
+export function removePostFromCaches(queryClient, id) {
+  removePostFromLists(queryClient, id);
   queryClient.removeQueries({ queryKey: postKeys.detail(id), exact: true });
   queryClient.removeQueries({ queryKey: postKeys.comments(id), exact: true });
 }

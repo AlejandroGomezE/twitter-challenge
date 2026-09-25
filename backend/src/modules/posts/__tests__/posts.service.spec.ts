@@ -47,6 +47,7 @@ describe('PostsService', () => {
     like: vi.fn(),
     unlike: vi.fn(),
     likeCount: vi.fn(),
+    activityCounts: vi.fn(),
   };
 
   const followsService = { followedIds: vi.fn() };
@@ -87,6 +88,27 @@ describe('PostsService', () => {
       });
       // A new post has no activity: no count queries.
       expect(postsRepository.countsFor).not.toHaveBeenCalled();
+    });
+
+    it('emits post.created with the post and its author once stored', async () => {
+      postsRepository.create.mockResolvedValue(POST);
+
+      await service.create(AUTHOR_ID, 'hello world');
+
+      expect(eventEmitter.emit).toHaveBeenCalledTimes(1);
+      expect(eventEmitter.emit).toHaveBeenCalledWith(DomainEvent.PostCreated, {
+        postId: 'post-1',
+        authorId: AUTHOR_ID,
+      });
+    });
+
+    it('emits nothing when the insert fails', async () => {
+      postsRepository.create.mockRejectedValue(new Error('db down'));
+
+      await expect(service.create(AUTHOR_ID, 'hello world')).rejects.toThrow(
+        'db down',
+      );
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
     });
   });
 
@@ -142,6 +164,11 @@ describe('PostsService', () => {
         'post-1',
         AUTHOR_ID,
       );
+      expect(eventEmitter.emit).toHaveBeenCalledTimes(1);
+      expect(eventEmitter.emit).toHaveBeenCalledWith(DomainEvent.PostDeleted, {
+        postId: 'post-1',
+        authorId: AUTHOR_ID,
+      });
     });
 
     it('throws 404 for an unknown id', async () => {
@@ -152,6 +179,7 @@ describe('PostsService', () => {
       await expect(promise).rejects.toBeInstanceOf(NotFoundException);
       await expect(promise).rejects.toThrow('Post not found');
       expect(postsRepository.deleteByIdAndAuthor).not.toHaveBeenCalled();
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
     });
 
     it("throws 403 for someone else's post and deletes nothing", async () => {
@@ -164,6 +192,7 @@ describe('PostsService', () => {
         'You can only delete your own posts',
       );
       expect(postsRepository.deleteByIdAndAuthor).not.toHaveBeenCalled();
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
     });
 
     it('throws 404 when the post disappears before the delete', async () => {
@@ -173,6 +202,7 @@ describe('PostsService', () => {
       await expect(service.delete('post-1', AUTHOR_ID)).rejects.toBeInstanceOf(
         NotFoundException,
       );
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
     });
   });
 
@@ -542,6 +572,27 @@ describe('PostsService', () => {
 
       await expect(service.countByAuthor(AUTHOR_ID)).resolves.toBe(7);
       expect(postsRepository.countByAuthor).toHaveBeenCalledWith(AUTHOR_ID);
+    });
+  });
+
+  describe('counts', () => {
+    it("returns the repository's like/comment totals", async () => {
+      postsRepository.activityCounts.mockResolvedValue({
+        likeCount: 4,
+        commentCount: 1,
+      });
+
+      await expect(service.counts('post-1')).resolves.toEqual({
+        likeCount: 4,
+        commentCount: 1,
+      });
+      expect(postsRepository.activityCounts).toHaveBeenCalledWith('post-1');
+    });
+
+    it('resolves null when the post no longer exists', async () => {
+      postsRepository.activityCounts.mockResolvedValue(null);
+
+      await expect(service.counts('gone')).resolves.toBeNull();
     });
   });
 });
