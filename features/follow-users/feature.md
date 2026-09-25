@@ -119,6 +119,9 @@ on profiles, a working "Following" feed tab, and the "Who to follow" card.
 - [ ] Follow-list dialog opens with a visible focus ring on the selected tab (Radix autofocus) ·
   cosmetic.
 
+## PRs
+- https://github.com/AlejandroGomezE/twitter-challenge/pull/10
+
 ## Log
 - 2026-09-24 · framed
 - 2026-09-24 · built — follow/unfollow (idempotent, throttled), followers/following lists + dialog, profile counts + Follows you, Following (default) / For you feeds, Who to follow; docs. BE 29 suites / 334 unit + 4 suites / 137 e2e, FE 37 suites / 381, build/lint green.
