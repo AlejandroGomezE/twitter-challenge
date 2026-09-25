@@ -1,21 +1,97 @@
 # RUNBOOK — running twitter-clone
 
-Context for **Alejandro and AI agents**: how to check the environment and launch each
-app, from the repo root.
+How to set up, run and test the app, from a fresh clone. The technical decisions (stack,
+[timeline and follow graph](README.md#4-timeline-and-follow-graph), [auth](README.md#5-authentication),
+[trade-offs](README.md#9-trade-offs-and-known-limitations)) are in the root [README.md](README.md).
 
-> **Overview and technical decisions** (stack, [timeline and follow graph](README.md#4-timeline-and-follow-graph),
-> [auth](README.md#5-authentication), [trade-offs](README.md#9-trade-offs-and-known-limitations)) live in the
-> root [README.md](README.md). This Runbook is the source for setup and operations.
+**Quickest paths:**
 
-> **Golden rule:** always work from the repo root (where `backend/`, `frontend/`, and
-> `.claude/` are siblings). The scripts resolve their own paths, so `scripts/<name>`
-> works from any cwd — but the repo root is the home.
+- **Docker only:** `docker compose up --build` from the repo root, then open http://localhost:8080
+  (see [Run with Docker](#run-with-docker)).
+- **Local dev:** follow [First-time setup](#first-time-setup-fresh-clone--new-machine) below, then
+  open http://localhost:5173.
+- Either way, sign in as **`demo@example.com` / `password1234`** (seeded demo account), or create
+  an account at `/sign-up`.
 
-This is a plain two-app repo: `backend/` and `frontend/`
-are each their own independent npm project with their own `package.json` and
-`node_modules`. The scripts under `scripts/` are thin wrappers that `cd` into one of
-them and run its own npm scripts — they don't add any build/orchestration logic of
-their own.
+The repo is two independent npm projects, `backend/` and `frontend/`, each with its own
+`package.json` and `node_modules`. The scripts under `scripts/` are thin wrappers that `cd` into
+one of them and run its npm scripts. Commands below are run from the repo root unless they `cd`
+first (the scripts resolve their own paths, so `scripts/<name>` works from any directory).
+
+---
+
+## First-time setup (fresh clone / new machine)
+
+The database is a local SQLite file (`backend/prisma/dev.db`), and both the file and the generated
+Prisma client (`backend/src/generated/prisma`) are git-ignored. On a fresh clone neither exists yet,
+and `npm install` doesn't create them because there's no `postinstall` hook.
+
+**Prerequisites:**
+
+- **Node ^22.12 (22 LTS), 24 or 26+**, with the npm it ships (10 or 11). `.nvmrc` pins 22, so with
+  nvm: `nvm install && nvm use`. Odd majors (23, 25) and anything older than 22.12 aren't
+  supported: the frontend's Vitest and the backend's `better-sqlite3` require it, and it's what
+  `engines` in both `package.json` files and `scripts/check-env` enforce.
+- **git**, and **bash** for `scripts/` (on Windows: Git Bash or WSL, see [Cross-platform](#cross-platform)).
+- **A C/C++ build toolchain** for the native `better-sqlite3` build during `npm install`: Xcode
+  Command Line Tools on macOS (`xcode-select --install`), `build-essential` + `python3` on Debian/Ubuntu.
+- **Chromium for Playwright** (only for the browser E2E suite): installed once with
+  `npx playwright install chromium` from `frontend/`, included in the commands below.
+- **Docker** (optional, only for [Run with Docker](#run-with-docker)): Docker Engine with the Compose v2
+  plugin (`docker compose`). Verified with Docker 28.
+
+Then run these once, in order:
+
+```bash
+git clone https://github.com/AlejandroGomezE/twitter-challenge.git
+cd twitter-challenge
+nvm install && nvm use            # only with nvm: installs and selects the Node pinned in .nvmrc
+scripts/check-env                 # Node ^22.12 / 24 / 26+, npm; it will flag the missing node_modules/.env
+
+# Backend
+cd backend
+npm install                       # also builds the native better-sqlite3 / argon2 modules
+cp .env.example .env              # the defaults work as-is; see Environment variables
+npx prisma generate               # writes the client to src/generated/prisma
+npx prisma db push                # creates prisma/dev.db with every table in the current schema
+npm run db:seed                   # loads the demo data (30 users, posts, follows, likes…)
+cd ..
+
+# Frontend
+cd frontend
+npm install
+cp .env.example .env              # optional: VITE_API_URL already defaults to http://localhost:3000
+npx playwright install chromium   # one-time browser download, only for the browser E2E suite
+cd ..
+
+scripts/check-env                 # should now report everything OK
+```
+
+Then start the app in development mode, each in its own terminal, from the repo root:
+
+```bash
+scripts/be-local                  # backend on http://localhost:3000 (watch mode)
+scripts/fe-local                  # frontend on http://localhost:5173
+```
+
+Open http://localhost:5173 and sign in as `demo@example.com` / `password1234`. To run the tests,
+see [Run all tests](#run-all-tests).
+
+- No database server is needed (no Postgres). Docker is optional; see
+  [Run with Docker](#run-with-docker). The Prisma CLI picks up
+  `prisma7.config.ts` on its own, so you don't need a `--config` flag.
+- This schema has no migrations folder. `db push` syncs the schema into the database directly.
+- `npm run db:seed` fills the DB with demo data; sign in as `demo@example.com` /
+  `password1234` (more accounts in Backend → Seed data). Skip it to start with an empty DB and
+  create an account through `/sign-up` in the frontend.
+- To check it worked, run `npx prisma studio` from `backend/`. It opens a browser UI that lists the tables.
+- **To start over** (wipe the dev DB, e.g. after a schema change that `db push` can't apply to
+  existing rows): stop the backend, delete `backend/prisma/dev.db*` and run `npx prisma db push`
+  again from `backend/` (plus `npx prisma generate` if the client is stale). The DB is empty
+  afterwards; run `npm run db:seed` again for the demo data. To go back to the demo data without
+  touching the schema, `npm run db:seed` alone is enough — it resets the data itself.
+- The test suites don't need `dev.db`: the backend e2e suite builds its own `prisma/e2e.db` and the
+  browser E2E suite its own `prisma/playwright.db` on every run.
 
 ---
 
@@ -31,90 +107,9 @@ their own.
 | Stop the **frontend** | `scripts/down-fe` |
 | Run the **whole stack in Docker** (`:8080` + `:3000`) | `docker compose up --build` — see [Run with Docker](#run-with-docker) |
 | Load the **demo data** (**wipes** the dev DB first) | `cd backend && npm run db:seed` — see Backend → Seed data |
-| Run the **full test suite** | see [Run all tests](#run-all-tests) |
+| Run the **full test suite** (unit, backend e2e, browser E2E) | see [Run all tests](#run-all-tests) |
+| Run the **browser E2E** suite (Playwright) | `cd frontend && npm run test:e2e` |
 | See every **environment variable** | see [Environment variables](#environment-variables) |
-
-**Try it locally:** run `scripts/be-local` and `scripts/fe-local`, open
-http://localhost:5173 — you land on `/sign-in`; sign in as `demo@example.com` / `password1234` once
-the DB is seeded (see Backend → Seed data), or use "Create an account" (`/sign-up`). First time
-after pulling the auth change, run `npx prisma db push` from `backend/` (see Backend → Auth);
-after pulling the profile change, run `npx prisma db push --force-reset` instead (see Backend →
-Profiles — it wipes the dev DB); after pulling the posts, the follows, the user-search
-(display names) or the notifications change, a plain `npx prisma db push` is enough (additive — see
-Backend → Posts / Follows / Search / Notifications). The realtime change needs nothing extra (no
-schema change — see Backend → Realtime).
-
----
-
-## First-time setup (fresh clone / new machine)
-
-The database is a local SQLite file (`backend/prisma/dev.db`), and both the file and the generated
-Prisma client (`backend/src/generated/prisma`) are git-ignored. On a fresh clone neither exists yet,
-and `npm install` doesn't create them because there's no `postinstall` hook.
-
-**Prerequisites:**
-
-- **Node 22.12+ (22 LTS) or Node 24**, with the npm it ships (10 or 11). `.nvmrc` pins 22, so with nvm:
-  `nvm install && nvm use`. Odd majors (23, 25) and anything older than 22.12 aren't supported: the
-  frontend's Vitest and the backend's `better-sqlite3` require it, and it's what `engines` in both
-  `package.json` files and `scripts/check-env` enforce.
-- **git**, and **bash** for `scripts/` (on Windows: Git Bash or WSL, see [Cross-platform](#cross-platform)).
-- **A C/C++ build toolchain** for the native `better-sqlite3` build during `npm install`: Xcode
-  Command Line Tools on macOS (`xcode-select --install`), `build-essential` + `python3` on Debian/Ubuntu.
-- **Docker** (optional, only for [Run with Docker](#run-with-docker)): Docker Engine with the Compose v2
-  plugin (`docker compose`). Verified with Docker 28.
-
-Then run these once, in order:
-
-```bash
-git clone https://github.com/AlejandroGomezE/twitter-challenge.git
-cd twitter-challenge
-nvm install && nvm use            # only with nvm: installs and selects the Node pinned in .nvmrc
-scripts/check-env                 # Node ^22.12 / 24, npm; it will flag the missing node_modules/.env
-
-# Backend
-cd backend
-npm install                       # also builds the native better-sqlite3 / argon2 modules
-cp .env.example .env              # the defaults work as-is; see Environment variables
-npx prisma generate               # writes the client to src/generated/prisma
-npx prisma db push                # creates prisma/dev.db with every table in the current schema
-npm run db:seed                   # loads the demo data (30 users, posts, follows, likes…)
-cd ..
-
-# Frontend
-cd frontend
-npm install
-cp .env.example .env              # optional: VITE_API_URL already defaults to http://localhost:3000
-cd ..
-
-scripts/check-env                 # should now report everything OK
-```
-
-Then start the app in development mode, each in its own terminal, from the repo root:
-
-```bash
-scripts/be-local                  # backend on http://localhost:3000 (watch mode)
-scripts/fe-local                  # frontend on http://localhost:5173
-```
-
-Open http://localhost:5173 and sign in as `demo@example.com` / `password1234`.
-
-- No database server is needed (no Postgres). Docker is optional; see
-  [Run with Docker](#run-with-docker). The Prisma CLI picks up
-  `prisma7.config.ts` on its own, so you don't need a `--config` flag.
-- This schema has no migrations folder. `db push` syncs the schema into the database directly.
-- The "after pulling the X change, run `db push`…" notes further down are for existing
-  databases. A fresh `db push` already creates the latest schema, so you can skip them,
-  including the `--force-reset` one.
-- `npm run db:seed` fills the DB with demo data; sign in as `demo@example.com` /
-  `password1234` (more accounts in Backend → Seed data). Skip it to start with an empty DB and
-  create an account through `/sign-up` in the frontend.
-- To check it worked, run `npx prisma studio` from `backend/`. It opens a browser UI that lists the tables.
-- To start over, delete `backend/prisma/dev.db*` and run `npx prisma db push` again.
-  `npx prisma db push --force-reset` does the same thing. Either way the DB is empty afterwards;
-  run `npm run db:seed` again for the demo data. (To go back to the demo data without touching
-  the schema, `npm run db:seed` alone is enough — it resets the data itself.)
-- The e2e suite doesn't need any of this. It builds its own `prisma/e2e.db` on every run.
 
 ---
 
@@ -142,17 +137,26 @@ For local development the `.env.example` values work unchanged.
 
 ## Run all tests
 
-From the repo root, after [First-time setup](#first-time-setup-fresh-clone--new-machine). No
-server needs to be running, and the dev database is never touched:
+From the repo root, after [First-time setup](#first-time-setup-fresh-clone--new-machine)
+(including `npx playwright install chromium`). No server needs to be running, and the dev database
+is never touched:
 
 ```bash
 (cd backend && npm run test:cov && npm run test:e2e)   # backend unit tests with coverage, then e2e
 (cd frontend && npm run test:cov)                      # frontend tests with coverage
+(cd frontend && npm run test:e2e)                      # browser E2E (Playwright + Chromium)
 ```
 
 - `npm run test:cov` prints a coverage summary. Use `npm test` for the same run without coverage.
 - The backend e2e suite runs the real app against its own `backend/prisma/e2e.db`, which it
   rebuilds on every run and deletes afterwards.
+- The browser E2E suite (`frontend/e2e/`, config in `frontend/playwright.config.ts`) starts its
+  own servers: the backend built and run on **:3100** and a Vite dev server on **:5174**, with the
+  backend on its own SQLite file, `backend/prisma/playwright.db`, recreated at the start of every
+  run (`dev.db` is untouched). It needs the backend set up (First-time setup: `npm install` +
+  `prisma generate` in `backend/`), Chromium installed, and ports 3100 and 5174 free — it never
+  reuses a server already running there. The first run takes a little longer (it builds the
+  backend).
 - Current results are in the README's [Testing](README.md#7-testing) section.
 
 ---
@@ -215,7 +219,7 @@ docker compose down -v            # stop and wipe the database (removes the volu
 
 ## Scripts index
 
-- **`scripts/check-env`** — checks Node (^22.12, 24 or >=26, the `engines` range; see `.nvmrc`)
+- **`scripts/check-env`** — checks Node (^22.12, 24 or 26+, the `engines` range; see `.nvmrc`)
   and npm are installed, that `backend/node_modules` and
   `frontend/node_modules` are present, and that `backend/.env` exists. It also reports whether
   Docker (optional, for [Run with Docker](#run-with-docker)) is available. Read-only.
@@ -298,8 +302,6 @@ from `backend/.env` (create it from `backend/.env.example`; it's git-ignored).
     `AuthGuard` (`APP_GUARD`); opt a route out with `@Public()`. POST/PUT/PATCH/DELETE with
     an `Origin` other than `FRONTEND_ORIGIN` get 403, public routes included.
   - Sign-up and sign-in are rate limited to 5 requests/minute per IP (429 beyond).
-  - **After pulling this change, run `npx prisma db push` from `backend/`** to create the
-    `User`/`Session` tables (and `npx prisma generate` if the client is stale).
 - **Profiles** (`src/modules/users/`, `users.controller.ts`) — both routes session-gated:
   - `GET /users/:username` → `{ username, displayName, bio, createdAt, postCount, followerCount,
     followingCount, isFollowing, followsYou }` (case-insensitive lookup; never the email or id) or
@@ -321,9 +323,6 @@ from `backend/.env` (create it from `backend/.env.example`; it's git-ignored).
   - `src/modules/users/username.rules.ts` is authoritative (username, bio and display name); the
     frontend copy in `frontend/src/lib/validation/profile-schemas.ts` (incl. `RESERVED_USERNAMES`)
     must match.
-  - **After pulling this change, run `npx prisma db push --force-reset` from `backend/`.** It
-    **wipes the dev DB** (the new required `username` column can't be added to existing rows) —
-    re-create your accounts afterwards.
 - **Posts, likes, comments** (`src/modules/posts/`; a user's posts in `src/modules/users/`) — every
   route session-gated (401 without a session; writes with a foreign `Origin` → 403); author/viewer
   ids come only from the session. `Post` = `{ id, body, createdAt, author: { username,
@@ -358,8 +357,6 @@ from `backend/.env` (create it from `backend/.env.example`; it's git-ignored).
   - **Rate limits** (429 `Too many requests, please try again later`, rejected 400s count too):
     create post 10/min and create comment 20/min per signed-in user; sign-in / sign-up 5/min per IP
     (per route); follow / unfollow 30/min (see Follows). Likes aren't limited.
-  - **After pulling this change, run `npx prisma db push` from `backend/`** (plain — the new
-    tables are additive, no reset) and `npx prisma generate` if the client is stale.
 - **Follows** (`src/modules/follows/`, routes under `/users` beside `UsersController`) — every route
   session-gated (401 without a session; writes with a foreign `Origin` → 403); the follower is
   always the session user. Usernames in the path are case-insensitive. `FollowUser` = `{ username,
@@ -382,8 +379,6 @@ from `backend/.env` (create it from `backend/.env.example`; it's git-ignored).
   - **Rate limit:** `PUT` and `DELETE` get 30/min **each** per signed-in user
     (`FOLLOW_LIMIT_PER_MINUTE`, a constant in `follows.controller.ts` — not an env var); other users
     are unaffected. The lists and suggestions aren't limited.
-  - **After pulling this change, run `npx prisma db push` from `backend/`** (plain — `Follow` is a
-    new table, no reset) and `npx prisma generate` if the client is stale.
 - **Search** (`src/modules/users/search.controller.ts`, in the users module) — session-gated (401
   without a session). Finds users by username **or** display name:
 
@@ -402,9 +397,6 @@ from `backend/.env` (create it from `backend/.env.example`; it's git-ignored).
     `Invalid cursor`); `limit` 1–50, default 20. Not rate limited.
   - The route is `/search/users`, not `/users/search`: `search` isn't a reserved username, so
     `/users/search` would shadow a user called "search".
-  - **After pulling this change (it also adds `User.displayName`), run `npx prisma db push` from
-    `backend/`** (plain — a new nullable column, no reset; existing users get `null`) and
-    `npx prisma generate` if the client is stale.
 - **Notifications** (`src/modules/notifications/`) — every route session-gated (401 without a
   session; the POST with a foreign `Origin` → 403) and always the session user's own. Created
   asynchronously from domain events (`src/common/events/`) when someone follows you, likes your
@@ -422,8 +414,6 @@ from `backend/.env` (create it from `backend/.env.example`; it's git-ignored).
 
   - Paging works like the posts listings (opaque `cursor`, `limit` 1–50, default 20, an empty
     `cursor=` → 400). Not rate limited.
-  - **After pulling this change, run `npx prisma db push` from `backend/`** (plain — `Notification`
-    is a new table, no reset) and `npx prisma generate` if the client is stale.
 - **Realtime** (`src/modules/realtime/`) — `GET /events`, one Server-Sent Events stream per tab
   (`text/event-stream`), session-gated by the `sid` cookie like every other route (401 without a
   live session, before any stream opens). Not rate limited — `EventSource` reconnects on its own.
@@ -450,7 +440,6 @@ from `backend/.env` (create it from `backend/.env.example`; it's git-ignored).
     http://localhost:3000/events` — you'll see a `: ping` every 25s, and events as other users
     post, like, comment or delete (your own posts, likes and comments aren't echoed back to you). The `Origin`
     header is optional for this GET; without a valid cookie it's a 401.
-  - **After pulling this change: nothing to run** — no schema change, no new env var.
 - **Seed data** (`src/database/seed/`) — a fixed, hand-written demo data set so the app shows
   content right away. Needs the schema first (`npx prisma db push`). From `backend/`:
 
@@ -504,8 +493,15 @@ shadcn/ui (Radix base, Nova preset), and `react-router` for client-side routing.
   production build).
 - **Build**: `build` (`tsc -b && vite build` — a type error fails the build).
 - **Typecheck**: `typecheck` (`tsc -b`; `tsconfig.app.json` covers `src/`, `tsconfig.node.json`
-  covers `vite.config.ts`). API response shapes live in `src/lib/api/types.ts`.
+  covers `vite.config.ts`, `playwright.config.ts` and `e2e/`). API response shapes live in `src/lib/api/types.ts`.
 - **Lint**: `lint` (`eslint .`, with `typescript-eslint` recommended).
+- **Browser E2E**: `test:e2e` (`playwright test`, Chromium only). Specs in `e2e/*.spec.ts`
+  (`e2e/auth.spec.ts`: sign up → Home → sign out → gated redirect → sign in, plus a wrong
+  password; `e2e/layout.spec.ts`: the app shell at mobile, tablet and desktop widths; shared
+  helpers in `e2e/helpers.ts`), config in `playwright.config.ts`. It starts its own backend (:3100, built and
+  run from `../backend` against `prisma/playwright.db`, recreated each run) and Vite (:5174); see
+  [Run all tests](#run-all-tests). One-time `npx playwright install chromium`. Not part of
+  `npm test` (Vitest only includes `src/**`).
 - **Test**: `test` (`vitest run`), `test:watch`, `test:cov`. Vitest + jsdom + React
   Testing Library, config in `vite.config.ts`'s `test` block. Tests live in a
   `__tests__/` folder next to the code they cover (`src/**/__tests__/*.test.{ts,tsx}`). Shared helpers live in `src/test/`: `setup.ts`
@@ -565,10 +561,11 @@ shadcn/ui (Radix base, Nova preset), and `react-router` for client-side routing.
   without a vertical scrollbar (with a matching override so opening a dialog doesn't shift it
   either).
 - **App shell** — every gated page renders inside `components/layout/AppShell.tsx`, a layout
-  route (`ProtectedRoute` → `AppShell` → page) in `router.tsx`: left nav rail (`lg`+, labels at
-  `xl`), the page in the center column (it renders its own sticky `PageHeader`), right rail
+  route (`ProtectedRoute` → `AppShell` → page) in `router.tsx`: left nav rail (`sm`+, icon-only
+  until `xl`, labels at `xl`), the page in the center column (capped at 620px from `sm`, rail +
+  column centered as a group; it renders its own sticky `PageHeader`), right rail
   (`xl`: search, your profile card, who to follow — 366px with 8px inline padding, so the search
-  box's focus ring isn't clipped), and a bottom nav + compose button below `lg`. Nav items are
+  box's focus ring isn't clipped), and a bottom nav + compose button below `sm` (640px). Nav items are
   configured once in `layout/nav-items.ts`; Explore is a working item (side and bottom nav).
 - **Disabled items** — features without a backend yet are shown but disabled, never with fake
   counts or users. The composer's attachment icons and the post cards' Repost / Bookmark /

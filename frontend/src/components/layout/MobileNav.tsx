@@ -8,7 +8,7 @@ import { useNavBadgeCounts } from './use-nav-badge-counts'
 const itemClassName =
   'flex flex-1 justify-center py-3.5 outline-none focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/50'
 
-// Bottom bar below lg: the same nav config as the left rail, icons only (a count badge sits on the
+// Bottom bar below sm: the same nav config as the left rail, icons only (a count badge sits on the
 // icon, and the count is part of the item's `aria-label`).
 export function MobileNav() {
   const { user } = useAuth()
@@ -18,7 +18,7 @@ export function MobileNav() {
   return (
     <nav
       aria-label="Primary (mobile)"
-      className="sticky bottom-0 z-20 flex items-center justify-around border-t border-border bg-background/85 backdrop-blur-md lg:hidden"
+      className="sticky bottom-0 z-20 flex items-center justify-around border-t border-border bg-background/85 backdrop-blur-md sm:hidden"
     >
       {items.map(({ key, label, icon: Icon, to, end, badge }) => {
         const count = badge ? badgeCounts[badge] : undefined

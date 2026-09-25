@@ -13,7 +13,7 @@ import { useNavBadgeCounts } from './use-nav-badge-counts'
 const itemClassName =
   'flex items-center gap-4 rounded-full px-3 py-2.5 text-lg transition outline-none focus-visible:ring-3 focus-visible:ring-ring/50 xl:pr-6'
 
-// Left rail (lg and up): logo, primary nav, "New post" (→ Home, focusing the composer), then the
+// Left rail (sm and up): logo, primary nav, "New post" (→ Home, focusing the composer), then the
 // signed-in user chip and Sign out at the bottom. Labels collapse to icons below xl, so every item carries an
 // `aria-label` (which includes the unread count when the item shows a badge). A badge always sits on
 // the item's icon, with or without the label.
