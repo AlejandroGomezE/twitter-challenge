@@ -67,7 +67,10 @@ branch history to drop it before merge, plus rotating the credential.
   imported by `app.module.ts`. Unregistered = fails at boot, not compile — **Blocker**.
 - **DTOs.** Request DTOs carry `class-validator` decorators on every field (a field with none accepts
   anything — **Blocker** on a new field). A handler with no concrete return type (`Promise<any>`) is a
-  **Warning**.
+  **Warning**. The global `ValidationPipe` has **no implicit conversion**: a numeric or boolean field
+  that arrives as a string (every query param does) must declare its conversion explicitly
+  (`@Type(() => Number)`, or a strict `'true'`/`'false'` transform for booleans) — relying on
+  implicit coercion, or re-enabling it globally, is a **Blocker**.
 - **Response DTOs — every endpoint.** Every handler that returns a body returns a response DTO (a
   class in the module's `dto/` with `@Expose()` on each emitted field) declared on the handler with
   `@SerializeOptions({ type: XResponseDto })` and as its return type. The global
