@@ -97,9 +97,9 @@ on profiles, a working "Following" feed tab, and the "Who to follow" card.
   username, so it can't clash with a real `/users/:username/...` path.
 - 2026-09-24 · building · Follow/unfollow are throttled at 30/min per user per route
   (`FOLLOW_LIMIT_PER_MINUTE`). The plan said "like likes", but likes are deliberately unthrottled —
-  kept a throttle since the plan asked for one; open for Alejandro to change or drop.
+  kept a throttle since the plan asked for one. **Alejandro: keep 30/min** (2026-09-24).
 - 2026-09-24 · building · New shared components `FollowButton` and `FollowListDialog` (compose
-  existing shadcn `Button`/`Badge`/`Dialog`/`Tabs`) — **pending Alejandro's sign-off**
+  existing shadcn `Button`/`Badge`/`Dialog`/`Tabs`) — **signed off by Alejandro** (2026-09-24)
   (`knowledge/decisions/shadcn-component-preference.md`). FollowButton stays clickable while a
   request is in flight (no spinner), like the like button; bursts settle on the last confirmed state.
 - 2026-09-24 · building · Unfollowing from an open follow list keeps the row (now "Follow"), like
