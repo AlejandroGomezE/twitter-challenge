@@ -3,6 +3,10 @@
 Context for **Alejandro and AI agents**: how to check the environment and launch each
 app, from the repo root.
 
+> **Overview and technical decisions** (stack, [timeline and follow graph](README.md#4-timeline-and-follow-graph),
+> [auth](README.md#5-authentication), [trade-offs](README.md#9-trade-offs-and-known-limitations)) live in the
+> root [README.md](README.md). This Runbook is the source for setup and operations.
+
 > **Golden rule:** always work from the repo root (where `backend/`, `frontend/`, and
 > `.claude/` are siblings). The scripts resolve their own paths, so `scripts/<name>`
 > works from any cwd — but the repo root is the home.
