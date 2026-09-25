@@ -3,7 +3,9 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Test } from '@nestjs/testing';
+import { DomainEvent } from '../../../common/events/domain-events.js';
 import { Prisma } from '../../../generated/prisma/client.js';
 import { FollowsService } from '../../follows/follows.service.js';
 import { decodeCursor, encodeCursor } from '../pagination.js';
@@ -48,6 +50,7 @@ describe('PostsService', () => {
   };
 
   const followsService = { followedIds: vi.fn() };
+  const eventEmitter = { emit: vi.fn() };
 
   beforeEach(async () => {
     vi.resetAllMocks();
@@ -57,6 +60,7 @@ describe('PostsService', () => {
         PostsService,
         { provide: PostsRepository, useValue: postsRepository },
         { provide: FollowsService, useValue: followsService },
+        { provide: EventEmitter2, useValue: eventEmitter },
       ],
     }).compile();
     service = moduleRef.get(PostsService);
@@ -182,7 +186,7 @@ describe('PostsService', () => {
 
     it('likes the post as the given user and returns { liked: true, likeCount }', async () => {
       postsRepository.findById.mockResolvedValue(POST);
-      postsRepository.like.mockResolvedValue(undefined);
+      postsRepository.like.mockResolvedValue(true);
       postsRepository.likeCount.mockResolvedValue(3);
 
       await expect(service.setLiked('post-1', OTHER_ID, true)).resolves.toEqual(
@@ -203,6 +207,47 @@ describe('PostsService', () => {
       ).resolves.toEqual({ liked: false, likeCount: 0 });
       expect(postsRepository.unlike).toHaveBeenCalledWith(OTHER_ID, 'post-1');
       expect(postsRepository.like).not.toHaveBeenCalled();
+    });
+
+    it('emits like.created with the actor and the post author when the like was inserted', async () => {
+      postsRepository.findById.mockResolvedValue(POST);
+      postsRepository.like.mockResolvedValue(true);
+      postsRepository.likeCount.mockResolvedValue(1);
+
+      await service.setLiked('post-1', OTHER_ID, true);
+
+      expect(eventEmitter.emit).toHaveBeenCalledTimes(1);
+      expect(eventEmitter.emit).toHaveBeenCalledWith(DomainEvent.LikeCreated, {
+        actorId: OTHER_ID,
+        recipientId: AUTHOR_ID,
+        postId: 'post-1',
+      });
+    });
+
+    it('emits nothing when the like already existed', async () => {
+      postsRepository.findById.mockResolvedValue(POST);
+      postsRepository.like.mockResolvedValue(false);
+      postsRepository.likeCount.mockResolvedValue(1);
+
+      await expect(service.setLiked('post-1', OTHER_ID, true)).resolves.toEqual(
+        { liked: true, likeCount: 1 },
+      );
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
+    });
+
+    it('emits like.removed on unlike', async () => {
+      postsRepository.findById.mockResolvedValue(POST);
+      postsRepository.unlike.mockResolvedValue(undefined);
+      postsRepository.likeCount.mockResolvedValue(0);
+
+      await service.setLiked('post-1', OTHER_ID, false);
+
+      expect(eventEmitter.emit).toHaveBeenCalledTimes(1);
+      expect(eventEmitter.emit).toHaveBeenCalledWith(DomainEvent.LikeRemoved, {
+        actorId: OTHER_ID,
+        recipientId: AUTHOR_ID,
+        postId: 'post-1',
+      });
     });
 
     it.each([true, false])(
@@ -235,6 +280,7 @@ describe('PostsService', () => {
         expect(postsRepository.like).not.toHaveBeenCalled();
         expect(postsRepository.unlike).not.toHaveBeenCalled();
         expect(postsRepository.likeCount).not.toHaveBeenCalled();
+        expect(eventEmitter.emit).not.toHaveBeenCalled();
       },
     );
 
@@ -247,6 +293,7 @@ describe('PostsService', () => {
       await expect(promise).rejects.toBeInstanceOf(NotFoundException);
       await expect(promise).rejects.toThrow('Post not found');
       expect(postsRepository.likeCount).not.toHaveBeenCalled();
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
     });
 
     it('rethrows other errors unchanged', async () => {

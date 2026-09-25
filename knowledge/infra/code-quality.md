@@ -81,11 +81,13 @@ re-litigated from scratch each session. Only the auth shapes exist so far — se
 
 ## Backend — `common/` taxonomy
 
-Only `common/filters/` exists today (`all-exceptions.filter.ts`). When something
-cross-cutting is actually needed, this is where it goes — don't invent a different
-home for it:
+`common/filters/` (`all-exceptions.filter.ts`), `common/interceptors/` and `common/events/` exist
+today. When something cross-cutting is actually needed, this is where it goes — don't invent a
+different home for it:
 
 * `decorators/` — custom param/method decorators (`@CurrentUser()` and `@Public()` live in `auth/`, next to the guard)
+* `events/` — domain event names + payload types (`domain-events.ts`), emitted by services via
+  `emitDomainEvent` and consumed by `@OnEvent` listeners in other modules
 * `exceptions/` — custom domain exceptions (thrown by services, caught by the global
   filter)
 * `filters/` — exception filters

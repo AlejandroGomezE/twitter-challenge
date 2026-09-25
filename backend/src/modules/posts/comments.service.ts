@@ -3,13 +3,18 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import {
+  DomainEvent,
+  emitDomainEvent,
+} from '../../common/events/domain-events.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import {
   CommentsRepository,
   type CommentWithAuthor,
 } from './comments.repository.js';
 import { decodeCursor, encodeCursor, resolvePageSize } from './pagination.js';
-import { PostsRepository } from './posts.repository.js';
+import { PostsRepository, type PostWithAuthor } from './posts.repository.js';
 import { normalizeBody } from './posts.rules.js';
 import type { PageQuery } from './posts.service.js';
 
@@ -39,6 +44,7 @@ export class CommentsService {
   constructor(
     private readonly commentsRepository: CommentsRepository,
     private readonly postsRepository: PostsRepository,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   // Keyset page over (createdAt, id), oldest first. An invalid cursor is a
@@ -69,19 +75,20 @@ export class CommentsService {
   // `authorId` is always the session user's id. 404 if the post doesn't
   // exist: checked first, and again via the FK violation (P2003) if the post
   // is deleted between the check and the insert, so that race is a 404.
+  // Emits `comment.created` once the comment is stored.
   async create(
     postId: string,
     authorId: string,
     body: string,
   ): Promise<CommentView> {
-    await this.assertPostExists(postId);
+    const post = await this.findPostOrThrow(postId);
+    let comment: CommentWithAuthor;
     try {
-      const comment = await this.commentsRepository.create({
+      comment = await this.commentsRepository.create({
         postId,
         authorId,
         body: normalizeBody(body),
       });
-      return this.toView(comment);
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -91,6 +98,13 @@ export class CommentsService {
       }
       throw error;
     }
+    emitDomainEvent(this.eventEmitter, DomainEvent.CommentCreated, {
+      actorId: authorId,
+      recipientId: post.authorId,
+      postId,
+      commentId: comment.id,
+    });
+    return this.toView(comment);
   }
 
   // 404 if the comment is missing or belongs to another post; 403 if it is
@@ -118,10 +132,15 @@ export class CommentsService {
   }
 
   private async assertPostExists(postId: string): Promise<void> {
+    await this.findPostOrThrow(postId);
+  }
+
+  private async findPostOrThrow(postId: string): Promise<PostWithAuthor> {
     const post = await this.postsRepository.findById(postId);
     if (!post) {
       throw new NotFoundException(POST_NOT_FOUND_MESSAGE);
     }
+    return post;
   }
 
   private toView(comment: CommentWithAuthor): CommentView {

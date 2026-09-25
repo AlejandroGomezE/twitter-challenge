@@ -3,7 +3,9 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Test } from '@nestjs/testing';
+import { DomainEvent } from '../../../common/events/domain-events.js';
 import { Prisma } from '../../../generated/prisma/client.js';
 import {
   CommentsRepository,
@@ -60,6 +62,7 @@ describe('CommentsService', () => {
     deleteByIdAndAuthor: vi.fn(),
   };
   const postsRepository = { findById: vi.fn() };
+  const eventEmitter = { emit: vi.fn() };
 
   beforeEach(async () => {
     vi.resetAllMocks();
@@ -68,6 +71,7 @@ describe('CommentsService', () => {
         CommentsService,
         { provide: CommentsRepository, useValue: commentsRepository },
         { provide: PostsRepository, useValue: postsRepository },
+        { provide: EventEmitter2, useValue: eventEmitter },
       ],
     }).compile();
     service = moduleRef.get(CommentsService);
@@ -181,6 +185,24 @@ describe('CommentsService', () => {
       });
     });
 
+    it('emits comment.created with the actor, the post author and the ids', async () => {
+      postsRepository.findById.mockResolvedValue(POST);
+      commentsRepository.create.mockResolvedValue(COMMENT);
+
+      await service.create('post-1', AUTHOR_ID, 'nice');
+
+      expect(eventEmitter.emit).toHaveBeenCalledTimes(1);
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        DomainEvent.CommentCreated,
+        {
+          actorId: AUTHOR_ID,
+          recipientId: OTHER_ID,
+          postId: 'post-1',
+          commentId: 'comment-1',
+        },
+      );
+    });
+
     it('throws 404 Post not found for an unknown post and stores nothing', async () => {
       postsRepository.findById.mockResolvedValue(null);
 
@@ -189,6 +211,7 @@ describe('CommentsService', () => {
       await expect(promise).rejects.toBeInstanceOf(NotFoundException);
       await expect(promise).rejects.toThrow('Post not found');
       expect(commentsRepository.create).not.toHaveBeenCalled();
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
     });
 
     it('maps a concurrently deleted post (P2003) to 404', async () => {
@@ -199,6 +222,7 @@ describe('CommentsService', () => {
 
       await expect(promise).rejects.toBeInstanceOf(NotFoundException);
       await expect(promise).rejects.toThrow('Post not found');
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
     });
 
     it('rethrows any other error', async () => {
@@ -209,6 +233,7 @@ describe('CommentsService', () => {
       await expect(service.create('post-1', AUTHOR_ID, 'nice')).rejects.toBe(
         error,
       );
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
     });
   });
 

@@ -182,5 +182,17 @@ describe('AppRouter', () => {
 
       expect(await screen.findByRole('heading', { name: 'Home' })).toBeInTheDocument()
     })
+
+    it('shows the Notifications page at /notifications', async () => {
+      server.use(
+        http.get(apiUrl('/notifications'), () => HttpResponse.json({ items: [], nextCursor: null })),
+        http.get(apiUrl('/notifications/unread-count'), () => HttpResponse.json({ count: 0 })),
+      )
+
+      renderApp('/notifications')
+
+      expect(await screen.findByRole('heading', { level: 1, name: 'Notifications' })).toBeInTheDocument()
+      expect(screen.getByTestId('location')).toHaveTextContent('/notifications')
+    })
   })
 })
