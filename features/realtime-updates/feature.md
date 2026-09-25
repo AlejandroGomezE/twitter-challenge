@@ -1,8 +1,8 @@
 ---
 slug: realtime-updates
-status: verifying
+status: done
 scope: full-stack
-next: /close-feature realtime-updates
+next: —
 ---
 # Realtime updates
 
@@ -82,6 +82,7 @@ feeds). This builds on the domain events added by `notifications`.
 - [ ] Replay of events missed during a disconnect (`Last-Event-ID`) · out of scope by decision.
 - [ ] Two backend tasks running `npm run test:e2e` at the same time conflict, because globalSetup recreates the shared `prisma/e2e.db` (seen as `SQLITE_READONLY_DBMOVED` and spurious failures). Consider a per-run DB file · process note, found during Build.
 - [ ] `tsc --noEmit` (specs included) now also reports errors in `test/notifications.e2e-spec.ts`, on top of the known ones in `users.controller.spec.ts`, `comments.controller.spec.ts` and `follows.e2e-spec.ts`. `nest build` and vitest are unaffected · carried over from `notifications`.
+- [ ] `EditProfile.test.jsx` failures (carried from `notifications`) diagnosed at Close. They're a test race, not flakiness: the profile page's `alwaysFresh` refetch (from `follow-users`) hits a static `GET /users/:username` mock that ignores the PATCH, overwriting the saved data milliseconds after it renders. The rename test may also show a real stale `ada` cache entry recreated by the still-mounted edit page. To be fixed in a separate `fix` PR, as Alejandro chose.
 
 ## PRs
 - #13 · https://github.com/AlejandroGomezE/twitter-challenge/pull/13
@@ -91,3 +92,4 @@ feeds). This builds on the domain events added by `notifications`.
 - 2026-09-25 · built — T1–T6 done: domain events → RealtimeHub + GET /events SSE (session-checked heartbeat) → listeners; frontend RealtimeProvider, live badge, live counts/deletions, new-posts pill (moved into the feed list per Alejandro). be 44 files/553 unit + 7 files/205 e2e, fe 51 files/590 tests, builds + lint green
 - 2026-09-25 · built — T6 reworked per Alejandro: the new-posts pill now opens its own animated row (grid 0fr→1fr, fade/slide, reduced-motion aware) and still docks under the header. fe 51 files/591 tests, 590 pass + 1 known EditProfile flake; build + lint green (backend unchanged since the last full pass)
 - 2026-09-25 · verified — 39/39 live checks (bo in headless Chromium, ana/cy via API) covering all 5 ACs incl. a backend restart/reconnect and server-side close 24.5s after sign-out; row animation sampled per frame (0→56px over ~200ms with fade, instant under reduced motion); approved by Alejandro
+- 2026-09-25 · closed — PR #13, merged
