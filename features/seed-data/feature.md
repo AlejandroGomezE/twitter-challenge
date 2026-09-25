@@ -2,7 +2,7 @@
 slug: seed-data
 status: verifying
 scope: backend
-next: /review-feature seed-data
+next: /close-feature seed-data
 ---
 # Seed data
 
@@ -88,6 +88,7 @@ in the Runbook).
   `demo`.
 
 ## Follow-ups
+- [ ] Every file in `scripts/` is committed as mode 100644, so `scripts/be-local` etc. fail with "permission denied" (`bash scripts/<name>` works) · pre-existing (noted for check-env in docker-compose-stack, affects all scripts); a `git update-index --chmod=+x` chore.
 - [ ] The machine's default Node (v20.11.1) couldn't run the toolchain during Build; every check ran on Node v24.3.0 · Runbook/check-env say Node >= 20.11, which looks too low for Vite 8 / Vitest 4–5 — confirm the real minimum and pin it (`.nvmrc` / `engines`); separate change.
 - [ ] `npm ci` in backend/ still needs `--legacy-peer-deps` (lockfile typescript peer issue, already noted in docker-compose-stack) · an evaluator following the Runbook literally may hit it; separate change.
 - [ ] `features/docker-compose-stack/feature.md` is still `status: verifying` /
@@ -96,4 +97,5 @@ in the Runbook).
 
 ## Log
 - 2026-09-25 · framed
-- 2026-09-25 · built — seed module + runSeed, db:seed CLI \/ prisma db seed, Docker first-boot seeding (SEED_ON_START), Runbook seed section + sample credentials; verified against scratch DBs and a real docker compose run; BE build + lint clean, 45\/556 unit and 7\/205 e2e green
+- 2026-09-25 · built — seed module + runSeed, db:seed CLI / prisma db seed, Docker first-boot seeding (SEED_ON_START), Runbook seed section + sample credentials; verified against scratch DBs and a real docker compose run; BE build + lint clean, 45/556 unit and 7/205 e2e green
+- 2026-09-25 · verified — all 5 criteria pass against the running app: Runbook path + prisma db seed (30 users/194 posts/321 follows/1074 likes/31 comments/15 notifications), identical reseeds, demo in the browser (infinite-scroll Following, For you, likes, followers list, "an" search, 6 unread notifications), Docker first boot/restart/SEED_ON_START=false; seed-failure path not re-run (covered in Build)
