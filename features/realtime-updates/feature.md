@@ -2,7 +2,7 @@
 slug: realtime-updates
 status: verifying
 scope: full-stack
-next: /review-feature realtime-updates
+next: /close-feature realtime-updates
 ---
 # Realtime updates
 
@@ -87,3 +87,4 @@ feeds). This builds on the domain events added by `notifications`.
 - 2026-09-24 · framed
 - 2026-09-25 · built — T1–T6 done: domain events → RealtimeHub + GET /events SSE (session-checked heartbeat) → listeners; frontend RealtimeProvider, live badge, live counts/deletions, new-posts pill (moved into the feed list per Alejandro). be 44 files/553 unit + 7 files/205 e2e, fe 51 files/590 tests, builds + lint green
 - 2026-09-25 · built — T6 reworked per Alejandro: the new-posts pill now opens its own animated row (grid 0fr→1fr, fade/slide, reduced-motion aware) and still docks under the header. fe 51 files/591 tests, 590 pass + 1 known EditProfile flake; build + lint green (backend unchanged since the last full pass)
+- 2026-09-25 · verified — 39/39 live checks (bo in headless Chromium, ana/cy via API) covering all 5 ACs incl. a backend restart/reconnect and server-side close 24.5s after sign-out; row animation sampled per frame (0→56px over ~200ms with fade, instant under reduced motion); approved by Alejandro
