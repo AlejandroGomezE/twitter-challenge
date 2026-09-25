@@ -12,17 +12,12 @@
 FROM node:22-bookworm AS toolchain
 WORKDIR /app
 
-# `--legacy-peer-deps`: with the npm 10 bundled in node:22, `npm ci` rejects
-# this lockfile over an optional peer (tsconfck wants typescript@^5, the tree
-# has 6). The flag only relaxes that check; the tree installed is still
-# exactly the lockfile's.
-
 # Build: full install (dev deps included), generate the Prisma client into
 # src/generated/prisma, then `nest build`, which compiles it into
 # dist/generated/prisma along with the rest of src/.
 FROM toolchain AS build
 COPY package.json package-lock.json ./
-RUN npm ci --legacy-peer-deps && npm cache clean --force
+RUN npm ci && npm cache clean --force
 COPY nest-cli.json tsconfig.json tsconfig.build.json prisma7.config.ts ./
 COPY prisma/schema.prisma ./prisma/schema.prisma
 COPY src ./src
@@ -36,7 +31,7 @@ RUN npx prisma generate && npm run build
 # (the entrypoint needs it for `prisma db push`).
 FROM toolchain AS prod-deps
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev --legacy-peer-deps \
+RUN npm ci --omit=dev \
   && npm cache clean --force \
   && test -x node_modules/.bin/prisma
 

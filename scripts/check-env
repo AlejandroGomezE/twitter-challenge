@@ -20,10 +20,13 @@ if command -v node >/dev/null; then
   node_version="$(node --version)"
   major="${node_version#v}"; major="${major%%.*}"
   rest="${node_version#v*.}"; minor="${rest%%.*}"
-  if [ "${major:-0}" -gt 20 ] 2>/dev/null || { [ "${major:-0}" -eq 20 ] && [ "${minor:-0}" -ge 11 ]; }; then
+  # Matches "engines" in backend/ and frontend/package.json: ^22.12.0 || ^24.0.0 || >=26.0.0
+  # (frontend Vitest's range; better-sqlite3 also needs >=22). Odd majors (23, 25) are excluded.
+  if { [ "${major:-0}" -eq 22 ] && [ "${minor:-0}" -ge 12 ]; } 2>/dev/null \
+    || [ "${major:-0}" -eq 24 ] || [ "${major:-0}" -ge 26 ]; then
     ok "node $node_version"
   else
-    warn "node $node_version — frontend/vite.config.ts uses import.meta.dirname, which needs >=20.11"
+    err "node $node_version — needs ^22.12.0, ^24 or >=26 (see .nvmrc: \`nvm install && nvm use\`)"
   fi
 else
   err "node missing"

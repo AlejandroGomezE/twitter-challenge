@@ -125,7 +125,7 @@ duplicate or contradict it.
 - 2026-09-25 · closing · The PR #19 review pass found README.md:489 "Of the 131 commits, 19 are merges" off by one (main: 130 commits, 19 merges) and bound to go stale. Alejandro chose to drop the exact commit numbers and keep the history description qualitative; fixed via implement, then back to close.
 
 ## Follow-ups
-- [ ] The README recommends Node 22+ (Node 20.11.1 was seen failing the frontend build), but `Runbook.md` and `scripts/check-env` still say Node >= 20.11 · the README flags the mismatch openly; fixing the Runbook/check-env minimum and pinning it is the separate Node-version change, and the README note should be updated to match when that lands.
+- [x] The README recommends Node 22+ (Node 20.11.1 was seen failing the frontend build), but `Runbook.md` and `scripts/check-env` still say Node >= 20.11 · the README flags the mismatch openly; fixing the Runbook/check-env minimum and pinning it is the separate Node-version change, and the README note should be updated to match when that lands. · **fixed** (setup-fixes branch)
 
 ## PRs
 - #19 — https://github.com/AlejandroGomezE/twitter-challenge/pull/19

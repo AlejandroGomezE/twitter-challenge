@@ -432,19 +432,14 @@ Also see [`.claude/ROADMAP.md`](.claude/ROADMAP.md) and the `## Follow-ups` sect
 
 ### Known setup gotchas
 
-These are open follow-ups, listed so nobody trips on them. The [Runbook](Runbook.md) is still the
-source for the steps themselves.
+The [Runbook](Runbook.md) is the source for the steps; these are the things most likely to trip a
+fresh setup.
 
-- **`scripts/*` lack the executable bit in git** (mode `100644`), so on a fresh clone
-  `scripts/be-local` can fail with "permission denied". Run them as `bash scripts/be-local` (and so
-  on).
-- **Node version.** `scripts/check-env` and the Runbook say Node >= 20.11, but that is too low:
-  on Node 20.11.1 the frontend `npm run build` fails (`node:util` has no `styleText`). The toolchain
-  runs on Node 22 (the Docker images) and Node 24. Use Node 22 or later. There is no `.nvmrc` or
-  `engines` pin yet.
-- **`npm ci` in `backend/` needs `--legacy-peer-deps`.** The lockfile has a TypeScript peer
-  conflict, which is why the backend Dockerfile uses that flag. The Runbook's `npm install` path is
-  the documented one.
+- **Node version.** Use Node 22.12+ (22 LTS, pinned in `.nvmrc`) or Node 24. Older versions fail:
+  the frontend's Vitest and the backend's `better-sqlite3` require them. `engines` in both
+  `package.json` files and `scripts/check-env` enforce the same range.
+- **Native build.** `npm install` in `backend/` compiles `better-sqlite3` from source, so it needs a
+  C/C++ toolchain (Xcode Command Line Tools on macOS, `build-essential` + `python3` on Linux).
 - **Docker is the zero-setup path.** It needs no host Node, npm or Prisma step.
 
 ---

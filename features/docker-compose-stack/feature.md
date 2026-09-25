@@ -1,8 +1,8 @@
 ---
 slug: docker-compose-stack
-status: verifying
+status: done
 scope: full-stack
-next: /close-feature docker-compose-stack
+next: —
 ---
 # Docker + docker compose for the whole stack
 
@@ -97,15 +97,15 @@ next: /close-feature docker-compose-stack
   401) and `check-env` reports `PORT=3000`.
 
 ## Follow-ups
-- [ ] `backend/package-lock.json` fails a plain `npm ci` on npm 10 ("Missing: typescript@5.9.3",
+- [x] `backend/package-lock.json` fails a plain `npm ci` on npm 10 ("Missing: typescript@5.9.3",
   tsconfck's optional peer vs typescript 6), so the Dockerfile uses `--legacy-peer-deps` · a
   pre-existing lockfile issue, not caused by this feature; regenerating the lockfile is its own
-  change.
+  change. · **fixed** (setup-fixes branch)
 - [ ] Two `better-sqlite3` versions ship (13.0.3 direct, 12.11.1 under the Prisma adapter) · the
   direct dependency looks unused by `src/`; dropping it would remove the compile step · product
   dependency change, out of scope.
-- [ ] `scripts/check-env` is mode 100644 in git, so `scripts/check-env` gives "Permission denied"
-  (`bash scripts/check-env` works) · pre-existing.
+- [x] `scripts/check-env` is mode 100644 in git, so `scripts/check-env` gives "Permission denied"
+  (`bash scripts/check-env` works) · pre-existing. · **fixed** (setup-fixes branch)
 - [ ] A root `.env` would feed compose interpolation (`VITE_API_URL`, `FRONTEND_ORIGIN`) but isn't
   gitignored at the root · docs tell people to use the host environment instead; gitignoring it is
   a separate tidy-up.
@@ -117,3 +117,4 @@ next: /close-feature docker-compose-stack
 - 2026-09-25 · framed
 - 2026-09-25 · built — backend/frontend images, compose.yaml and Docker docs; verified with a real `docker compose up --build` + Playwright e2e in the sandbox; BE 44/553, FE 52/606 tests green, lint clean
 - 2026-09-25 · verified — clean `docker compose up --build` from scratch: all 5 acceptance criteria pass (Chromium e2e incl. live notifications, persistence, `down -v` reset, <1s shutdown); local be-local/fe-local unaffected; runtime `apt-get install openssl` line not exercised (sandbox blocks deb.debian.org)
+- 2026-09-25 · closed — PR #17, merged (efded13). A later history rewrite dropped it from `main`, so it was re-merged as ebb4c4e before seed-data. This record was closed afterwards on the setup-fixes branch.
