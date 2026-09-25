@@ -110,10 +110,11 @@ on profiles, a working "Following" feed tab, and the "Who to follow" card.
 ## Follow-ups
 - [x] (fixed at Close, `b7d68c8`) `follows/dto/follow-user-page-response.dto.ts` comment cites a non-existent
   `follow-user-page-response.dto.spec.ts`; the coverage lives in `follow-user-response.dto.spec.ts`.
-- [ ] `scripts/down-be` stops any backend from this repo on the port (it stopped a pre-existing
+- [x] (fixed 2026-09-24: down-be/down-fe now only kill the nest/vite dev tooling + its tree; a backend
+  started otherwise is reported, not killed) `scripts/down-be` stops any backend from this repo on the port (it stopped a pre-existing
   `backend/dist/main` during Verify); the Runbook says foreign processes are only reported · flow
   tooling, not this feature.
-- [ ] Verify seeded dev-DB users `va_f8zdd`, `vb2_f8zdd`, `vc_f8zdd` (+ posts/follows/like) · clean
+- [x] (removed 2026-09-24, with their posts/follows/like/sessions) Verify seeded dev-DB users `va_f8zdd`, `vb2_f8zdd`, `vc_f8zdd` (+ posts/follows/like) · clean
   up if unwanted.
 - [ ] Follow-list dialog opens with a visible focus ring on the selected tab (Radix autofocus) ·
   cosmetic.
