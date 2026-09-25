@@ -110,6 +110,9 @@ next: /close-feature docker-compose-stack
   gitignored at the root · docs tell people to use the host environment instead; gitignoring it is
   a separate tidy-up.
 
+## PRs
+- #17 — https://github.com/AlejandroGomezE/twitter-challenge/pull/17
+
 ## Log
 - 2026-09-25 · framed
 - 2026-09-25 · built — backend/frontend images, compose.yaml and Docker docs; verified with a real `docker compose up --build` + Playwright e2e in the sandbox; BE 44/553, FE 52/606 tests green, lint clean
