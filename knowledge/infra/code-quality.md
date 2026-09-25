@@ -171,16 +171,18 @@ For when there's more than one page:
 How the "Configure" list above maps onto the actual two apps — see
 [[Backend architecture]] and [[Frontend architecture]] for the full picture:
 
-* **TypeScript strict mode** — `backend/` only (`tsconfig.json`: `strict: true`).
-  `frontend/` is plain JS (no TypeScript), with `jsconfig.json` providing the `@/*`
-  import alias instead.
+* **TypeScript strict mode** — both apps. `backend/tsconfig.json`: `strict: true`.
+  `frontend/tsconfig.app.json` (src) + `tsconfig.node.json` (vite.config.ts): `strict`,
+  `noUnusedLocals`/`noUnusedParameters`, `verbatimModuleSyntax`; `npm run typecheck`
+  (`tsc -b`), also run first by `npm run build`. API response shapes live in
+  `frontend/src/lib/api/types.ts` (mirroring the backend's response DTOs).
 * **Lint** — `backend/` uses `oxlint` (`npm run lint`), not ESLint; `frontend/` uses
-  ESLint (`npm run lint`). `backend/oxlint.json` currently sets
+  ESLint + `typescript-eslint` recommended (`npm run lint`). `backend/oxlint.json` currently sets
   `@typescript-eslint/no-explicit-any` to `"off"`, which sits at odds with "Avoid:
   `any`" above — noted, not silently changed; see [[Backend architecture]]'s open
   questions.
-* **Import aliases** — `@/*` → `frontend/src/*` (both `frontend/vite.config.js` and
-  `frontend/jsconfig.json`). No alias configured on the backend yet (relative imports
+* **Import aliases** — `@/*` → `frontend/src/*` (both `frontend/vite.config.ts` and
+  `frontend/tsconfig.app.json`). No alias configured on the backend yet (relative imports
   only).
 * **Tests** — backend: Vitest (`npm test`, `test:cov`, `test:e2e`). Frontend: Vitest
   + jsdom + React Testing Library + MSW (`npm test`, `test:watch`, `test:cov`) —
