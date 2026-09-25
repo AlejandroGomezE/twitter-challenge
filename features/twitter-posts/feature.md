@@ -160,7 +160,8 @@ next: /review-feature twitter-posts
 - [ ] **Follows (next feature):** follow/unfollow, add followed authors to the feed's author set,
   enable the "Following" tab and "Who to follow", follower/following counts.
 - [ ] Reposts, bookmarks and share on post cards stay disabled ("Coming soon").
-- [ ] (open, app-wide — Alejandro to decide) The global `ValidationPipe` has
+- [ ] (fixed on `main` by PR #8 `c16d33d` — at Close: merge `main` into this branch, add a
+  `POST /posts { body: 123 } → 400` e2e assertion, then tick) The global `ValidationPipe` had
   `enableImplicitConversion`, so a JSON number in a string field is coerced before `@IsString()` runs
   (`POST /posts { body: 123 }` → 201 with body "123"). Affects every DTO. Either drop implicit
   conversion (and add explicit `@Type(() => Number)` where query numbers need it) or accept it.
