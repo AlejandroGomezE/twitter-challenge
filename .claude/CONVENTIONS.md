@@ -111,8 +111,10 @@ format.
 
 Any phase that starts the app (`scripts/be-local`, `scripts/fe-local`, `npm run start:dev`, a
 background `npm run dev`, …) stops it before handing off: run `scripts/down-be` and/or
-`scripts/down-fe` as the phase's last step, and confirm they report the port free. They kill every
-`node` process running out of `backend/` / `frontend/` (whole process tree, incl. `nest --watch`
-watchers and Vite's esbuild), so they're safe to run even when nothing is up. Something else holding
-the port is reported, never killed — tell Alejandro. `/close-feature` runs both unconditionally, so a
+`scripts/down-fe` as the phase's last step, and confirm they report the port free. They kill the dev
+tooling running out of `backend/` / `frontend/` — the nest / vite CLIs under `node_modules/`, each
+with its whole process tree (the watched `node dist/main`, Vite's esbuild) — so they're safe to run
+even when nothing is up. A backend started any other way (`npm run start:prod`, `node dist/main`) or
+anything else holding the port is reported, never killed — tell Alejandro. So start the app only via
+`be-local` / `fe-local` / `start:dev` / `dev`, never `start:prod`, or it won't be cleaned up. `/close-feature` runs both unconditionally, so a
 finished feature never leaves orphaned servers behind.
