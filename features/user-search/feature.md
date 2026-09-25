@@ -122,7 +122,8 @@ name or username: a typeahead dropdown under the right-rail search box, plus a f
   near-identical user rows (avatar, UserName, bio, FollowButton) · could become one shared row.
 - [ ] Verify seeded dev-DB users `sa_qsyh`, `sb_qsyh`, `sc_qsyh` (+ a post, a comment, follows) · clean up if
   unwanted.
-- [ ] A backend (`node dist/main`) and a Vite dev server started at 20:52 during Build were left running
+- [x] (stopped at Close by down-be/down-fe — the backend was the child of a leftover `nest start --watch`)
+  A backend (`node dist/main`) and a Vite dev server started at 20:52 during Build were left running
   (likely by a build agent, against CONVENTIONS §10) · stop them; consider telling implementers to
   never leave servers running.
 
