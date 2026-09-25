@@ -38,7 +38,7 @@ Before you start, check [Known setup gotchas](#known-setup-gotchas).
 | Follow / unfollow, follower and following lists | Built | `backend/src/modules/follows/`, [feature](features/follow-users/feature.md) |
 | Likes | Built, optimistic in the UI | `posts.repository.ts`, `PostCard.tsx` |
 | Search (users by username or display name) | Built: typeahead and an Explore page | `search.controller.ts`, `pages/Explore.tsx`, [feature](features/user-search/feature.md) |
-| Responsive UI | Built: side nav from `lg`, right rail at `xl`, bottom nav and compose button on mobile | `components/layout/`, [feature](features/social-feed-ui/feature.md) |
+| Responsive UI | Built: bottom nav and compose button on mobile (< 640px), icon-only side nav on tablet (640–1024px), labelled side nav + right rail from `xl` (1280px) | `components/layout/`, [feature](features/social-feed-ui/feature.md) |
 | Bonus: realtime | Built over SSE (`GET /events`) | `backend/src/modules/realtime/`, `frontend/src/lib/realtime/`, [feature](features/realtime-updates/feature.md) |
 | Bonus: notifications | Built: follow, like and comment, with an unread badge | `backend/src/modules/notifications/`, [feature](features/notifications/feature.md) |
 | Bonus: Docker | Built: `compose.yaml` with two production-like images | [feature](features/docker-compose-stack/feature.md) |
@@ -353,6 +353,7 @@ Details: [Run with Docker](Runbook.md#run-with-docker).
 | Backend unit | `backend/src/**/__tests__/*.spec.ts` | Services, controllers, repositories, DTOs, guard, pagination, rules. Dependencies are mocked with `Test.createTestingModule`, with no database. |
 | Backend e2e | `backend/test/*.e2e-spec.ts` | The real app through `configureApp()` and supertest, against a dedicated `prisma/e2e.db` that is rebuilt from the schema on every run and deleted afterwards. It never touches `dev.db`. |
 | Frontend | `frontend/src/**/__tests__/*.test.{ts,tsx}` | Vitest, jsdom and React Testing Library. The API is faked with MSW at the network layer, and an unhandled request fails the test. A fake `EventSource` covers realtime. |
+| Browser E2E | `frontend/e2e/*.spec.ts` | Playwright + Chromium against the real stack: the built backend and a Vite dev server on their own ports (3100 / 5174) and their own `prisma/playwright.db`, recreated each run. It never touches `dev.db`. |
 
 - **The auth flow end to end.** `test/app.e2e-spec.ts` covers:
   - sign-up setting the cookie and returning only the response DTO fields;
@@ -364,6 +365,14 @@ Details: [Run with Docker](Runbook.md#run-with-docker).
 
   Other e2e specs cover posts, follows, search, notifications, realtime, request validation and the
   seed.
+
+  In a real browser, `frontend/e2e/auth.spec.ts` (Playwright) signs up a fresh user, lands on Home,
+  signs out, gets sent back to sign-in from a gated URL, and signs in again. A second test checks
+  that a wrong password shows "Invalid email or password".
+- **Responsive layout.** jsdom can't evaluate breakpoints, so `frontend/e2e/layout.spec.ts`
+  (Playwright) checks the app shell at 375, 768 and 1280px: bottom nav and floating compose button
+  on mobile, an icon-only rail with a centred 620px column on tablet, the labelled rail and right
+  rail on desktop, and no horizontal scroll at any of them.
 - **Key frontend flows.**
   - Sign-in (`pages/__tests__/SignIn.test.tsx`: validation, the 401 and 429 messages, the redirect
     back to the requested route).
@@ -378,9 +387,11 @@ Details: [Run with Docker](Runbook.md#run-with-docker).
   | Backend unit | 609 passed | 94.79% | 88.78% | 91.49% | 94.73% |
   | Backend e2e | 213 passed | not measured | | | |
   | Frontend | 606 passed | 95.39% | 91.22% | 93.91% | 96.14% |
+  | Browser E2E | 3 passed | not measured | | | |
 
   Backend coverage comes from the unit suite alone. The e2e suite exercises the same code
-  through HTTP but isn't counted, so these figures are a floor.
+  through HTTP but isn't counted, so these figures are a floor. The browser E2E suite
+  (`npm run test:e2e` in `frontend/`) isn't counted either.
 
 How to run everything: [Runbook, Run all tests](Runbook.md#run-all-tests).
 
@@ -415,7 +426,7 @@ features/    one feature.md per feature: plan, tasks, decisions, follow-ups, log
 - **Fan-out on read.** Following-feed cost grows with how many accounts a user follows (see
   [section 4](#4-timeline-and-follow-graph)).
 - **No migrations.** `prisma db push` only. A change that would lose data needs a reset (locally
-  `--force-reset`; in Docker `docker compose down -v`).
+  delete `backend/prisma/dev.db*` and push again; in Docker `docker compose down -v`).
 - **Throttling by IP without `trust proxy`.** Behind a reverse proxy every client would share one
   sign-in/sign-up bucket.
 - **Realtime gaps.** No replay of missed events. Notifications removed by a cascade send no
@@ -444,12 +455,14 @@ Also see [`.claude/ROADMAP.md`](.claude/ROADMAP.md) and the `## Follow-ups` sect
 The [Runbook](Runbook.md) is the source for the steps; these are the things most likely to trip a
 fresh setup.
 
-- **Node version.** Use Node 22.12+ (22 LTS, pinned in `.nvmrc`) or Node 24. Older versions fail:
+- **Node version.** Use Node ^22.12 (22 LTS, pinned in `.nvmrc`), 24 or 26+. Older versions fail:
   the frontend's Vitest and the backend's `better-sqlite3` require them. `engines` in both
   `package.json` files and `scripts/check-env` enforce the same range.
 - **Native build.** `npm install` in `backend/` compiles `better-sqlite3` from source, so it needs a
   C/C++ toolchain (Xcode Command Line Tools on macOS, `build-essential` + `python3` on Linux).
 - **Docker is the zero-setup path.** It needs no host Node, npm or Prisma step.
+- **Browser E2E needs Chromium and free ports.** Run `npx playwright install chromium` once in
+  `frontend/`, and keep ports 3100 and 5174 free: the suite starts its own servers there.
 
 ---
 

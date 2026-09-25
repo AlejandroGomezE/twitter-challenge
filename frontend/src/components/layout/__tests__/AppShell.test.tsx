@@ -9,7 +9,7 @@ import { renderWithProviders } from '@/test/render'
 import { apiUrl, server } from '@/test/server'
 
 // The shell is a layout route, so render the real router signed in (default MSW handlers: ada,
-// bio null). jsdom ignores the responsive `hidden`/`lg:` classes, so both navs are in the DOM:
+// bio null). jsdom ignores the responsive `hidden`/`sm:` classes, so both navs are in the DOM:
 // scope to the banner (left rail), the sidebar (right rail) or the mobile nav.
 async function renderShell(route = '/') {
   const utils = renderWithProviders(<AppRouter />, { route })

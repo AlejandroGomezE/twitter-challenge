@@ -9,8 +9,11 @@ import { MobileNav } from './MobileNav'
 import { RightRail } from './RightRail'
 import { SideNav } from './SideNav'
 
-// Layout route for every gated page: left rail (lg+), the page in the center column, right rail
-// (xl+), and below lg a bottom nav plus the compose button (→ Home, focusing the composer). Pages render their own sticky header.
+// Layout route for every gated page: left rail (sm+; icon-only until xl), the page in the center
+// column (capped at 620px from sm), right rail (xl+), and below sm a bottom nav plus the compose
+// button (→ Home, focusing the composer). Pages render their own sticky header.
+// `justify-center` centers rail + column as a group whenever they don't fill the row (tablet and
+// lg); at xl the three columns already fill the 1290px container, so it has no effect there.
 // Also keeps the notification badge and list, and cached posts (counts, deletions), in step with
 // the realtime stream.
 export function AppShell() {
@@ -26,15 +29,15 @@ export function AppShell() {
       >
         Skip to content
       </a>
-      <div className="mx-auto flex w-full max-w-[1290px] gap-8">
-        <header className="sticky top-0 hidden h-dvh shrink-0 lg:block lg:w-[88px] xl:w-[275px]">
+      <div className="mx-auto flex w-full max-w-[1290px] justify-center gap-8">
+        <header className="sticky top-0 hidden h-dvh shrink-0 sm:block sm:w-[88px] xl:w-[275px]">
           <SideNav />
         </header>
 
         <main
           id="main-content"
           tabIndex={-1}
-          className="flex min-h-dvh w-full min-w-0 flex-1 flex-col border-x border-border outline-none lg:max-w-[620px]"
+          className="flex min-h-dvh w-full min-w-0 flex-1 flex-col border-x border-border outline-none sm:max-w-[620px]"
         >
           <div className="flex-1">
             <Outlet />
@@ -56,7 +59,7 @@ export function AppShell() {
           type="button"
           aria-label="New post"
           onClick={openComposer}
-          className="fixed right-5 bottom-20 z-30 size-14 rounded-full shadow-lg lg:hidden"
+          className="fixed right-5 bottom-20 z-30 size-14 rounded-full shadow-lg sm:hidden"
         >
           <Feather className="size-6" aria-hidden="true" />
         </Button>
