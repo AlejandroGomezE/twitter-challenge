@@ -1,8 +1,8 @@
 ---
 slug: fix-edit-profile-tests
-status: verifying
+status: done
 scope: frontend
-next: /close-feature fix-edit-profile-tests
+next: —
 ---
 # Fix EditProfile test race
 
@@ -57,3 +57,4 @@ wrong. Separately, the rename test ("no stale username cached") may be showing a
 - 2026-09-25 · framed
 - 2026-09-25 · built — stateful test mock (T1) + rename stale-cache fix with a pinning test (T2). EditProfile 25/25 on 5 extra consecutive runs; full suite 52 files / 607 tests green twice; build + lint green
 - 2026-09-25 · verified — EditProfile 25/25 ×10 and full suite 52 files/607 ×3; real-app renames bo14090→bo14090x→bo14090 never requested the old username and had no 404s; approved by Alejandro
+- 2026-09-25 · closed — PR #14, merged
