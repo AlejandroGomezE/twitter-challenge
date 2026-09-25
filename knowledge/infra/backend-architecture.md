@@ -408,8 +408,8 @@ ignored).
   most recent follow first; 404 unknown user. `GET /users/me/suggestions?limit=` →
   `FollowUserListResponseDto { items }`: users the caller doesn't follow, never the caller, newest
   accounts first (`createdAt desc, id desc`, no ranking); `limit` 1–10, default 3
-  (`SuggestionsQueryDto`, `@Type(() => Number)`). `FollowUserResponseDto` = `{ username, bio,
-  isFollowing, followsYou }` — the booleans are relative to the caller and `false` on the
+  (`SuggestionsQueryDto`, `@Type(() => Number)`). `FollowUserResponseDto` = `{ username,
+  displayName, bio, isFollowing, followsYou }` — the booleans are relative to the caller and `false` on the
   caller's own row; no id or email. Usernames are normalized like `getProfile` (case-insensitive).
 - **Route placement.** The routes are sub-resources of `/users`, so `FollowsController` is
   `@Controller('users')` — but it's its own controller in its own module, because `UsersModule`
