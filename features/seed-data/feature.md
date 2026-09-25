@@ -88,12 +88,12 @@ in the Runbook).
   `demo`.
 
 ## Follow-ups
-- [ ] Every file in `scripts/` is committed as mode 100644, so `scripts/be-local` etc. fail with "permission denied" (`bash scripts/<name>` works) · pre-existing (noted for check-env in docker-compose-stack, affects all scripts); a `git update-index --chmod=+x` chore.
-- [ ] The machine's default Node (v20.11.1) couldn't run the toolchain during Build; every check ran on Node v24.3.0 · Runbook/check-env say Node >= 20.11, which looks too low for Vite 8 / Vitest 4–5 — confirm the real minimum and pin it (`.nvmrc` / `engines`); separate change.
-- [ ] `npm ci` in backend/ still needs `--legacy-peer-deps` (lockfile typescript peer issue, already noted in docker-compose-stack) · an evaluator following the Runbook literally may hit it; separate change.
-- [ ] `features/docker-compose-stack/feature.md` is still `status: verifying` /
+- [x] Every file in `scripts/` is committed as mode 100644, so `scripts/be-local` etc. fail with "permission denied" (`bash scripts/<name>` works) · pre-existing (noted for check-env in docker-compose-stack, affects all scripts); a `git update-index --chmod=+x` chore. · **fixed** (setup-fixes branch)
+- [x] The machine's default Node (v20.11.1) couldn't run the toolchain during Build; every check ran on Node v24.3.0 · Runbook/check-env say Node >= 20.11, which looks too low for Vite 8 / Vitest 4–5 — confirm the real minimum and pin it (`.nvmrc` / `engines`); separate change. · **fixed** (setup-fixes branch)
+- [x] `npm ci` in backend/ still needs `--legacy-peer-deps` (lockfile typescript peer issue, already noted in docker-compose-stack) · an evaluator following the Runbook literally may hit it; separate change. · **fixed** (setup-fixes branch)
+- [x] `features/docker-compose-stack/feature.md` is still `status: verifying` /
   `next: /close-feature` although PR #17 is merged · its close bookkeeping commit was never made;
-  separate chore.
+  separate chore. · **fixed** (setup-fixes branch)
 
 ## PRs
 - #18 — https://github.com/AlejandroGomezE/twitter-challenge/pull/18
