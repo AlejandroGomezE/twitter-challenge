@@ -15,12 +15,21 @@ import { PrismaClient } from '../generated/prisma/client.js';
 // sits directly under backend/ both in src/database during development and
 // dist/database after a build, so `../../prisma` lands on backend/prisma/
 // either way. See prisma7.config.ts for the matching CLI-side resolution.
-const PRISMA_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'prisma');
+const PRISMA_DIR = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+  '..',
+  'prisma',
+);
 
-function resolveDatabaseUrl(databaseUrl?: string): string {
+// Also used by the seed CLI (src/database/seed/seed.ts), which runs outside
+// Nest, so it stays in this module: PRISMA_DIR is derived from this file's
+// location, whoever the caller is.
+export function resolveDatabaseUrl(databaseUrl?: string): string {
   // DATABASE_URL is validated as a required, non-empty string at boot by
   // src/config/environment.validation.ts before this service is
-  // constructed, so the fallback below should be unreachable in practice.
+  // constructed, so for the app the fallback below is unreachable in
+  // practice; the seed CLI has no such validation and relies on it.
   if (!databaseUrl) {
     throw new Error('DATABASE_URL is required');
   }
@@ -39,7 +48,11 @@ function resolveDatabaseUrl(databaseUrl?: string): string {
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleDestroy {
   constructor() {
-    super({ adapter: new PrismaBetterSqlite3({ url: resolveDatabaseUrl(process.env.DATABASE_URL) }) });
+    super({
+      adapter: new PrismaBetterSqlite3({
+        url: resolveDatabaseUrl(process.env.DATABASE_URL),
+      }),
+    });
   }
 
   async onModuleDestroy() {

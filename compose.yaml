@@ -24,6 +24,9 @@ services:
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:8080}
       # SQLite file on the db-data volume mounted below.
       DATABASE_URL: file:/data/app.db
+      # Seed demo data on start when the database has no users (a no-op
+      # afterwards). Set SEED_ON_START=false on the host to boot empty.
+      SEED_ON_START: ${SEED_ON_START:-true}
       # Optional: passed through from the host only when set there.
       OBSERVE_APP_KEY:
       OBSERVE_APP_SECRET:

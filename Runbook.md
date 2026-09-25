@@ -26,9 +26,11 @@ their own.
 | Stop the **backend** (incl. orphaned watchers) | `scripts/down-be` |
 | Stop the **frontend** | `scripts/down-fe` |
 | Run the **whole stack in Docker** (`:8080` + `:3000`) | `docker compose up --build` — see [Run with Docker](#run-with-docker) |
+| Load the **demo data** (**wipes** the dev DB first) | `cd backend && npm run db:seed` — see Backend → Seed data |
 
 **Try it locally:** run `scripts/be-local` and `scripts/fe-local`, open
-http://localhost:5173 — you land on `/sign-in`; use "Create an account" (`/sign-up`). First time
+http://localhost:5173 — you land on `/sign-in`; sign in as `demo@example.com` / `password1234` once
+the DB is seeded (see Backend → Seed data), or use "Create an account" (`/sign-up`). First time
 after pulling the auth change, run `npx prisma db push` from `backend/` (see Backend → Auth);
 after pulling the profile change, run `npx prisma db push --force-reset` instead (see Backend →
 Profiles — it wipes the dev DB); after pulling the posts, the follows, the user-search
@@ -51,6 +53,7 @@ npm install                       # also builds the native better-sqlite3 / argo
 cp .env.example .env              # DATABASE_URL=file:./dev.db is the right default
 npx prisma generate               # writes the client to src/generated/prisma
 npx prisma db push                # creates prisma/dev.db with every table in the current schema
+npm run db:seed                   # loads the demo data (30 users, posts, follows, likes…)
 cd ..
 scripts/be-local                  # should boot on :3000 with no Prisma errors
 ```
@@ -62,10 +65,14 @@ scripts/be-local                  # should boot on :3000 with no Prisma errors
 - The "after pulling the X change, run `db push`…" notes further down are for existing
   databases. A fresh `db push` already creates the latest schema, so you can skip them,
   including the `--force-reset` one.
-- The DB starts empty. Create an account through `/sign-up` in the frontend.
+- `npm run db:seed` fills the DB with demo data; sign in as `demo@example.com` /
+  `password1234` (more accounts in Backend → Seed data). Skip it to start with an empty DB and
+  create an account through `/sign-up` in the frontend.
 - To check it worked, run `npx prisma studio` from `backend/`. It opens a browser UI that lists the tables.
 - To start over, delete `backend/prisma/dev.db*` and run `npx prisma db push` again.
-  `npx prisma db push --force-reset` does the same thing.
+  `npx prisma db push --force-reset` does the same thing. Either way the DB is empty afterwards;
+  run `npm run db:seed` again for the demo data. (To go back to the demo data without touching
+  the schema, `npm run db:seed` alone is enough — it resets the data itself.)
 - The e2e suite doesn't need any of this. It builds its own `prisma/e2e.db` on every run.
 
 ---
@@ -78,7 +85,7 @@ Run from the repo root:
 ```bash
 docker compose up --build         # builds both images, then starts backend + frontend
 docker compose down               # stop; the database is kept
-docker compose down -v            # stop and wipe the database (removes the volume)
+docker compose down -v            # stop and wipe the database (removes the volume; next up reseeds)
 ```
 
 - **URLs:** the app is at http://localhost:8080 (nginx serving the built SPA; deep links like
@@ -91,8 +98,17 @@ docker compose down -v            # stop and wipe the database (removes the volu
 - **Data:** SQLite at `/data/app.db` on the named volume `twitter-clone_db-data` (the compose
   project name is fixed, so the name is the same whatever the checkout is called).
   `down` keeps it and `down -v` resets it.
-- **Schema:** each backend start runs `prisma db push` (no migrations, same as local). This
-  does nothing when the schema is already in sync. A push that would lose data is **not** forced.
+- **Demo data:** on a fresh volume the backend seeds the demo data set on start (see Backend →
+  Seed data), so the app comes up with content: sign in at http://localhost:8080 as
+  `demo@example.com` / `password1234`. It runs with `--if-empty`, so it only seeds while the
+  database has no users: restarts (`down` + `up`) never reseed or wipe anything. For a fresh
+  seeded stack, `docker compose down -v` then `docker compose up`. To boot with an empty
+  database, `SEED_ON_START=false docker compose up` (only the exact value `false` skips it). A
+  seed that fails stops the backend container before the API starts (check
+  `docker compose logs backend`).
+- **Schema:** each backend start runs `prisma db push` (no migrations, same as local), then the
+  seed step above. The push does nothing when the schema is already in sync. A push that would
+  lose data is **not** forced.
   The backend container fails (check `docker compose logs backend`) and nothing is wiped. To
   get past it, reset with `docker compose down -v`, or change the schema so the push is additive.
 - **Changing the API URL / origin:** `VITE_API_URL` is baked into the bundle at build time, so
@@ -355,6 +371,38 @@ from `backend/.env` (create it from `backend/.env.example`; it's git-ignored).
     post, like, comment or delete (your own posts, likes and comments aren't echoed back to you). The `Origin`
     header is optional for this GET; without a valid cookie it's a 401.
   - **After pulling this change: nothing to run** — no schema change, no new env var.
+- **Seed data** (`src/database/seed/`) — a fixed, hand-written demo data set so the app shows
+  content right away. Needs the schema first (`npx prisma db push`). From `backend/`:
+
+  | Command | What it does |
+  |---|---|
+  | `npm run db:seed` | Builds (`nest build`), then runs the compiled seed (`dist/database/seed/seed.js`). **Resets the data.** |
+  | `npm run db:seed -- --if-empty` | Seeds only if the DB has no users; otherwise leaves it untouched. |
+  | `npx prisma db seed` | Same as `npm run db:seed` (configured in `prisma7.config.ts`); `npx prisma db seed -- --if-empty` forwards the flag. |
+
+  - **It wipes the database's data.** In one transaction it deletes **every** user, session,
+    post, like, follow, comment and notification — including accounts you created yourself — then
+    inserts the seed rows. Everyone is signed out (sessions are gone). Re-running it always gives
+    the same data set, never duplicates. The schema isn't touched.
+  - **What it creates:** 30 users (hand-written profiles), 194 posts (5–8 per user, spread over the
+    last ~14 days), 321 follows (`demo` follows 20 of the other 29, 15 follow `demo`), 1074 likes
+    (never on your own post), 31 comments, and 15 notifications for `demo` (6 unread). The content
+    is fixed; timestamps are relative to when you run it, and ids change on every run.
+  - It prints a summary of the counts; on failure it exits non-zero and the transaction leaves the
+    data as it was.
+  - **Sample credentials** — every seed user's password is `password1234` and their email is
+    `<username>@example.com`:
+
+    | Email | Password | Username | Notes |
+    |---|---|---|---|
+    | `demo@example.com` | `password1234` | `demo` | The demo account: Following feed, followers, unread notifications |
+    | `ana_torres@example.com` | `password1234` | `ana_torres` | Ana Torres |
+    | `dan_okafor@example.com` | `password1234` | `dan_okafor` | Daniel Okafor |
+    | `priya_codes@example.com` | `password1234` | `priya_codes` | Priya Raman |
+
+    Search (e.g. "an") or Explore lists the rest.
+  - Docker runs it on first boot with `--if-empty` (see [Run with Docker](#run-with-docker)). The
+    e2e suite never uses it (its own `prisma/e2e.db`).
 - **Run**: `start:dev` (watch mode, what `scripts/be-local` uses), `start` (no watch),
   `start:debug`, `start:prod` (runs the compiled `dist/`).
 - **Test**: `test` (Vitest unit), `test:watch`, `test:cov` (coverage), `test:debug`,
