@@ -16,21 +16,18 @@ describe('getNavItems', () => {
       'home',
       'explore',
       'notifications',
-      'messages',
-      'bookmarks',
       'profile',
       'settings',
     ])
   })
 
-  it('lists the mobile nav: Home, Explore, Notifications, Messages, Profile, Sign out', () => {
+  it('lists the mobile nav: Home, Explore, Notifications, Profile, Sign out', () => {
     const items = getNavItems('ada', { mobile: true })
 
     expect(items.map((item) => item.label)).toEqual([
       'Home',
       'Explore',
       'Notifications',
-      'Messages',
       'Profile',
       'Sign out',
     ])
@@ -39,40 +36,34 @@ describe('getNavItems', () => {
   it('resolves the working items to their paths', () => {
     const items = getNavItems('ada')
 
-    expect(byKey(items, 'home')).toMatchObject({ label: 'Home', to: '/', end: true, disabled: false })
+    expect(byKey(items, 'home')).toMatchObject({ label: 'Home', to: '/', end: true })
     expect(byKey(items, 'explore')).toMatchObject({
       label: 'Explore',
       to: '/explore',
       end: false,
-      disabled: false,
     })
     expect(byKey(getNavItems('ada', { mobile: true }), 'explore')).toMatchObject({
       to: '/explore',
-      disabled: false,
     })
     for (const navItems of [items, getNavItems('ada', { mobile: true })]) {
       expect(byKey(navItems, 'notifications')).toMatchObject({
         label: 'Notifications',
         to: '/notifications',
         end: false,
-        disabled: false,
       })
     }
     expect(byKey(items, 'profile')).toMatchObject({
       label: 'Profile',
       to: '/u/ada',
       end: false,
-      disabled: false,
     })
     expect(byKey(items, 'settings')).toMatchObject({
       label: 'Settings',
       to: '/settings/profile',
-      disabled: false,
     })
     expect(byKey(getNavItems('ada', { mobile: true }), 'sign-out')).toMatchObject({
       label: 'Sign out',
       to: '/sign-out',
-      disabled: false,
     })
   })
 
@@ -84,18 +75,6 @@ describe('getNavItems', () => {
     expect(keysOf(getNavItems(username))).not.toContain('profile')
     expect(keysOf(getNavItems(username, { mobile: true }))).not.toContain('profile')
     expect(keysOf(getNavItems(username))).toContain('home')
-  })
-
-  it('flags the "Coming soon" items as disabled, with no path', () => {
-    const items = getNavItems('ada')
-
-    for (const key of ['messages', 'bookmarks']) {
-      expect(byKey(items, key)).toMatchObject({ disabled: true, to: undefined, badge: null })
-    }
-    expect(keysOf(items.filter((item) => item.disabled))).toEqual(['messages', 'bookmarks'])
-    expect(keysOf(getNavItems('ada', { mobile: true }).filter((item) => item.disabled))).toEqual([
-      'messages',
-    ])
   })
 
   it('gives only Notifications a badge (the unread-notifications count), in both navs', () => {
@@ -120,7 +99,6 @@ describe('getSignOutItem', () => {
       label: 'Sign out',
       to: '/sign-out',
       end: false,
-      disabled: false,
     })
     expect(getSignOutItem().icon).toBeTruthy()
   })

@@ -1,68 +1,34 @@
-import {
-  Bell,
-  Bookmark,
-  Hash,
-  Home,
-  LogOut,
-  Mail,
-  Settings,
-  User,
-  type LucideIcon,
-} from 'lucide-react'
+import { Bell, Hash, Home, LogOut, Settings, User, type LucideIcon } from 'lucide-react'
 
 // The live counts a nav item can show as a badge (see `useNavBadgeCounts`).
 export type NavBadgeKey = 'notifications'
 
-interface NavItemConfigBase {
+interface NavItemConfig {
   key: string
   label: string
   icon: LucideIcon
+  // Builds the item's path from the signed-in user's username.
+  to: (username: string) => string
+  end?: boolean
+  badge?: NavBadgeKey
   mobile: boolean
   desktop?: boolean
   requiresUsername?: boolean
 }
 
-// A working item: `to` builds its path from the signed-in user's username.
-interface NavLinkConfig extends NavItemConfigBase {
-  to: (username: string) => string
-  end?: boolean
-  badge?: NavBadgeKey
-}
-
-// A "Coming soon" placeholder.
-interface NavPlaceholderConfig extends NavItemConfigBase {
-  to?: undefined
-  end?: undefined
-  badge?: undefined
-}
-
-type NavItemConfig = NavLinkConfig | NavPlaceholderConfig
-
-interface NavItemBase {
+// A nav item resolved for the signed-in user (see `getNavItems`).
+export interface NavItem {
   key: string
   label: string
   icon: LucideIcon
-  end: boolean
-}
-
-export interface NavLinkItem extends NavItemBase {
   to: string
-  disabled: false
+  end: boolean
   badge: NavBadgeKey | null
 }
 
-export interface NavPlaceholderItem extends NavItemBase {
-  to: undefined
-  disabled: true
-  badge: null
-}
-
-// A nav item resolved for the signed-in user (see `getNavItems`).
-export type NavItem = NavLinkItem | NavPlaceholderItem
-
 // Sign-out always goes through the /sign-out page (the single sign-out path). The bottom bar shows
 // it as its last icon; the left rail renders it in its footer (via `getSignOutItem`), not the nav.
-const SIGN_OUT_ITEM: NavLinkConfig = {
+const SIGN_OUT_ITEM: NavItemConfig = {
   key: 'sign-out',
   label: 'Sign out',
   icon: LogOut,
@@ -71,9 +37,8 @@ const SIGN_OUT_ITEM: NavLinkConfig = {
   desktop: false,
 }
 
-// One source of truth for the left rail (SideNav) and the bottom bar (MobileNav). An item with a
-// `to` builder is a working route; an item without one is a disabled "Coming soon" placeholder
-// (never a link, so never a badge). A working item may declare a `badge` key naming the live count
+// One source of truth for the left rail (SideNav) and the bottom bar (MobileNav). Every item is a
+// working route; its `to` builds the path. An item may declare a `badge` key naming the live count
 // it shows (resolved by `useNavBadgeCounts`; `'notifications'` = unread notifications). `mobile`
 // marks the items the bottom bar shows (Settings is reached there through the profile's "Edit
 // profile"); `desktop: false` keeps an item out of the left rail's nav.
@@ -88,8 +53,6 @@ const NAV_ITEMS: NavItemConfig[] = [
     badge: 'notifications',
     mobile: true,
   },
-  { key: 'messages', label: 'Messages', icon: Mail, mobile: true },
-  { key: 'bookmarks', label: 'Bookmarks', icon: Bookmark, mobile: false },
   {
     key: 'profile',
     label: 'Profile',
@@ -102,19 +65,15 @@ const NAV_ITEMS: NavItemConfig[] = [
   SIGN_OUT_ITEM,
 ]
 
-function resolve(item: NavLinkConfig, username?: string | null): NavLinkItem
-function resolve(item: NavItemConfig, username?: string | null): NavItem
 function resolve(
   { key, label, icon, to, end = false, badge }: NavItemConfig,
   username?: string | null,
 ): NavItem {
   // `username` is only missing for items that don't use it (Profile is left out without one).
-  return to
-    ? { key, label, icon, to: to(username ?? ''), end, disabled: false, badge: badge ?? null }
-    : { key, label, icon, to: undefined, end, disabled: true, badge: null }
+  return { key, label, icon, to: to(username ?? ''), end, badge: badge ?? null }
 }
 
-// Resolves the nav for the signed-in user: `{ key, label, icon, to, end, disabled, badge }`
+// Resolves the nav for the signed-in user: `{ key, label, icon, to, end, badge }`
 // (`badge` is the item's count key, or null). Profile is left out while the user has no username
 // (it would have nowhere to point).
 export function getNavItems(

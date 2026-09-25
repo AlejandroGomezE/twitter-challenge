@@ -43,8 +43,6 @@ async function renderShellWithProbe(route: string) {
 const composerTextbox = () =>
   within(screen.getByRole('main')).getByRole('textbox', { name: 'Compose a new post' })
 
-const COMING_SOON_NAV = ['Messages', 'Bookmarks']
-
 const withUnreadCount = (count: number) =>
   server.use(http.get(apiUrl('/notifications/unread-count'), () => HttpResponse.json({ count })))
 
@@ -76,14 +74,12 @@ describe('AppShell', () => {
       expect(nav.queryByRole('link', { name: 'Sign out' })).not.toBeInTheDocument()
     })
 
-    it('shows the "Coming soon" items as aria-disabled buttons, not links', async () => {
+    it('has no Messages or Bookmarks item', async () => {
       await renderShell()
       const rail = leftRail()
 
-      for (const name of COMING_SOON_NAV) {
-        const button = rail.getByRole('button', { name })
-        expect(button).toHaveAttribute('aria-disabled', 'true')
-        expect(button).not.toHaveAttribute('href')
+      for (const name of ['Messages', 'Bookmarks']) {
+        expect(rail.queryByRole('button', { name })).not.toBeInTheDocument()
         expect(rail.queryByRole('link', { name })).not.toBeInTheDocument()
       }
     })
@@ -199,14 +195,14 @@ describe('AppShell', () => {
   })
 
   describe('mobile', () => {
-    it('shows Home, Explore, Notifications, Messages, Profile and Sign out in the bottom bar', async () => {
+    it('shows Home, Explore, Notifications, Profile and Sign out in the bottom bar', async () => {
       await renderShell()
       const nav = mobileNav()
 
       const labels = [...screen.getByRole('navigation', { name: 'Primary (mobile)' }).children].map(
         (item) => item.getAttribute('aria-label'),
       )
-      expect(labels).toEqual(['Home', 'Explore', 'Notifications', 'Messages', 'Profile', 'Sign out'])
+      expect(labels).toEqual(['Home', 'Explore', 'Notifications', 'Profile', 'Sign out'])
 
       expect(nav.getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page')
       expect(nav.getByRole('link', { name: 'Profile' })).toHaveAttribute('href', '/u/ada')
@@ -216,8 +212,6 @@ describe('AppShell', () => {
         'href',
         '/notifications',
       )
-      expect(nav.getByRole('button', { name: 'Messages' })).toHaveAttribute('aria-disabled', 'true')
-      expect(nav.queryByRole('link', { name: 'Messages' })).not.toBeInTheDocument()
     })
 
     it('renders the compose button as an enabled "New post" button', async () => {
