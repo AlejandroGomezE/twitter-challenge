@@ -1,8 +1,8 @@
 ---
 slug: realtime-updates
-status: framed
+status: verifying
 scope: full-stack
-next: /implement realtime-updates
+next: /review-feature realtime-updates
 ---
 # Realtime updates
 
@@ -55,12 +55,12 @@ feeds). This builds on the domain events added by `notifications`.
   e2e suite (which must not hang on an open stream).
 
 ## Tasks
-- [ ] (T1, be) New domain events: `post.created` `{ postId, authorId }` and `post.deleted` `{ postId, authorId }` from `PostsService`, `comment.removed` `{ actorId, postId, commentId }` from `CommentsService.delete`, and `notification.changed` `{ recipientId }` from `NotificationsService` after create, retract or mark-read (only when rows changed). All are fire-and-forget like the existing ones, with unit tests.
-- [ ] (T2, be) `src/modules/realtime/`: a `RealtimeHub` (in-memory connections per user, at most 5 streams per user with the oldest closed, cleanup on disconnect) and a `GET /events` `@Sse()` controller behind the session guard. It sends the 25s heartbeat that re-validates the session cookie and closes the stream when invalid. Unit tests.
-- [ ] (T3, be, after: T1, T2) Realtime listeners (`{ async: true }`, errors logged and never thrown) that map domain events to the stream contract. `following` is computed once per post from the author's followers intersected with connected users. Counts come from the posts service, and `unreadCount` from the notifications service. Unit tests.
-- [ ] (T4, fe) `RealtimeProvider`: one `EventSource(API_URL + '/events', { withCredentials: true })` mounted in the signed-in shell, with reconnect and backoff only while signed in, and a small subscribe API for handlers. `notifications.changed` sets the unread-count cache and invalidates the list, and a reconnect invalidates the unread count. `useUnreadNotificationCount` drops its `refetchInterval` while connected.
-- [ ] (T5, fe, after: T4) `post.counts` and `post.deleted` handlers built on `lib/api/post-cache.js`. Counts are patched without touching `likedByMe` and are skipped while that post has a like toggle in flight. A deleted post is removed from every list and its detail cache, so `PostDetail` shows its not-found state.
-- [ ] (T6, fe, after: T4) New-posts pill in `pages/Home.jsx`. It keeps pending post ids per tab (Following gets `following: true` only; For you gets all) and drops ids on `post.deleted`. Clicking it refetches that feed from the first page, scrolls to the top and clears the pending ids. It's accessible: a button whose name includes the count, and a polite live region announcing it.
+- [x] (T1, be) New domain events: `post.created` `{ postId, authorId }` and `post.deleted` `{ postId, authorId }` from `PostsService`, `comment.removed` `{ actorId, postId, commentId }` from `CommentsService.delete`, and `notification.changed` `{ recipientId }` from `NotificationsService` after create, retract or mark-read (only when rows changed). All are fire-and-forget like the existing ones, with unit tests.
+- [x] (T2, be) `src/modules/realtime/`: a `RealtimeHub` (in-memory connections per user, at most 5 streams per user with the oldest closed, cleanup on disconnect) and a `GET /events` `@Sse()` controller behind the session guard. It sends the 25s heartbeat that re-validates the session cookie and closes the stream when invalid. Unit tests.
+- [x] (T3, be, after: T1, T2) Realtime listeners (`{ async: true }`, errors logged and never thrown) that map domain events to the stream contract. `following` is computed once per post from the author's followers intersected with connected users. Counts come from the posts service, and `unreadCount` from the notifications service. Unit tests.
+- [x] (T4, fe) `RealtimeProvider`: one `EventSource(API_URL + '/events', { withCredentials: true })` mounted in the signed-in shell, with reconnect and backoff only while signed in, and a small subscribe API for handlers. `notifications.changed` sets the unread-count cache and invalidates the list, and a reconnect invalidates the unread count. `useUnreadNotificationCount` drops its `refetchInterval` while connected.
+- [x] (T5, fe, after: T4) `post.counts` and `post.deleted` handlers built on `lib/api/post-cache.js`. Counts are patched without touching `likedByMe` and are skipped while that post has a like toggle in flight. A deleted post is removed from every list and its detail cache, so `PostDetail` shows its not-found state.
+- [x] (T6, fe, after: T4) New-posts pill in `pages/Home.jsx`. It keeps pending post ids per tab (Following gets `following: true` only; For you gets all) and drops ids on `post.deleted`. Clicking it refetches that feed from the first page, scrolls to the top and clears the pending ids. It's accessible: a button whose name includes the count, and a polite live region announcing it.
 
 ## Decisions
 - 2026-09-24 · framed · The transport is SSE, not WebSockets. Every push goes from server to client, it runs over plain HTTP with the existing cookie session and CORS `credentials`, `EventSource` reconnects on its own, and NestJS supports it natively with `@Sse()`. There is one multiplexed stream per tab rather than one per feature.
@@ -71,11 +71,15 @@ feeds). This builds on the domain events added by `notifications`.
 - 2026-09-24 · framed · Events aren't replayed. After a reconnect the client refreshes the unread count. Posts, counts and deletions missed while offline show up on the next normal refetch.
 - 2026-09-24 · framed · The actor is excluded from `post.counts` and the author from `post.created`/`post.deleted`, because their own client already applied the change optimistically. This avoids fights with `useToggleLike`'s reconciliation.
 - 2026-09-24 · framed · Notifications removed by an FK cascade (a post, comment or user deleted) emit no `notification.changed`, because the rows are gone before any listener runs. The badge corrects itself on the next focus refetch or reconnect. Accepted for v1.
+- 2026-09-25 · building · The new-posts pill sits at the start of the feed list, below the composer, in a zero-height sticky wrapper. It no longer sits under the page header, where it covered the composer. It still takes no layout space, so the list never shifts, and it docks under the header when scrolled (Alejandro).
 
 ## Follow-ups
 - [ ] Multi-instance fan-out (Redis pub/sub or similar) · out of scope, single instance.
 - [ ] Live comment lists on an open post detail (new comments appear, not only the count) · not requested.
 - [ ] Replay of events missed during a disconnect (`Last-Event-ID`) · out of scope by decision.
+- [ ] Two backend tasks running `npm run test:e2e` at the same time conflict, because globalSetup recreates the shared `prisma/e2e.db` (seen as `SQLITE_READONLY_DBMOVED` and spurious failures). Consider a per-run DB file · process note, found during Build.
+- [ ] `tsc --noEmit` (specs included) now also reports errors in `test/notifications.e2e-spec.ts`, on top of the known ones in `users.controller.spec.ts`, `comments.controller.spec.ts` and `follows.e2e-spec.ts`. `nest build` and vitest are unaffected · carried over from `notifications`.
 
 ## Log
 - 2026-09-24 · framed
+- 2026-09-25 · built — T1–T6 done: domain events → RealtimeHub + GET /events SSE (session-checked heartbeat) → listeners; frontend RealtimeProvider, live badge, live counts/deletions, new-posts pill (moved into the feed list per Alejandro). be 44 files/553 unit + 7 files/205 e2e, fe 51 files/590 tests, builds + lint green
