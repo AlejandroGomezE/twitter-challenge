@@ -1,8 +1,8 @@
 ---
 slug: seed-data
-status: verifying
+status: done
 scope: backend
-next: /close-feature seed-data
+next: —
 ---
 # Seed data
 
@@ -102,3 +102,4 @@ in the Runbook).
 - 2026-09-25 · framed
 - 2026-09-25 · built — seed module + runSeed, db:seed CLI / prisma db seed, Docker first-boot seeding (SEED_ON_START), Runbook seed section + sample credentials; verified against scratch DBs and a real docker compose run; BE build + lint clean, 45/556 unit and 7/205 e2e green
 - 2026-09-25 · verified — all 5 criteria pass against the running app: Runbook path + prisma db seed (30 users/194 posts/321 follows/1074 likes/31 comments/15 notifications), identical reseeds, demo in the browser (infinite-scroll Following, For you, likes, followers list, "an" search, 6 unread notifications), Docker first boot/restart/SEED_ON_START=false; seed-failure path not re-run (covered in Build)
+- 2026-09-25 · closed — PR #18, merged (ef9bbee); tests added at Close: unit 47/609, e2e 8/213
