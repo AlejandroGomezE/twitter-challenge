@@ -1,8 +1,8 @@
 ---
 slug: readme-technical-decisions
-status: framed
+status: verifying
 scope: full-stack
-next: /implement readme-technical-decisions
+next: /review-feature readme-technical-decisions
 ---
 # Root README with technical decisions
 
@@ -100,11 +100,11 @@ duplicate or contradict it.
   other docs link to (e.g. `Runbook.md#backend-backend`) stay unchanged.
 
 ## Tasks
-- [ ] (T1, be) Write the root `README.md` per the outline above. Take every fact from the code and
+- [x] (T1, be) Write the root `README.md` per the outline above. Take every fact from the code and
   the existing docs (`knowledge/infra/*`, `features/*/feature.md` Decisions, `.claude/*`,
   `Runbook.md`, `schema.prisma`, `src/auth/*`, the posts/follows repositories, the realtime and
   notifications modules). Don't copy long passages. Link to the deeper docs instead.
-- [ ] (T2, fe, after: T1) Cross-links: a pointer at the top of `Runbook.md` to the README's
+- [x] (T2, fe, after: T1) Cross-links: a pointer at the top of `Runbook.md` to the README's
   technical decisions, and a line in `backend/README.md` and `frontend/README.md` pointing to the
   root README and Runbook. Check that every relative link and anchor in all four files resolves.
 
@@ -120,7 +120,11 @@ duplicate or contradict it.
 - 2026-09-25 · framed · Scope tagged `full-stack` because it documents both halves. T1 and T2 are
   tagged `be` / `fe` only to route them to an implementer; neither changes code.
 
+- 2026-09-25 · building · Postgres → SQLite rationale, which the repo never recorded (Alejandro): zero setup for evaluators (no database server; clone + `db push` just works, so the Runbook is simpler and harder to break); fast, isolated tests (e2e gets its own file DB, `e2e.db`, and never touches dev data; no container needed); a simpler Docker stack (no DB container, just a file on a named volume). The README states these as the reasons.
+
 ## Follow-ups
+- [ ] The README recommends Node 22+ (Node 20.11.1 was seen failing the frontend build), but `Runbook.md` and `scripts/check-env` still say Node >= 20.11 · the README flags the mismatch openly; fixing the Runbook/check-env minimum and pinning it is the separate Node-version change, and the README note should be updated to match when that lands.
 
 ## Log
 - 2026-09-25 · framed
+- 2026-09-25 · built — root README.md (507 lines; §1–10 per outline, with claims checked against the code, the SQLite rationale from Alejandro, and a known setup gotchas section), plus cross-links from Runbook.md, backend/README.md and frontend/README.md; 65/65 relative links resolve; BE 47/609 and FE 52/606 green, builds + lint clean
