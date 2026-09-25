@@ -92,7 +92,7 @@ from `backend/.env` (create it from `backend/.env.example`; it's git-ignored).
 - **Cross-cutting**: the HTTP pipeline lives in `src/app.setup.ts`
   (`configureApp(app)`), shared by `main.ts` and the e2e suite so tests run the same
   stack: `helmet()`, `cookie-parser`, CORS restricted to `FRONTEND_ORIGIN` with
-  `credentials: true`, a global `ValidationPipe` (`whitelist: true, transform: true`),
+  `credentials: true`, a global `ValidationPipe` (`whitelist: true, transform: true`, no implicit conversion — a wrong JSON type is a 400; numeric query params declare `@Type(() => Number)`),
   and a single global `AllExceptionsFilter` (`src/common/filters/`) that normalizes
   every error response to `{ statusCode, message, timestamp, path }`.
 - **Response serialization**: a global `ResponseSerializerInterceptor`

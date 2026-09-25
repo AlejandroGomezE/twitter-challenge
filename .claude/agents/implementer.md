@@ -52,7 +52,9 @@ Follow without being told; see `knowledge/infra/backend-architecture.md` and
   (and `exports:` if reused elsewhere); a new module is imported by `app.module.ts`. Unregistered
   fails at boot, not compile.
 - **DTOs carry `class-validator` decorators** on every request field. Declare a concrete return type
-  on every handler (`Promise<XDto>`, not `Promise<any>`).
+  on every handler (`Promise<XDto>`, not `Promise<any>`). There's no implicit type conversion: a
+  numeric/boolean query param or field that arrives as a string needs an explicit
+  `@Type(() => Number)` (or a strict boolean transform).
 - **Every endpoint returns a response DTO** (`dto/<name>-response.dto.ts`, `@Expose()` on every
   field that may leave the API — nothing else), declared with `@SerializeOptions({ type: XResponseDto })`
   on the handler plus a matching return type. The global `ResponseSerializerInterceptor`

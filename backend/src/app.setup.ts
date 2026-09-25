@@ -21,11 +21,14 @@ export function configureApp(app: INestApplication): void {
     origin: [configService.getOrThrow<string>('frontendOrigin')],
     credentials: true,
   });
+  // No implicit conversion: request values keep the JSON type the client sent, so a number or
+  // boolean in a string field fails @IsString() (400) instead of being silently coerced. DTO fields
+  // that genuinely need conversion (e.g. numeric query params, which always arrive as strings)
+  // declare it explicitly with @Type(() => Number).
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
       transform: true,
-      transformOptions: { enableImplicitConversion: true },
     }),
   );
   // Response whitelist (fails closed). Every handler that returns a body
