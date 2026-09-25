@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { bioSchema, RESERVED_USERNAMES, usernameSchema } from '../profile-schemas'
+import {
+  bioSchema,
+  displayNameSchema,
+  optionalDisplayNameSchema,
+  RESERVED_USERNAMES,
+  usernameSchema,
+} from '../profile-schemas'
 
 const messagesOf = (result) => result.error.issues.map((issue) => issue.message)
 
@@ -101,5 +107,49 @@ describe('bioSchema', () => {
 
   it('measures length after trimming', () => {
     expect(bioSchema.safeParse(`  ${'a'.repeat(160)}  `).success).toBe(true)
+  })
+})
+
+describe('displayNameSchema', () => {
+  it('trims', () => {
+    expect(displayNameSchema.parse('  Ada Lovelace ')).toBe('Ada Lovelace')
+  })
+
+  it.each(['', '   '])('requires a name (%j)', (value) => {
+    expect(messagesOf(displayNameSchema.safeParse(value))).toEqual(['Name is required'])
+  })
+
+  it.each([
+    ['a', true],
+    ['a'.repeat(50), true],
+    ['a'.repeat(51), false],
+    [`  ${'a'.repeat(50)}  `, true],
+  ])('length boundary: %j → valid %s', (value, valid) => {
+    expect(displayNameSchema.safeParse(value).success).toBe(valid)
+  })
+
+  it('counts code points, so an emoji counts as 1 (like the backend)', () => {
+    expect(displayNameSchema.safeParse('😀'.repeat(50)).success).toBe(true)
+    expect(messagesOf(displayNameSchema.safeParse('😀'.repeat(51)))).toEqual([
+      'Name must be at most 50 characters',
+    ])
+  })
+
+  it.each(['Ada\nLovelace', 'Ada\rLovelace'])('rejects line breaks (%j)', (value) => {
+    expect(messagesOf(displayNameSchema.safeParse(value))).toEqual([
+      "Name can't contain line breaks",
+    ])
+  })
+})
+
+describe('optionalDisplayNameSchema', () => {
+  it.each(['', '   '])('accepts an empty name as "" (%j)', (value) => {
+    expect(optionalDisplayNameSchema.parse(value)).toBe('')
+  })
+
+  it('applies the same rules to a non-empty name', () => {
+    expect(optionalDisplayNameSchema.parse(' Ada ')).toBe('Ada')
+    expect(optionalDisplayNameSchema.safeParse('a'.repeat(51)).success).toBe(false)
+    expect(optionalDisplayNameSchema.safeParse('A\nB').success).toBe(false)
   })
 })

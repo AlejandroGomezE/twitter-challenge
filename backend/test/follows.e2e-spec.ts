@@ -19,7 +19,16 @@ import { UsersService } from './../src/modules/users/users.service.js';
 const FRONTEND_ORIGIN = 'http://localhost:5173';
 const FOREIGN_ORIGIN = 'http://evil.test';
 
-const FOLLOW_USER_KEYS = ['bio', 'followsYou', 'isFollowing', 'username'];
+const FOLLOW_USER_KEYS = [
+  'bio',
+  'displayName',
+  'followsYou',
+  'isFollowing',
+  'username',
+];
+
+// Display name the helper gives every user unless told otherwise.
+const DISPLAY_NAME = 'E2E User';
 const PAGE_KEYS = ['items', 'nextCursor'];
 
 // Keys that must never appear in any response of this module.
@@ -36,6 +45,7 @@ type Method = 'get' | 'put' | 'delete';
 
 interface FollowUserJson {
   username: string;
+  displayName: string | null;
   bio: string | null;
   isFollowing: boolean;
   followsYou: boolean;
@@ -144,13 +154,27 @@ describe('Follows (e2e)', () => {
     return `e2e_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
   }
 
-  async function createUserWithSession(): Promise<TestUser> {
+  // `displayName: null` creates a user without one (like an account from
+  // before display names): sign-up requires it, so it's cleared afterwards.
+  async function createUserWithSession(
+    displayName: string | null = DISPLAY_NAME,
+  ): Promise<TestUser> {
     const email = `e2e-${randomUUID()}@example.test`;
     const user = await app
       .get(UsersService)
-      .create(email, uniqueUsername(), 'correct-horse-battery');
+      .create(
+        email,
+        uniqueUsername(),
+        displayName ?? DISPLAY_NAME,
+        'correct-horse-battery',
+      );
     createdUserIds.push(user.id);
     createdEmails.push(email);
+    if (displayName === null) {
+      await app
+        .get(PrismaService)
+        .user.update({ where: { id: user.id }, data: { displayName: null } });
+    }
     const { token } = await app.get(AuthService).createSession(user.id);
     return { userId: user.id, username: user.username, email, token };
   }
@@ -371,7 +395,8 @@ describe('Follows (e2e)', () => {
       const me = await createUserWithSession();
       const target = await createUserWithSession();
       const mutual = await createUserWithSession();
-      const fan = await createUserWithSession();
+      // No display name: its row carries displayName null.
+      const fan = await createUserWithSession(null);
       const followed = await createUserWithSession();
       // me <-> mutual; fan -> me; me -> followed.
       await follow(me, mutual);
@@ -396,24 +421,28 @@ describe('Follows (e2e)', () => {
       expect(items).toEqual([
         {
           username: mutual.username,
+          displayName: DISPLAY_NAME,
           bio: null,
           isFollowing: true,
           followsYou: true,
         },
         {
           username: me.username,
+          displayName: DISPLAY_NAME,
           bio: null,
           isFollowing: false,
           followsYou: false,
         },
         {
           username: fan.username,
+          displayName: null,
           bio: null,
           isFollowing: false,
           followsYou: true,
         },
         {
           username: followed.username,
+          displayName: DISPLAY_NAME,
           bio: null,
           isFollowing: true,
           followsYou: false,
@@ -433,6 +462,7 @@ describe('Follows (e2e)', () => {
       ]);
       expect(following.items[0]).toEqual({
         username: followed.username,
+        displayName: DISPLAY_NAME,
         bio: null,
         isFollowing: true,
         followsYou: false,
@@ -545,7 +575,8 @@ describe('Follows (e2e)', () => {
       const me = await createUserWithSession();
       const older = await createUserWithSession();
       const followed = await createUserWithSession();
-      const fan = await createUserWithSession();
+      // No display name: its row carries displayName null.
+      const fan = await createUserWithSession(null);
       const newest = await createUserWithSession();
       await follow(me, followed);
       await follow(fan, me);
@@ -572,18 +603,21 @@ describe('Follows (e2e)', () => {
       expect((res.body as { items: FollowUserJson[] }).items).toEqual([
         {
           username: newest.username,
+          displayName: DISPLAY_NAME,
           bio: null,
           isFollowing: false,
           followsYou: false,
         },
         {
           username: fan.username,
+          displayName: null,
           bio: null,
           isFollowing: false,
           followsYou: true,
         },
         {
           username: older.username,
+          displayName: DISPLAY_NAME,
           bio: null,
           isFollowing: false,
           followsYou: false,

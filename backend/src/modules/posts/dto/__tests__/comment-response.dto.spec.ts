@@ -41,7 +41,10 @@ async function serialize(
 
 // A comment carrying fields that must never leave the API, on the item and
 // on its nested author.
-function leakyComment(id: string): Record<string, unknown> {
+function leakyComment(
+  id: string,
+  displayName: string | null = 'Some One',
+): Record<string, unknown> {
   return {
     id,
     postId: 'post-1',
@@ -51,6 +54,7 @@ function leakyComment(id: string): Record<string, unknown> {
     author: {
       id: 'user-1',
       username: 'someone',
+      displayName,
       email: 'someone@example.test',
       passwordHash: '$argon2id$secret',
     },
@@ -58,12 +62,15 @@ function leakyComment(id: string): Record<string, unknown> {
   };
 }
 
-function expectedComment(id: string): Record<string, unknown> {
+function expectedComment(
+  id: string,
+  displayName: string | null = 'Some One',
+): Record<string, unknown> {
   return {
     id,
     body: `body of ${id} 😀`,
     createdAt: '2026-09-24T10:00:00.000Z',
-    author: { username: 'someone' },
+    author: { username: 'someone', displayName },
   };
 }
 
@@ -72,6 +79,12 @@ describe('Comment response DTOs through ResponseSerializerInterceptor', () => {
     await expect(
       serialize('comment', leakyComment('comment-1')),
     ).resolves.toEqual(expectedComment('comment-1'));
+  });
+
+  it('CommentResponseDto keeps a null author display name as null', async () => {
+    await expect(
+      serialize('comment', leakyComment('comment-1', null)),
+    ).resolves.toEqual(expectedComment('comment-1', null));
   });
 
   it('CommentPageResponseDto strips extra fields on the page, items and nested authors', async () => {

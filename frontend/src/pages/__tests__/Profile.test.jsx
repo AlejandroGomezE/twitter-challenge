@@ -107,6 +107,21 @@ describe('Profile', () => {
     expect(screen.queryByRole('status', { name: 'Loading' })).not.toBeInTheDocument()
   })
 
+  it('shows the display name big (and as the page title) with @username muted under it', async () => {
+    mockProfiles({ grace: { ...PROFILES.grace, displayName: 'Grace Hopper' } })
+
+    renderApp('/u/grace')
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Grace Hopper' }),
+    ).toBeInTheDocument()
+    const page = within(screen.getByRole('main'))
+    const name = page.getAllByText('Grace Hopper').find((el) => el.closest('h1') === null)
+    expect(name).toHaveClass('text-xl', 'font-bold')
+    expect(page.getByText('@grace')).toHaveClass('text-muted-foreground')
+    expect(page.getByRole('img', { name: '@grace' })).toBeInTheDocument()
+  })
+
   it('shows the avatar, @username, bio and join date', async () => {
     mockProfiles()
 

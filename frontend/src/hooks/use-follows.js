@@ -10,6 +10,7 @@ import {
 } from '@/lib/api/follow-cache';
 import { cancelLoadedFetches, writeAfterServerChange } from '@/lib/api/post-cache';
 import { postKeys } from '@/lib/api/posts';
+import { searchKeys } from '@/lib/api/search';
 import {
   fetchFollowers,
   fetchFollowing,
@@ -140,8 +141,9 @@ export function resetFollowBursts(queryClient) {
 }
 
 // Moves every cached copy of `username`'s follow state to `following`: their profile
-// (`isFollowing`, `followerCount` — the server's `followerCount` when given), their list/suggestion
-// rows, and the caller's `followingCount` by the flip relative to `burst.shown`.
+// (`isFollowing`, `followerCount` — the server's `followerCount` when given), their
+// list/suggestion/search-result rows, and the caller's `followingCount` by the flip relative to
+// `burst.shown`.
 function writeFollowState(queryClient, username, burst, following, followerCount = null) {
   setFollowInProfile(queryClient, username, following, followerCount);
   setFollowingInLists(queryClient, username, following);
@@ -155,10 +157,10 @@ function writeFollowState(queryClient, username, burst, following, followerCount
 // (`!user.isFollowing`). The request is PUT (follow) or DELETE (unfollow) — idempotent, so rapid
 // clicks just send the latest intent. Optimistic: in-flight fetches of the affected entries are
 // cancelled, then the target's profile (`isFollowing`, `followerCount`), the signed-in user's
-// profile (`followingCount`) and every loaded list/suggestion row of the target flip. When the last
-// request of the burst settles, the caches get the server-confirmed state (see `followBursts`) —
-// the target's `followerCount` is the server's — after cancelling any fetch still in flight, so
-// neither a failed request nor a stale refetch leaves a wrong state. If any request succeeded, the
+// profile (`followingCount`) and every loaded list/suggestion/search-result row of the target
+// flip. When the last request of the burst settles, the caches get the server-confirmed state
+// (see `followBursts`) — the target's `followerCount` is the server's — after cancelling any fetch
+// still in flight, so neither a failed request nor a stale refetch leaves a wrong state. If any request succeeded, the
 // Following feed and the suggestions are refetched, and the target's followers / the caller's
 // following lists are marked stale (not refetched: an open list keeps its rows, like Twitter).
 export function useToggleFollow() {
@@ -226,6 +228,7 @@ export function useToggleFollow() {
           // Nothing was cached when the burst began and no request succeeded: refetch it.
           queryClient.invalidateQueries({ queryKey: profileQueryKey(username), exact: true });
           queryClient.invalidateQueries({ queryKey: followKeys.all });
+          queryClient.invalidateQueries({ queryKey: searchKeys.all });
         }
         // The caller's own count can't be trusted when it started unknown, or when their profile
         // was fetched mid-burst (see `withPendingFollow`): take the server's.

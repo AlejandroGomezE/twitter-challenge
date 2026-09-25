@@ -43,6 +43,7 @@ describe('PostResponseDto through ResponseSerializerInterceptor', () => {
       author: {
         id: 'user-1',
         username: 'someone',
+        displayName: 'Some One',
         email: 'someone@example.test',
         passwordHash: '$argon2id$secret',
       },
@@ -55,10 +56,27 @@ describe('PostResponseDto through ResponseSerializerInterceptor', () => {
       id: 'post-1',
       body: 'hello 😀',
       createdAt: '2026-09-24T10:00:00.000Z',
-      author: { username: 'someone' },
+      author: { username: 'someone', displayName: 'Some One' },
       likeCount: 3,
       commentCount: 1,
       likedByMe: true,
     });
+  });
+
+  it('keeps a null author display name as null', async () => {
+    const json = await serialize({
+      id: 'post-1',
+      body: 'hello',
+      createdAt: new Date('2026-09-24T10:00:00.000Z'),
+      author: { id: 'user-1', username: 'someone', displayName: null },
+      likeCount: 0,
+      commentCount: 0,
+      likedByMe: false,
+    });
+
+    expect(json).toMatchObject({
+      author: { username: 'someone', displayName: null },
+    });
+    expect((json as { author: object }).author).not.toHaveProperty('id');
   });
 });

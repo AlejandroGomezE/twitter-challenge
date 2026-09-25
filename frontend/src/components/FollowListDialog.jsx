@@ -1,6 +1,7 @@
 import { InfiniteListFooter } from '@/components/feed/InfiniteListFooter';
 import { FollowButton } from '@/components/FollowButton';
 import { UserAvatar } from '@/components/UserAvatar';
+import { UserName } from '@/components/UserName';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
@@ -196,9 +197,13 @@ function FollowListRow({ item, isMe, onNavigate }) {
         <Link
           to={`/u/${encodeURIComponent(item.username)}`}
           onClick={onNavigate}
-          className="block truncate font-mono text-sm font-semibold outline-none after:absolute after:inset-0 hover:underline"
+          className="block truncate text-sm outline-none after:absolute after:inset-0 hover:underline"
         >
-          @{item.username}
+          <UserName
+            username={item.username}
+            displayName={item.displayName}
+            fallbackClassName="font-mono font-semibold"
+          />
         </Link>
         {item.bio && (
           <p className="mt-0.5 line-clamp-2 text-sm break-words text-muted-foreground">

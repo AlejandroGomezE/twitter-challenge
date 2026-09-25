@@ -9,7 +9,9 @@ import { renderWithProviders } from '@/test/render'
 import { apiUrl, server } from '@/test/server'
 
 const CREATED_AT = '2026-09-15T12:00:00.000Z'
-const ADA_PROFILE = { username: 'ada', bio: 'Math & engines', createdAt: CREATED_AT }
+// Ada has no display name yet (like every account created before names existed).
+const ADA_PROFILE = { username: 'ada', displayName: null, bio: 'Math & engines', createdAt: CREATED_AT }
+const NAMED_ADA_PROFILE = { ...ADA_PROFILE, displayName: 'Ada Lovelace' }
 
 function LocationDisplay() {
   const location = useLocation()
@@ -34,6 +36,7 @@ function mockPatch(
       id: 'u1',
       email: 'ada@example.com',
       username: body.username ?? 'ada',
+      displayName: body.displayName ?? null,
       bio: 'bio' in body ? body.bio || null : ADA_PROFILE.bio,
       createdAt: CREATED_AT,
     }),
@@ -285,13 +288,135 @@ describe('EditProfile', () => {
         id: 'u1',
         email: 'ada@example.com',
         username: 'ada_l',
+        displayName: null,
       })
       expect(queryClient.getQueryData(profileQueryKey('ada_l'))).toEqual({
         username: 'ada_l',
+        displayName: null,
         bio: 'Renamed',
         createdAt: CREATED_AT,
       })
       expect(queryClient.getQueryState(profileQueryKey('ada'))).toBeUndefined()
+    })
+  })
+
+  describe('name', () => {
+    it('is empty for a user without a name, who can save other changes without setting one', async () => {
+      mockProfiles()
+      const requests = mockPatch()
+      const { user } = await renderEditProfile()
+
+      expect(screen.getByLabelText('Name')).toHaveValue('')
+
+      await replaceText(user, 'Bio', 'Still nameless')
+      await save(user)
+
+      await waitFor(() => expect(requests).toEqual([{ bio: 'Still nameless' }]))
+      expect(await page().findByText('Still nameless')).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: '@ada' })).toBeInTheDocument()
+    })
+
+    it('ignores a whitespace-only name for a user without one (never sends "")', async () => {
+      mockProfiles()
+      const requests = mockPatch()
+      const { user } = await renderEditProfile()
+
+      await replaceText(user, 'Name', '   ')
+      await save(user)
+
+      expect(await screen.findByRole('heading', { name: '@ada' })).toBeInTheDocument()
+      expect(screen.getByTestId('location')).toHaveTextContent('/u/ada')
+      expect(requests).toHaveLength(0)
+    })
+
+    it('sets a name for a user without one and shows it on the profile', async () => {
+      // The server keeps the saved name, so the profile page's refetch returns it too.
+      const profiles = { ada: { ...ADA_PROFILE } }
+      mockProfiles(profiles)
+      const requests = mockPatch((body) => {
+        profiles.ada.displayName = body.displayName
+        return HttpResponse.json({ id: 'u1', email: 'ada@example.com', ...profiles.ada })
+      })
+      const { user, queryClient } = await renderEditProfile()
+
+      await replaceText(user, 'Name', '  Ada Lovelace  ')
+      await save(user)
+
+      await waitFor(() => expect(requests).toEqual([{ displayName: 'Ada Lovelace' }]))
+      expect(await screen.findByRole('heading', { name: 'Ada Lovelace' })).toBeInTheDocument()
+      expect(screen.getByTestId('location')).toHaveTextContent('/u/ada')
+      expect(queryClient.getQueryData(AUTH_ME_QUERY_KEY)).toMatchObject({
+        username: 'ada',
+        displayName: 'Ada Lovelace',
+      })
+      expect(queryClient.getQueryData(profileQueryKey('ada'))).toMatchObject({
+        displayName: 'Ada Lovelace',
+      })
+    })
+
+    it('is prefilled and can be changed', async () => {
+      mockProfiles({ ada: NAMED_ADA_PROFILE })
+      const requests = mockPatch()
+      const { user } = await renderEditProfile()
+
+      expect(screen.getByLabelText('Name')).toHaveValue('Ada Lovelace')
+
+      await replaceText(user, 'Name', 'Countess of Lovelace')
+      await save(user)
+
+      await waitFor(() => expect(requests).toEqual([{ displayName: 'Countess of Lovelace' }]))
+      expect(
+        await screen.findByRole('heading', { name: 'Countess of Lovelace' }),
+      ).toBeInTheDocument()
+    })
+
+    it("isn't sent when unchanged", async () => {
+      mockProfiles({ ada: NAMED_ADA_PROFILE })
+      const requests = mockPatch((body) =>
+        HttpResponse.json({
+          id: 'u1',
+          email: 'ada@example.com',
+          username: 'ada',
+          displayName: 'Ada Lovelace',
+          bio: body.bio,
+          createdAt: CREATED_AT,
+        }),
+      )
+      const { user } = await renderEditProfile()
+
+      await replaceText(user, 'Name', ' Ada Lovelace ')
+      await replaceText(user, 'Bio', 'Poet of science')
+      await save(user)
+
+      await waitFor(() => expect(requests).toEqual([{ bio: 'Poet of science' }]))
+    })
+
+    it.each(['', '   '])("can't be cleared once set (%j)", async (value) => {
+      mockProfiles({ ada: NAMED_ADA_PROFILE })
+      const requests = mockPatch()
+      const { user } = await renderEditProfile()
+
+      await replaceText(user, 'Name', value)
+      await save(user)
+
+      expect(await screen.findByText('Name is required')).toBeInTheDocument()
+      const input = screen.getByLabelText('Name')
+      expect(input).toHaveAttribute('aria-invalid', 'true')
+      expect(input.getAttribute('aria-describedby')).toContain('edit-profile-display-name-error')
+      expect(requests).toHaveLength(0)
+      expect(screen.getByTestId('location')).toHaveTextContent('/settings/profile')
+    })
+
+    it('rejects a name longer than 50 characters', async () => {
+      mockProfiles()
+      const requests = mockPatch()
+      const { user } = await renderEditProfile()
+
+      await replaceText(user, 'Name', 'a'.repeat(51))
+      await save(user)
+
+      expect(await screen.findByText('Name must be at most 50 characters')).toBeInTheDocument()
+      expect(requests).toHaveLength(0)
     })
   })
 

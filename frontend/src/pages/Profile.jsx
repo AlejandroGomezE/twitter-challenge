@@ -5,6 +5,7 @@ import { FollowButton } from '@/components/FollowButton';
 import { FollowListDialog } from '@/components/FollowListDialog';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { UserAvatar } from '@/components/UserAvatar';
+import { UserName } from '@/components/UserName';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -111,7 +112,13 @@ export function Profile() {
   return (
     <>
       <ProfileHeader
-        title={<span className="font-mono">@{profile.username}</span>}
+        title={
+          profile.displayName ? (
+            profile.displayName
+          ) : (
+            <span className="font-mono">@{profile.username}</span>
+          )
+        }
         subtitle={postCountLabel(profile.postCount)}
       />
 
@@ -142,10 +149,20 @@ export function Profile() {
               />
             )}
           </div>
-          {/* Name line: Pulse shows a display name here; we only have the username. Not a heading,
-              so it doesn't repeat the page's h1 for screen readers. */}
+          {/* Name line: the display name big with @username muted below it, or just @username
+              when there's no display name. Not a heading, so it doesn't repeat the page's h1 for
+              screen readers. */}
           <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1">
-            <p className="font-mono text-xl font-semibold break-words">@{profile.username}</p>
+            <p className="min-w-0 max-w-full">
+              <UserName
+                username={profile.username}
+                displayName={profile.displayName}
+                stacked
+                nameClassName="text-xl font-bold"
+                usernameClassName="text-sm"
+                fallbackClassName="font-mono text-xl font-semibold"
+              />
+            </p>
             {!isOwnProfile && profile.followsYou && (
               <Badge variant="secondary" className="rounded-md text-muted-foreground">
                 Follows you

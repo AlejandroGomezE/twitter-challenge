@@ -6,7 +6,7 @@ export const POST_MAX_LENGTH = 280;
 const ANNOUNCE_FROM_REMAINING = 20;
 
 // Length in Unicode code points, so an emoji (a surrogate pair) counts as 1, like the backend.
-const countCodePoints = (str) => Array.from(str ?? '').length;
+export const countCodePoints = (str) => Array.from(str ?? '').length;
 
 // What a composer (post or comment) needs to know about its draft: the trimmed body that would be
 // sent, its code-point length, how many characters are left (negative = over the limit), and

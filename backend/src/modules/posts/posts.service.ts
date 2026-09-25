@@ -23,7 +23,7 @@ export interface PostView {
   id: string;
   body: string;
   createdAt: Date;
-  author: { username: string };
+  author: { username: string; displayName: string | null };
   likeCount: number;
   commentCount: number;
   likedByMe: boolean;
@@ -217,7 +217,10 @@ export class PostsService {
       id: post.id,
       body: post.body,
       createdAt: post.createdAt,
-      author: { username: post.author.username },
+      author: {
+        username: post.author.username,
+        displayName: post.author.displayName,
+      },
       likeCount: counts.likeCount,
       commentCount: counts.commentCount,
       likedByMe: counts.likedByMe,

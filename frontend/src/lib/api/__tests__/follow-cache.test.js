@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createQueryClient } from '@/app/query-client'
+import { searchKeys } from '@/lib/api/search'
 import { followKeys, profileQueryKey } from '@/lib/api/users'
 import {
   bumpProfileFollowingCount,
@@ -25,11 +26,12 @@ const profile = (overrides = {}) => ({
 })
 
 describe('followQueryFilters', () => {
-  it("covers the target's profile, the caller's profile and every follow listing", () => {
+  it("covers the target's profile, the caller's profile, every follow listing and search", () => {
     expect(followQueryFilters('Ada', 'Bob')).toEqual([
       { queryKey: ['users', 'ada', 'profile'], exact: true },
       { queryKey: ['users', 'bob', 'profile'], exact: true },
       { queryKey: ['follows'] },
+      { queryKey: ['search'] },
     ])
   })
 
@@ -37,6 +39,7 @@ describe('followQueryFilters', () => {
     expect(followQueryFilters('ada', null)).toEqual([
       { queryKey: ['users', 'ada', 'profile'], exact: true },
       { queryKey: ['follows'] },
+      { queryKey: ['search'] },
     ])
   })
 })
@@ -72,6 +75,22 @@ describe('findFollowState', () => {
     queryClient.setQueryData(followKeys.suggestions(), { items: [row('ada', false)] })
 
     expect(findFollowState(queryClient, 'Ada')).toEqual({ following: false, followerCount: null })
+  })
+
+  it('falls back to a search result row (typeahead page or Explore pages)', () => {
+    const queryClient = newClient()
+    queryClient.setQueryData(searchKeys.userResults('ad', 'typeahead'), {
+      items: [row('Ada', true)],
+      nextCursor: null,
+    })
+    expect(findFollowState(queryClient, 'ada')).toEqual({ following: true, followerCount: null })
+
+    const other = newClient()
+    other.setQueryData(
+      searchKeys.userResults('a', 'all'),
+      infinite([row('bob', false)], [row('ada', false)]),
+    )
+    expect(findFollowState(other, 'ada')).toEqual({ following: false, followerCount: null })
   })
 
   it('returns null when the user is not cached anywhere', () => {
@@ -188,6 +207,31 @@ describe('setFollowingInLists', () => {
     expect(updated).not.toBe(mixed)
     expect(updated.pages[0]).toBe(mixed.pages[0])
     expect(updated.pages[1].items).toEqual([row('ada', true)])
+  })
+
+  it("updates the target's search result rows, in both the typeahead and Explore shapes", () => {
+    const queryClient = newClient()
+    const unrelated = { items: [row('carol', false)], nextCursor: null }
+    queryClient.setQueryData(searchKeys.userResults('a', 'typeahead'), {
+      items: [row('ADA', false), row('bob', false)],
+      nextCursor: 'c0',
+    })
+    queryClient.setQueryData(
+      searchKeys.userResults('a', 'all'),
+      infinite([row('bob', false)], [row('ada', false)]),
+    )
+    queryClient.setQueryData(searchKeys.userResults('car', 'typeahead'), unrelated)
+
+    setFollowingInLists(queryClient, 'ada', true)
+
+    expect(queryClient.getQueryData(searchKeys.userResults('a', 'typeahead'))).toEqual({
+      items: [row('ADA', true), row('bob', false)],
+      nextCursor: 'c0',
+    })
+    const explore = queryClient.getQueryData(searchKeys.userResults('a', 'all'))
+    expect(explore.pages[0].items).toEqual([row('bob', false)])
+    expect(explore.pages[1].items).toEqual([row('ada', true)])
+    expect(queryClient.getQueryData(searchKeys.userResults('car', 'typeahead'))).toBe(unrelated)
   })
 
   it('leaves profiles and unloaded suggestions alone', () => {

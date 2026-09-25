@@ -15,6 +15,8 @@ model User {
   email        String    @unique
   // Stored already lowercased by the app, so @unique is effectively case-insensitive.
   username     String    @unique
+  // Shown next to the @username. Required at sign-up; null for accounts created before it existed.
+  displayName  String?
   bio          String?
   passwordHash String
   createdAt    DateTime  @default(now())

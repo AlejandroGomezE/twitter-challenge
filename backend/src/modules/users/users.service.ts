@@ -8,25 +8,38 @@ import { Prisma, type User } from '../../generated/prisma/client.js';
 import {
   type FollowCounts,
   FollowsService,
+  type FollowUserPage,
 } from '../follows/follows.service.js';
+import { resolvePageSize } from '../posts/pagination.js';
 import {
   type PageQuery,
   type PostPage,
   PostsService,
 } from '../posts/posts.service.js';
-import { normalizeBio, normalizeUsername } from './username.rules.js';
+import {
+  decodeUsernameCursor,
+  encodeUsernameCursor,
+} from './username-cursor.js';
+import {
+  normalizeBio,
+  normalizeDisplayName,
+  normalizeUsername,
+} from './username.rules.js';
 import { type UpdateProfileData, UsersRepository } from './users.repository.js';
 
 export interface PublicUser {
   id: string;
   email: string;
   username: string;
+  // null for accounts created before display names existed.
+  displayName: string | null;
 }
 
 // Another user's profile as any signed-in user may see it — never the email.
 // The two booleans are relative to the viewer and false on their own profile.
 export interface PublicProfile {
   username: string;
+  displayName: string | null;
   bio: string | null;
   createdAt: Date;
   postCount: number;
@@ -43,6 +56,7 @@ export interface MyProfile {
   id: string;
   email: string;
   username: string;
+  displayName: string | null;
   bio: string | null;
   createdAt: Date;
   postCount: number;
@@ -50,10 +64,12 @@ export interface MyProfile {
   followingCount: number;
 }
 
-// Only the keys present are changed; an empty bio (or null) clears it.
+// Only the keys present are changed; an empty bio (or null) clears it. The
+// display name can only be set or changed (the DTO rejects a blank one).
 export interface UpdateProfileInput {
   username?: string;
   bio?: string | null;
+  displayName?: string;
 }
 
 // OWASP-recommended argon2id parameters. argon2 generates a random salt per
@@ -130,6 +146,7 @@ export class UsersService {
   async create(
     email: string,
     username: string,
+    displayName: string,
     password: string,
   ): Promise<PublicUser> {
     const normalizedEmail = normalizeEmail(email);
@@ -138,6 +155,7 @@ export class UsersService {
       const user = await this.usersRepository.create({
         email: normalizedEmail,
         username: normalizeUsername(username),
+        displayName: normalizeDisplayName(displayName),
         passwordHash,
       });
       return this.toPublicUser(user);
@@ -175,6 +193,7 @@ export class UsersService {
     ]);
     return {
       username: user.username,
+      displayName: user.displayName,
       bio: user.bio,
       createdAt: user.createdAt,
       postCount,
@@ -196,6 +215,46 @@ export class UsersService {
     return this.postsService.listByAuthor(user.id, viewerId, query);
   }
 
+  // Users whose username or display name contains `query` (already
+  // normalized and validated by SearchUsersQueryDto), ordered by username,
+  // as `viewerId` sees them; the viewer is included if they match, with both
+  // booleans false. A constant number of queries: the page (limit + 1 to
+  // detect a next page) plus the two relation queries. The cursor is
+  // validated before any query runs (400 `Invalid cursor`).
+  async searchUsers(
+    viewerId: string,
+    query: string,
+    page: PageQuery,
+  ): Promise<FollowUserPage> {
+    const afterUsername =
+      page.cursor === undefined ? undefined : decodeUsernameCursor(page.cursor);
+    const limit = resolvePageSize(page.limit);
+    const rows = await this.usersRepository.searchPage({
+      query,
+      afterUsername,
+      limit,
+    });
+    const users = rows.slice(0, limit);
+    const last = users.at(-1);
+    const nextCursor =
+      rows.length > limit && last ? encodeUsernameCursor(last.username) : null;
+    const { followedByViewer, followingViewer } =
+      await this.followsService.relationsFor(
+        viewerId,
+        users.map((user) => user.id),
+      );
+    return {
+      items: users.map((user) => ({
+        username: user.username,
+        displayName: user.displayName,
+        bio: user.bio,
+        isFollowing: followedByViewer.has(user.id),
+        followsYou: followingViewer.has(user.id),
+      })),
+      nextCursor,
+    };
+  }
+
   // Always scoped to the caller's own id. Re-setting your current username
   // is a no-op update (no unique violation against your own row).
   async updateProfile(
@@ -208,6 +267,9 @@ export class UsersService {
     }
     if (input.bio !== undefined) {
       data.bio = input.bio === null ? null : normalizeBio(input.bio);
+    }
+    if (input.displayName !== undefined) {
+      data.displayName = normalizeDisplayName(input.displayName);
     }
     let user: User;
     try {
@@ -231,7 +293,12 @@ export class UsersService {
   }
 
   toPublicUser(user: User): PublicUser {
-    return { id: user.id, email: user.email, username: user.username };
+    return {
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      displayName: user.displayName,
+    };
   }
 
   // Lookup is case-insensitive (usernames are stored normalized).
@@ -254,6 +321,7 @@ export class UsersService {
       id: user.id,
       email: user.email,
       username: user.username,
+      displayName: user.displayName,
       bio: user.bio,
       createdAt: user.createdAt,
       postCount,

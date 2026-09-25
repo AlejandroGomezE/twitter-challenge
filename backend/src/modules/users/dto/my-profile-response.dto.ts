@@ -12,6 +12,10 @@ export class MyProfileResponseDto {
   @Expose()
   username: string;
 
+  // null for accounts created before display names existed.
+  @Expose()
+  displayName: string | null;
+
   @Expose()
   bio: string | null;
 

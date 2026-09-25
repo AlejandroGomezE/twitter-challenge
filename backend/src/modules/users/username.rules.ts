@@ -7,9 +7,10 @@ import {
   Length,
   Matches,
   MaxLength,
+  ValidateBy,
 } from 'class-validator';
 
-// Authoritative username/bio rules. The frontend mirrors them in
+// Authoritative username/bio/display-name rules. The frontend mirrors them in
 // `frontend/src/lib/validation/profile-schemas.js` — keep both in sync.
 
 // Words that would collide with app routes or API paths. The frontend copy
@@ -33,6 +34,9 @@ export const USERNAME_MIN_LENGTH = 3;
 export const USERNAME_MAX_LENGTH = 20;
 export const USERNAME_PATTERN = /^[a-z0-9_]+$/;
 export const BIO_MAX_LENGTH = 160;
+export const DISPLAY_NAME_MIN_LENGTH = 1;
+export const DISPLAY_NAME_MAX_LENGTH = 50;
+const LINE_BREAK_PATTERN = /[\r\n]/;
 
 // Usernames are stored lowercase, so the DB unique index is effectively
 // case-insensitive.
@@ -44,6 +48,33 @@ export function normalizeUsername(value: string): string {
 export function normalizeBio(value: string): string | null {
   const trimmed = value.trim();
   return trimmed === '' ? null : trimmed;
+}
+
+// Display names are stored trimmed. Unlike the bio, a blank display name is
+// not turned into null: it stays '' so the validator rejects it (a display
+// name can be set or changed, never cleared).
+export function normalizeDisplayName(value: string): string {
+  return value.trim();
+}
+
+// Length in Unicode code points, so an emoji such as "😀" (two UTF-16 code
+// units) counts as 1 — the same way post bodies are counted.
+// class-validator's @Length counts UTF-16 code units, so it is not used.
+export function displayNameLength(value: string): number {
+  return Array.from(value).length;
+}
+
+// True for a normalized display name: 1–50 code points, no line breaks.
+export function isValidDisplayName(value: unknown): boolean {
+  if (typeof value !== 'string') {
+    return false;
+  }
+  const length = displayNameLength(value);
+  return (
+    length >= DISPLAY_NAME_MIN_LENGTH &&
+    length <= DISPLAY_NAME_MAX_LENGTH &&
+    !LINE_BREAK_PATTERN.test(value)
+  );
 }
 
 // DTO building blocks. The @Transform runs in plainToInstance, i.e. before
@@ -80,6 +111,29 @@ export function IsBio(): PropertyDecorator {
     IsString(),
     MaxLength(BIO_MAX_LENGTH, {
       message: `bio must be at most ${BIO_MAX_LENGTH} characters`,
+    }),
+  );
+}
+
+// Display-name field: trimmed, then a string of 1–50 code points with no
+// line breaks (a \r or \n left after trimming). Required as declared; on a
+// DTO where it may be omitted, add
+// @ValidateIf((o) => o.displayName !== undefined) rather than @IsOptional(),
+// so that an explicit null is still rejected (a display name can't be
+// cleared).
+export function IsDisplayName(): PropertyDecorator {
+  return applyDecorators(
+    Transform(({ value }: { value: unknown }) =>
+      typeof value === 'string' ? normalizeDisplayName(value) : value,
+    ),
+    IsString(),
+    ValidateBy({
+      name: 'isDisplayName',
+      validator: {
+        validate: (value: unknown): boolean => isValidDisplayName(value),
+        defaultMessage: (): string =>
+          `displayName must be between ${DISPLAY_NAME_MIN_LENGTH} and ${DISPLAY_NAME_MAX_LENGTH} characters with no line breaks`,
+      },
     }),
   );
 }

@@ -36,9 +36,12 @@ export function AppShell() {
           <MobileNav />
         </main>
 
+        {/* `overflow-y-auto` also clips horizontally, so the rail gets inline padding (width grown
+            to match, content stays 350px) for the search box's 3px focus ring and the typeahead
+            panel's shadow to show in full. */}
         <aside
           aria-label="Sidebar"
-          className="sticky top-0 hidden h-dvh w-[350px] shrink-0 overflow-y-auto py-8 xl:block"
+          className="sticky top-0 hidden h-dvh w-[366px] shrink-0 overflow-y-auto px-2 py-8 xl:block"
         >
           <RightRail />
         </aside>
