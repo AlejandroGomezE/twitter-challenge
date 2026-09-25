@@ -122,12 +122,10 @@ describe('PostsRepository', () => {
   });
 
   describe('like', () => {
-    it('inserts the (userId, postId) like', async () => {
+    it('inserts the (userId, postId) like and resolves true', async () => {
       prisma.like.create.mockResolvedValue({ postId: 'post-1' });
 
-      await expect(
-        repository.like('user-1', 'post-1'),
-      ).resolves.toBeUndefined();
+      await expect(repository.like('user-1', 'post-1')).resolves.toBe(true);
       expect(prisma.like.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: { userId: 'user-1', postId: 'post-1' },
@@ -135,12 +133,10 @@ describe('PostsRepository', () => {
       );
     });
 
-    it('ignores a duplicate (P2002): already liked is a no-op', async () => {
+    it('ignores a duplicate (P2002): already liked resolves false', async () => {
       prisma.like.create.mockRejectedValue(prismaError('P2002'));
 
-      await expect(
-        repository.like('user-1', 'post-1'),
-      ).resolves.toBeUndefined();
+      await expect(repository.like('user-1', 'post-1')).resolves.toBe(false);
     });
 
     it('rethrows any other error (e.g. P2003 for a deleted post)', async () => {

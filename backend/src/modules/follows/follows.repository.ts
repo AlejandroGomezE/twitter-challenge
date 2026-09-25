@@ -52,21 +52,23 @@ export class FollowsRepository {
   // Idempotent insert-or-ignore of the (followerId, followingId) follow, the
   // same race-safe pattern as PostsRepository.like: the composite primary key
   // is the only arbiter, so of N concurrent identical requests one inserts
-  // and the rest hit P2002 and are treated as "already following". Any other
-  // error — e.g. P2003 when a user was deleted meanwhile — is rethrown for
-  // the service to map.
-  async follow(followerId: string, followingId: string): Promise<void> {
+  // and the rest hit P2002 and are treated as "already following". Resolves
+  // true if this call inserted the follow, false if it already existed. Any
+  // other error — e.g. P2003 when a user was deleted meanwhile — is rethrown
+  // for the service to map.
+  async follow(followerId: string, followingId: string): Promise<boolean> {
     try {
       await this.prisma.follow.create({
         data: { followerId, followingId },
         select: { followerId: true },
       });
+      return true;
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === UNIQUE_CONSTRAINT_VIOLATION
       ) {
-        return;
+        return false;
       }
       throw error;
     }

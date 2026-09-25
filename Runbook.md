@@ -30,9 +30,9 @@ their own.
 http://localhost:5173 — you land on `/sign-in`; use "Create an account" (`/sign-up`). First time
 after pulling the auth change, run `npx prisma db push` from `backend/` (see Backend → Auth);
 after pulling the profile change, run `npx prisma db push --force-reset` instead (see Backend →
-Profiles — it wipes the dev DB); after pulling the posts, the follows or the user-search
-(display names) change, a plain `npx prisma db push` is enough (additive — see Backend → Posts /
-Follows / Search).
+Profiles — it wipes the dev DB); after pulling the posts, the follows, the user-search
+(display names) or the notifications change, a plain `npx prisma db push` is enough (additive — see
+Backend → Posts / Follows / Search / Notifications).
 
 ---
 
@@ -258,6 +258,25 @@ from `backend/.env` (create it from `backend/.env.example`; it's git-ignored).
   - **After pulling this change (it also adds `User.displayName`), run `npx prisma db push` from
     `backend/`** (plain — a new nullable column, no reset; existing users get `null`) and
     `npx prisma generate` if the client is stale.
+- **Notifications** (`src/modules/notifications/`) — every route session-gated (401 without a
+  session; the POST with a foreign `Origin` → 403) and always the session user's own. Created
+  asynchronously from domain events (`src/common/events/`) when someone follows you, likes your
+  post or comments on it — never for your own actions. Unlike / unfollow removes the notification;
+  deleting the comment, post or either user removes it through the cascade. A failure creating one
+  is logged and never fails the like / follow / comment request. `Notification` = `{ id, type
+  ('follow' | 'like' | 'comment'), createdAt, read, actor: { username, displayName }, post: { id,
+  body } | null, comment: { id, body } | null }`:
+
+  | Method + path | Result | Errors |
+  |---|---|---|
+  | `GET /notifications?cursor=&limit=` | 200 page of `Notification`, newest first | 400 bad cursor/limit |
+  | `GET /notifications/unread-count` | 200 `{ count }` | — |
+  | `POST /notifications/read` `{ until }` | 204 — marks your unread notifications created at or before `until` as read | 400 missing / invalid `until` (ISO-8601) |
+
+  - Paging works like the posts listings (opaque `cursor`, `limit` 1–50, default 20, an empty
+    `cursor=` → 400). Not rate limited.
+  - **After pulling this change, run `npx prisma db push` from `backend/`** (plain — `Notification`
+    is a new table, no reset) and `npx prisma generate` if the client is stale.
 - **Run**: `start:dev` (watch mode, what `scripts/be-local` uses), `start` (no watch),
   `start:debug`, `start:prod` (runs the compiled `dist/`).
 - **Test**: `test` (Vitest unit), `test:watch`, `test:cov` (coverage), `test:debug`,

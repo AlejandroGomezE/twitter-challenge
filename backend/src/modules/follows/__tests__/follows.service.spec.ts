@@ -1,5 +1,7 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Test } from '@nestjs/testing';
+import { DomainEvent } from '../../../common/events/domain-events.js';
 import { Prisma } from '../../../generated/prisma/client.js';
 import { decodeCursor, encodeCursor } from '../../posts/pagination.js';
 import {
@@ -59,6 +61,7 @@ describe('FollowsService', () => {
     relationsAmong: vi.fn(),
     findSuggestions: vi.fn(),
   };
+  const eventEmitter = { emit: vi.fn() };
 
   beforeEach(async () => {
     vi.resetAllMocks();
@@ -67,6 +70,7 @@ describe('FollowsService', () => {
       providers: [
         FollowsService,
         { provide: FollowsRepository, useValue: followsRepository },
+        { provide: EventEmitter2, useValue: eventEmitter },
       ],
     }).compile();
     service = moduleRef.get(FollowsService);
@@ -115,6 +119,38 @@ describe('FollowsService', () => {
         service.setFollowing(VIEWER_ID, 'ghost', true),
       ).rejects.toEqual(new NotFoundException('User not found'));
       expect(followsRepository.follow).not.toHaveBeenCalled();
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
+    });
+
+    it('emits follow.created when the follow was inserted', async () => {
+      followsRepository.follow.mockResolvedValue(true);
+
+      await service.setFollowing(VIEWER_ID, 'target', true);
+
+      expect(eventEmitter.emit).toHaveBeenCalledTimes(1);
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        DomainEvent.FollowCreated,
+        { actorId: VIEWER_ID, recipientId: TARGET_ID },
+      );
+    });
+
+    it('emits nothing when the follow already existed', async () => {
+      followsRepository.follow.mockResolvedValue(false);
+
+      await expect(
+        service.setFollowing(VIEWER_ID, 'target', true),
+      ).resolves.toEqual({ following: true, followerCount: 4 });
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
+    });
+
+    it('emits follow.removed on unfollow', async () => {
+      await service.setFollowing(VIEWER_ID, 'target', false);
+
+      expect(eventEmitter.emit).toHaveBeenCalledTimes(1);
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        DomainEvent.FollowRemoved,
+        { actorId: VIEWER_ID, recipientId: TARGET_ID },
+      );
     });
 
     it.each([
@@ -130,6 +166,7 @@ describe('FollowsService', () => {
       ).rejects.toEqual(new BadRequestException(message));
       expect(followsRepository.follow).not.toHaveBeenCalled();
       expect(followsRepository.unfollow).not.toHaveBeenCalled();
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
     });
 
     it('maps a P2003 (user deleted meanwhile) to 404', async () => {
@@ -138,6 +175,7 @@ describe('FollowsService', () => {
       await expect(
         service.setFollowing(VIEWER_ID, 'target', true),
       ).rejects.toEqual(new NotFoundException('User not found'));
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
     });
 
     it('rethrows other errors', async () => {

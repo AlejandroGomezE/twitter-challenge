@@ -3,6 +3,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import {
+  DomainEvent,
+  emitDomainEvent,
+} from '../../common/events/domain-events.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import { FollowsService } from '../follows/follows.service.js';
 import {
@@ -64,6 +69,7 @@ export class PostsService {
   constructor(
     private readonly postsRepository: PostsRepository,
     private readonly followsService: FollowsService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   // `authorId` is always the session user's id. A new post has no likes or
@@ -105,6 +111,8 @@ export class PostsService {
   // user); both are idempotent. 404 if the post doesn't exist — checked
   // first, and again via the FK violation (P2003) if the post is deleted
   // between the check and the insert, so that race is a 404, not a 500.
+  // After the write, emits `like.created` (only if the like was actually
+  // inserted) or `like.removed`; never on a 404.
   async setLiked(
     postId: string,
     userId: string,
@@ -114,9 +122,10 @@ export class PostsService {
     if (!post) {
       throw new NotFoundException(POST_NOT_FOUND_MESSAGE);
     }
+    let inserted = false;
     try {
       if (liked) {
-        await this.postsRepository.like(userId, postId);
+        inserted = await this.postsRepository.like(userId, postId);
       } else {
         await this.postsRepository.unlike(userId, postId);
       }
@@ -128,6 +137,12 @@ export class PostsService {
         throw new NotFoundException(POST_NOT_FOUND_MESSAGE);
       }
       throw error;
+    }
+    const payload = { actorId: userId, recipientId: post.authorId, postId };
+    if (!liked) {
+      emitDomainEvent(this.eventEmitter, DomainEvent.LikeRemoved, payload);
+    } else if (inserted) {
+      emitDomainEvent(this.eventEmitter, DomainEvent.LikeCreated, payload);
     }
     const likeCount = await this.postsRepository.likeCount(postId);
     return { liked, likeCount };

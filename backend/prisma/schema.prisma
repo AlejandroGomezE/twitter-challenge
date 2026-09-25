@@ -11,24 +11,28 @@ datasource db {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
+  id                    String         @id @default(cuid())
+  email                 String         @unique
   // Stored already lowercased by the app, so @unique is effectively case-insensitive.
-  username     String    @unique
+  username              String         @unique
   // Shown next to the @username. Required at sign-up; null for accounts created before it existed.
-  displayName  String?
-  bio          String?
-  passwordHash String
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  sessions     Session[]
-  posts        Post[]
-  likes        Like[]
-  comments     Comment[]
+  displayName           String?
+  bio                   String?
+  passwordHash          String
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  sessions              Session[]
+  posts                 Post[]
+  likes                 Like[]
+  comments              Comment[]
   // Follow rows where this user is the follower (i.e. the accounts this user follows).
-  following    Follow[]  @relation("UserFollowing")
+  following             Follow[]       @relation("UserFollowing")
   // Follow rows where this user is the one being followed (i.e. this user's followers).
-  followers    Follow[]  @relation("UserFollowers")
+  followers             Follow[]       @relation("UserFollowers")
+  // Notifications this user receives.
+  notificationsReceived Notification[] @relation("NotificationRecipient")
+  // Notifications caused by this user's actions (their follows, likes, comments).
+  notificationsSent     Notification[] @relation("NotificationActor")
 }
 
 model Session {
@@ -43,13 +47,14 @@ model Session {
 }
 
 model Post {
-  id        String    @id @default(cuid())
-  authorId  String
-  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  body      String
-  createdAt DateTime  @default(now())
-  likes     Like[]
-  comments  Comment[]
+  id            String         @id @default(cuid())
+  authorId      String
+  author        User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  body          String
+  createdAt     DateTime       @default(now())
+  likes         Like[]
+  comments      Comment[]
+  notifications Notification[]
 
   @@index([authorId, createdAt])
   @@index([createdAt])
@@ -67,13 +72,14 @@ model Like {
 }
 
 model Comment {
-  id        String   @id @default(cuid())
-  postId    String
-  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  authorId  String
-  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  body      String
-  createdAt DateTime @default(now())
+  id            String         @id @default(cuid())
+  postId        String
+  post          Post           @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId      String
+  author        User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  body          String
+  createdAt     DateTime       @default(now())
+  notifications Notification[]
 
   @@index([postId, createdAt])
 }
@@ -92,4 +98,28 @@ model Follow {
   @@index([followingId, createdAt])
   // "Following of X", newest follow first.
   @@index([followerId, createdAt])
+}
+
+model Notification {
+  id          String    @id @default(cuid())
+  // The user who receives the notification.
+  recipientId String
+  recipient   User      @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  // The user whose action triggered it.
+  actorId     String
+  actor       User      @relation("NotificationActor", fields: [actorId], references: [id], onDelete: Cascade)
+  // 'follow' | 'like' | 'comment' — SQLite has no enums, so validated in code.
+  type        String
+  // The liked / commented-on post; null for 'follow'.
+  postId      String?
+  post        Post?     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  // The comment; set only for 'comment'.
+  commentId   String?
+  comment     Comment?  @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  // Null while unread.
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  // "Notifications of X", newest first.
+  @@index([recipientId, createdAt])
 }

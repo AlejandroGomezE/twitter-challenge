@@ -3,6 +3,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import { useLocation } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import { AppRouter } from '@/app/router'
+import { notificationKeys } from '@/lib/api/notifications'
 import { renderWithProviders } from '@/test/render'
 import { apiUrl, server } from '@/test/server'
 
@@ -41,7 +42,10 @@ async function renderShellWithProbe(route) {
 const composerTextbox = () =>
   within(screen.getByRole('main')).getByRole('textbox', { name: 'Compose a new post' })
 
-const COMING_SOON_NAV = ['Notifications', 'Messages', 'Bookmarks']
+const COMING_SOON_NAV = ['Messages', 'Bookmarks']
+
+const withUnreadCount = (count) =>
+  server.use(http.get(apiUrl('/notifications/unread-count'), () => HttpResponse.json({ count })))
 
 describe('AppShell', () => {
   describe('left rail', () => {
@@ -87,6 +91,16 @@ describe('AppShell', () => {
       await renderShell()
 
       expect(primaryNav().getByRole('link', { name: 'Explore' })).toHaveAttribute('href', '/explore')
+    })
+
+    it('links Notifications, with no badge when nothing is unread (default handlers)', async () => {
+      await renderShell()
+
+      const link = primaryNav().getByRole('link', { name: 'Notifications' })
+      expect(link).toHaveAttribute('href', '/notifications')
+      expect(link).not.toHaveAttribute('aria-current')
+      expect(leftRail().queryByRole('button', { name: 'Notifications' })).not.toBeInTheDocument()
+      expect(link.querySelector('[data-slot="badge"]')).toBeNull()
     })
 
     it('shows New post as an enabled button', async () => {
@@ -197,10 +211,12 @@ describe('AppShell', () => {
       expect(nav.getByRole('link', { name: 'Profile' })).toHaveAttribute('href', '/u/ada')
       expect(nav.getByRole('link', { name: 'Sign out' })).toHaveAttribute('href', '/sign-out')
       expect(nav.getByRole('link', { name: 'Explore' })).toHaveAttribute('href', '/explore')
-      for (const name of ['Notifications', 'Messages']) {
-        expect(nav.getByRole('button', { name })).toHaveAttribute('aria-disabled', 'true')
-        expect(nav.queryByRole('link', { name })).not.toBeInTheDocument()
-      }
+      expect(nav.getByRole('link', { name: 'Notifications' })).toHaveAttribute(
+        'href',
+        '/notifications',
+      )
+      expect(nav.getByRole('button', { name: 'Messages' })).toHaveAttribute('aria-disabled', 'true')
+      expect(nav.queryByRole('link', { name: 'Messages' })).not.toBeInTheDocument()
     })
 
     it('renders the compose button as an enabled "New post" button', async () => {
@@ -211,6 +227,51 @@ describe('AppShell', () => {
       for (const button of buttons) {
         expect(button).toBeEnabled()
         expect(button).not.toHaveAttribute('aria-disabled')
+      }
+    })
+  })
+
+  describe('unread notifications badge', () => {
+    const navs = [
+      ['left rail', primaryNav],
+      ['bottom bar', mobileNav],
+    ]
+
+    it.each(navs)('shows the unread count on Notifications and in its name (%s)', async (_label, nav) => {
+      withUnreadCount(3)
+      await renderShell()
+
+      const link = await nav().findByRole('link', { name: 'Notifications, 3 unread' })
+      expect(link).toHaveAttribute('href', '/notifications')
+      const badge = link.querySelector('[data-slot="badge"]')
+      expect(badge).toHaveTextContent('3')
+      expect(badge).toHaveAttribute('aria-hidden', 'true')
+    })
+
+    it.each(navs)('caps the badge at 99+ but keeps the exact count in the name (%s)', async (_label, nav) => {
+      withUnreadCount(150)
+      await renderShell()
+
+      const link = await nav().findByRole('link', { name: 'Notifications, 150 unread' })
+      expect(link.querySelector('[data-slot="badge"]')).toHaveTextContent('99+')
+    })
+
+    it('shows no badge when the count cannot be loaded', async () => {
+      server.use(
+        http.get(apiUrl('/notifications/unread-count'), () =>
+          HttpResponse.json({ message: 'Boom' }, { status: 500 }),
+        ),
+      )
+      const { queryClient } = await renderShell()
+
+      // Wait for the 500 to settle (the query in error), so this doesn't pass during loading.
+      await waitFor(() =>
+        expect(queryClient.getQueryState(notificationKeys.unreadCount())?.status).toBe('error'),
+      )
+      for (const nav of [primaryNav(), mobileNav()]) {
+        const link = nav.getByRole('link', { name: 'Notifications' })
+        expect(link).toHaveAccessibleName('Notifications')
+        expect(link.querySelector('[data-slot="badge"]')).toBeNull()
       }
     })
   })
