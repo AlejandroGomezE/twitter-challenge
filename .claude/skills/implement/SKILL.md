@@ -7,7 +7,7 @@ argument-hint: <slug>
 # Build: $ARGUMENTS
 
 You are running **Build** (`WORKFLOW.md`). Your job: work through `features/<slug>/feature.md`'s
-`## Tasks` checklist, one task (or a few independent ones) at a time, via `implementer` ⇄ `reviewer`.
+`## Tasks` checklist — independent tasks in parallel, up to 3 at once — via `implementer` ⇄ `reviewer`.
 Alejandro directs by iteration — summarize state in behavior terms, don't dump diffs unless asked.
 
 Read `WORKFLOW.md` and `CONVENTIONS.md` first. Write artifacts in English; talk to Alejandro in his
@@ -38,21 +38,41 @@ git branch --show-current
 
 ## Step 3. Work the task list
 
-For each task still unchecked in `## Tasks` (a few independent ones may run in parallel via separate
-`Agent` calls if they touch different files — most of the time just go one at a time):
+Run the list as a pipeline, keeping **up to 3 agents working at once** (implementers + reviewers).
+
+**Ready tasks.** A task is *ready* when it's unchecked, every task in its `after:` tag is checked off,
+and it won't touch the same files as a task currently in flight. Tasks are tagged
+`(T<n>, be|fe[, after: …])` by `/feature`; if an older `feature.md` has no tags, infer dependencies
+from the descriptions and write the tags in before starting. When unsure whether two tasks overlap,
+treat them as dependent.
+
+**Dispatch.** Whenever a slot is free, launch the next ready task(s) — **all launches for a round go in
+one message** (multiple `Agent` calls in one response); calls in separate messages run serially.
+Launch in the background and react to each completion as it arrives, rather than waiting for the
+whole round.
+
+Per task:
 
 1. **Implement** — spawn the `implementer` agent, passing the target stack (`backend` or `frontend`)
-   and the task description plus any prior `REVIEW_NOTES`. It reads existing code for precedent
-   (`Grep`/`Glob`) before writing.
+   and the task description plus any prior `REVIEW_NOTES`. If other tasks are in flight, also pass
+   `PARALLEL_WITH:` their task ids + the files they're expected to touch. It reads existing code for
+   precedent (`Grep`/`Glob`) before writing.
    - `BLOCKED: …` → note it under `## Decisions` as an open question, ask Alejandro
-     (`CONVENTIONS.md` §6).
-   - `COMPLETED` → go to review.
+     (`CONVENTIONS.md` §6). Tasks that don't depend on it keep going.
+   - `COMPLETED` → **in the same message**, spawn its reviewer *and* launch the next ready task(s)
+     into the freed slots — don't let a review block new implementation.
 2. **Review** — spawn a **fresh** `reviewer` agent (never reused) with the task + files changed.
-   - `APPROVED` → check the task off in `feature.md`, move to the next task.
+   - `APPROVED` → check the task off in `feature.md` (this may make dependent tasks ready).
    - `REJECTED` → resume the *same* implementer with the reviewer's notes. After **2** rejections on
      the same task, stop and ask Alejandro rather than looping further.
 
+Only the coordinator edits `feature.md` — never ask an agent to check off its own task.
+
 ## Step 4. Build & checks
+
+Once no tasks are in flight, run this full pass — it's the authoritative check after parallel work.
+If scope is both stacks, run backend and frontend checks **concurrently** (two background commands),
+each chained in its own directory.
 
 - **`backend/`:** `npm run build` (stop on errors), then `npm test`. Report as "N suites / M tests".
 - **`frontend/`:** `npm run build`, then `npm test`, then `npm run lint`. Report tests as "N suites /
@@ -87,6 +107,7 @@ Once the task list is done and checks are green:
 
 - **Never edit product code yourself** — that's what `implementer` is for. You orchestrate.
 - **Fresh reviewer every time**; resume the same implementer on a reject (it keeps context).
+- **Max 3 agents in flight; never two on overlapping files.**
 - **Never override a reviewer rejection.**
 - **Two rejections on one task → ask, don't keep looping** (`CONVENTIONS.md` §6).
 - No PR here — that's `/close-feature`.

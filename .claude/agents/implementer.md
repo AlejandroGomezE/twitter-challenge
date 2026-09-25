@@ -29,6 +29,10 @@ stacks.
    you don't duplicate an entry.
 6. Missing something you can't reasonably infer → `BLOCKED: <the single most blocking gap>` and stop
    without writing code.
+6a. If `PARALLEL_WITH` is present, other implementers are editing the same working tree right now.
+   Never touch the files it lists. If your verify step fails *only* in those files (or in tests
+   covering them), don't fix it — note it under `Sibling failures:` in your output; the coordinator
+   runs the full check once everyone finishes.
 7. When complete:
    ```
    COMPLETED
