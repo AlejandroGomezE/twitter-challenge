@@ -202,8 +202,12 @@ running server.
 **Error handling.** A single global `AllExceptionsFilter`
 (`src/common/filters/all-exceptions.filter.ts`) catches everything and normalizes the
 response to `{ statusCode, message, timestamp, path }`. Paired with a global
-`ValidationPipe` (`whitelist: true, transform: true`, implicit conversion) — DTOs use
-`class-validator` / `class-transformer` (see `src/auth/dto/`, `src/modules/users/dto/`).
+`ValidationPipe` (`whitelist: true, transform: true`, **no** implicit conversion) — DTOs use
+`class-validator` / `class-transformer` (see `src/auth/dto/`, `src/modules/users/dto/`). Values
+keep the JSON type the client sent, so a number or boolean in a string field fails `@IsString()`
+with a 400 instead of being coerced (`test/validation.e2e-spec.ts`). A field that genuinely needs
+conversion — numeric query params always arrive as strings — declares it explicitly with
+`@Type(() => Number)`.
 
 **Responses.** Request DTOs validate input (`class-validator`); response DTOs define
 output. Every handler that returns a body returns a response DTO — a class with
