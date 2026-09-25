@@ -95,7 +95,7 @@ after them note their own status):
   primitive.
 - `layout/nav-items.ts` — not a component: the nav config (`getNavItems`, `getSignOutItem`)
   shared by `SideNav` and `MobileNav`. Explore is now enabled (→ `/explore`, side and bottom
-  nav); Notifications, Messages and Bookmarks stay `ComingSoon`.
+  nav). Every nav item is a working link; Messages and Bookmarks were removed from the nav.
 - `feed/Composer.tsx` — the Home post composer, now enabled: auto-growing textarea
   (`id="composer"` for "New post"), `N/280` counter, Post (spinner while sending), server error
   below, Cmd/Ctrl+Enter; attachment icons stay `ComingSoon`. Uses `Textarea`, `Button`,

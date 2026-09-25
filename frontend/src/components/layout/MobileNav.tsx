@@ -2,7 +2,6 @@ import { NavLink } from 'react-router'
 import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/lib/auth/use-auth'
 import { cn } from '@/lib/utils'
-import { ComingSoon } from './ComingSoon'
 import { formatBadgeCount, getNavItems, navItemLabel } from './nav-items'
 import { useNavBadgeCounts } from './use-nav-badge-counts'
 
@@ -21,16 +20,10 @@ export function MobileNav() {
       aria-label="Primary (mobile)"
       className="sticky bottom-0 z-20 flex items-center justify-around border-t border-border bg-background/85 backdrop-blur-md lg:hidden"
     >
-      {items.map(({ key, label, icon: Icon, to, end, disabled, badge }) => {
+      {items.map(({ key, label, icon: Icon, to, end, badge }) => {
         const count = badge ? badgeCounts[badge] : undefined
         const badgeText = formatBadgeCount(count)
-        return disabled ? (
-          <ComingSoon key={key} side="top">
-            <button type="button" aria-label={label} className={itemClassName}>
-              <Icon className="size-6 text-muted-foreground" aria-hidden="true" />
-            </button>
-          </ComingSoon>
-        ) : (
+        return (
           <NavLink
             key={key}
             to={to}
