@@ -51,8 +51,8 @@ describe('FollowsRepository', () => {
   });
 
   describe('follow', () => {
-    it('creates the (follower, following) row', async () => {
-      await repository.follow('a', 'b');
+    it('creates the (follower, following) row and resolves true', async () => {
+      await expect(repository.follow('a', 'b')).resolves.toBe(true);
 
       expect(prisma.follow.create).toHaveBeenCalledWith({
         data: { followerId: 'a', followingId: 'b' },
@@ -60,10 +60,10 @@ describe('FollowsRepository', () => {
       });
     });
 
-    it('treats a P2002 (already following) as success', async () => {
+    it('treats a P2002 (already following) as success, resolving false', async () => {
       prisma.follow.create.mockRejectedValue(prismaError('P2002'));
 
-      await expect(repository.follow('a', 'b')).resolves.toBeUndefined();
+      await expect(repository.follow('a', 'b')).resolves.toBe(false);
     });
 
     it('rethrows other errors (e.g. P2003)', async () => {

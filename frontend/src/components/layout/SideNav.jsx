@@ -2,19 +2,22 @@ import { Feather } from 'lucide-react'
 import { Link, NavLink } from 'react-router'
 import { BrandMark } from '@/components/BrandMark'
 import { UserAvatar } from '@/components/UserAvatar'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useOpenComposer } from '@/hooks/use-open-composer'
 import { useAuth } from '@/lib/auth/use-auth'
 import { cn } from '@/lib/utils'
 import { ComingSoon } from './ComingSoon'
-import { getNavItems, getSignOutItem } from './nav-items'
+import { formatBadgeCount, getNavItems, getSignOutItem, navItemLabel } from './nav-items'
+import { useNavBadgeCounts } from './use-nav-badge-counts'
 
 const itemClassName =
   'flex items-center gap-4 rounded-full px-3 py-2.5 text-lg transition outline-none focus-visible:ring-3 focus-visible:ring-ring/50 xl:pr-6'
 
 // Left rail (lg and up): logo, primary nav, "New post" (→ Home, focusing the composer), then the
 // signed-in user chip and Sign out at the bottom. Labels collapse to icons below xl, so every item carries an
-// `aria-label`.
+// `aria-label` (which includes the unread count when the item shows a badge). A badge always sits on
+// the item's icon, with or without the label.
 export function SideNav() {
   const { user } = useAuth()
   const username = user?.username
@@ -22,6 +25,7 @@ export function SideNav() {
   const signOut = getSignOutItem()
   const SignOutIcon = signOut.icon
   const openComposer = useOpenComposer()
+  const badgeCounts = useNavBadgeCounts()
 
   return (
     <div className="flex h-dvh flex-col gap-1 px-3 py-5 xl:px-5">
@@ -35,8 +39,10 @@ export function SideNav() {
       </Link>
 
       <nav aria-label="Primary" className="flex flex-col gap-1">
-        {items.map(({ key, label, icon: Icon, to, end, disabled }) =>
-          disabled ? (
+        {items.map(({ key, label, icon: Icon, to, end, disabled, badge }) => {
+          const count = badge ? badgeCounts[badge] : undefined
+          const badgeText = formatBadgeCount(count)
+          return disabled ? (
             <ComingSoon key={key}>
               <button type="button" aria-label={label} className={cn(itemClassName, 'text-foreground/80')}>
                 <Icon className="size-6" aria-hidden="true" />
@@ -48,7 +54,7 @@ export function SideNav() {
               key={key}
               to={to}
               end={end}
-              aria-label={label}
+              aria-label={navItemLabel(label, count)}
               className={({ isActive }) =>
                 cn(
                   itemClassName,
@@ -59,13 +65,23 @@ export function SideNav() {
             >
               {({ isActive }) => (
                 <>
-                  <Icon className={cn('size-6', isActive && 'text-primary')} aria-hidden="true" />
+                  <span className="relative flex">
+                    <Icon className={cn('size-6', isActive && 'text-primary')} aria-hidden="true" />
+                    {badgeText && (
+                      <Badge
+                        aria-hidden="true"
+                        className="absolute -top-1.5 -right-2 h-4 min-w-4 px-1 text-[10px] tabular-nums ring-2 ring-background"
+                      >
+                        {badgeText}
+                      </Badge>
+                    )}
+                  </span>
                   <span className="hidden xl:inline">{label}</span>
                 </>
               )}
             </NavLink>
-          ),
-        )}
+          )
+        })}
       </nav>
 
       <Button
