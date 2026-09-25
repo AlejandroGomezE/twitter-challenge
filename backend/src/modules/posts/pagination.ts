@@ -3,8 +3,8 @@ import { BadRequestException } from '@nestjs/common';
 // Keyset pagination over (createdAt, id). The cursor is opaque to clients:
 // base64url-encoded JSON `[createdAt ISO-8601, id]` of the last item of a
 // page. Ordering by both columns means posts with equal timestamps are never
-// skipped or duplicated across pages. Used by the post listings (feed, a
-// user's posts); comments will reuse it.
+// skipped or duplicated across pages. Used by every paged listing: the feed,
+// a user's posts and a post's comments.
 
 export const PAGE_SIZE = 20;
 export const MAX_PAGE_SIZE = 50;
@@ -54,10 +54,8 @@ export function decodeCursor(cursor: string): CursorPosition {
   return { createdAt, id };
 }
 
-// Page size for a request: PAGE_SIZE by default, clamped to 1..MAX_PAGE_SIZE.
+// Page size for a request: PAGE_SIZE when omitted. The range (1..MAX_PAGE_SIZE,
+// integer) is enforced once, by ListPostsQueryDto (400 otherwise).
 export function resolvePageSize(requested?: number): number {
-  if (requested === undefined || !Number.isInteger(requested)) {
-    return PAGE_SIZE;
-  }
-  return Math.min(Math.max(requested, 1), MAX_PAGE_SIZE);
+  return requested ?? PAGE_SIZE;
 }

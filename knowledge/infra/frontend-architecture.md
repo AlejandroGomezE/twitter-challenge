@@ -33,7 +33,8 @@ frontend/src/
 ├── features/           # not created yet
 ├── hooks/              # use-profile.js — useProfile(username); use-posts.js — useFeed,
 │                       #   useUserPosts, usePost, useCreatePost, useDeletePost, useToggleLike;
-│                       #   use-comments.js; use-retry-unless-not-found.js; use-open-composer.js
+│                       #   use-comments.js; use-retry-unless-not-found.js; use-open-composer.js;
+│                       #   use-post-removal-focus.js
 ├── lib/
 │   ├── api/            # client.js — apiClient, ApiError; users.js — profileQueryKey,
 │   │                   #   fetchProfile, updateMyProfile; posts.js — postKeys + post/like/comment
@@ -383,7 +384,11 @@ non-primary / modified clicks, clicks on inner links / buttons / menu items, cli
 menus or dialogs, and clicks that end a text selection. Your own posts get a "More options" (…)
 `DropdownMenu` (non-modal) → Delete → `AlertDialog` that stays open while the request runs and
 shows its error; others' posts have no menu (the API would 403 anyway). `CommentItem` follows the
-same layout and own-comment menu.
+same layout and own-comment menu. **Focus after a delete:** the deleted card (and the dialog's
+return-focus target) unmounts, so lists (Home, Profile) pass `onDeleted` from
+`usePostRemovalFocus(items)`: once the post has left the rendered list, focus moves to the next
+post's timestamp link (else the previous one's; else `#main-content`). PostDetail does the same for
+comments, focusing the reply box.
 
 **PostDetail** (`/u/:username/posts/:id`) loads by id (`usePost`). Once loaded, a `:username`
 that isn't the author's (case-insensitive) is a `<Navigate replace>` (no state) to the canonical
