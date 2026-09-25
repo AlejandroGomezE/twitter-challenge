@@ -1,8 +1,8 @@
 ---
 slug: notifications
-status: framed
+status: verifying
 scope: full-stack
-next: /implement notifications
+next: /review-feature notifications
 ---
 # Notifications
 
@@ -52,12 +52,12 @@ with an unread badge. Live push over SSE is out of scope: it becomes its own fea
   must still succeed.
 
 ## Tasks
-- [ ] (T1, be) Add the `Notification` model to the schema and add `@nestjs/event-emitter` (`EventEmitterModule.forRoot()` in `app.module.ts`). Make `PostsRepository.like` and `FollowsRepository.follow` return whether a row was inserted.
-- [ ] (T2, be, after: T1) Emit domain events after successful writes: `like.created` / `like.removed` from `PostsService.setLiked` (created only if a row was actually inserted), `follow.created` / `follow.removed` from `FollowsService.setFollowing` (same rule), and `comment.created` from `CommentsService.create`. Payloads carry actor, recipient and ids.
-- [ ] (T3, be, after: T1, T2) `NotificationsModule`: event listeners that create or retract notifications (skipping self-actions, logging failures instead of throwing), plus a repository, service and controller for the three endpoints above.
-- [ ] (T4, fe) `lib/api/notifications.js` and `hooks/use-notifications.js`: an infinite list query, an unread-count query (`refetchOnWindowFocus` plus a 30s `refetchInterval`), and a mark-read mutation that invalidates the unread count.
-- [ ] (T5, fe, after: T4) Unread badge on the Notifications nav item: `nav-items.js` gets a `to`, and `SideNav`/`MobileNav` render the count.
-- [ ] (T6, fe, after: T4) `pages/Notifications.jsx` and the `/notifications` route. Rows, empty/loading/error states, mark-read after the first page loads, and unread highlighting taken from the loaded data.
+- [x] (T1, be) Add the `Notification` model to the schema and add `@nestjs/event-emitter` (`EventEmitterModule.forRoot()` in `app.module.ts`). Make `PostsRepository.like` and `FollowsRepository.follow` return whether a row was inserted. — done
+- [x] (T2, be, after: T1) Emit domain events after successful writes: `like.created` / `like.removed` from `PostsService.setLiked` (created only if a row was actually inserted), `follow.created` / `follow.removed` from `FollowsService.setFollowing` (same rule), and `comment.created` from `CommentsService.create`. Payloads carry actor, recipient and ids.
+- [x] (T3, be, after: T1, T2) `NotificationsModule`: event listeners that create or retract notifications (skipping self-actions, logging failures instead of throwing), plus a repository, service and controller for the three endpoints above.
+- [x] (T4, fe) `lib/api/notifications.js` and `hooks/use-notifications.js`: an infinite list query, an unread-count query (`refetchOnWindowFocus` plus a 30s `refetchInterval`), and a mark-read mutation that invalidates the unread count.
+- [x] (T5, fe, after: T4) Unread badge on the Notifications nav item: `nav-items.js` gets a `to`, and `SideNav`/`MobileNav` render the count.
+- [x] (T6, fe, after: T4) `pages/Notifications.jsx` and the `/notifications` route. Rows, empty/loading/error states, mark-read after the first page loads, and unread highlighting taken from the loaded data.
 
 ## Decisions
 - 2026-09-24 · framed · Scope is REST only. SSE live push is a separate `realtime-updates` feature (Alejandro).
@@ -73,6 +73,11 @@ with an unread badge. Live push over SSE is out of scope: it becomes its own fea
 - [ ] Live push over SSE (`realtime-updates` feature) · out of scope by decision.
 - [ ] Group repeated events ("A and 3 others liked your post") · out of scope by decision.
 - [ ] Like → unlike → like creates a fresh notification each cycle. Consider a cooldown if it becomes spammy · edge case, not worth the complexity in v1.
+- [ ] Close: make the `AppShell.test.jsx` "no badge when the count cannot be loaded" test wait for the failed request to finish. Right now it passes while the count is still loading, so it doesn't test the error path · T5 reviewer, test quality.
+- [ ] Coming back to `/notifications` within the 30s `staleTime` shows the cached rows, which still say `read: false`. They're highlighted again and a harmless mark-read is sent again. Possible fix: flip the cached rows to read in `useMarkNotificationsRead`'s `onSuccess` via `setQueryData`, since `useUnreadThisVisit` already keeps the highlight for the current visit · cosmetic, T6 reviewer said it can wait.
+- [ ] `EditProfile.test.jsx` fails intermittently (1–3 tests, e.g. "sends bio \"\" when the bio is cleared"). It also fails with this feature's files removed · pre-existing, unrelated.
+- [ ] `tsc -p tsconfig.json` reports 16 type errors in `follows.controller.spec.ts` / `comments.controller.spec.ts` (`displayName` missing on `PublicUser` fixtures). `nest build` and vitest are unaffected · pre-existing, unrelated.
 
 ## Log
 - 2026-09-24 · framed
+- 2026-09-24 · built — T1–T6 done: events → listener → Notification rows, 3 endpoints, nav badge, /notifications page. be 41 files/494 tests, fe 46 files/539 tests, builds + lint green
