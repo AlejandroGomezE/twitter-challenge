@@ -1,8 +1,8 @@
 ---
 slug: follow-users
-status: framed
+status: verifying
 scope: full-stack
-next: /implement follow-users
+next: /review-feature follow-users
 ---
 # Follow users
 
@@ -49,33 +49,33 @@ on profiles, a working "Following" feed tab, and the "Who to follow" card.
   in any new response).
 
 ## Tasks
-- [ ] (T1, be) Prisma `Follow { followerId, followingId, createdAt }`: composite PK
+- [x] (T1, be) Prisma `Follow { followerId, followingId, createdAt }`: composite PK
   `(followerId, followingId)`, cascades on both users, indexes for "followers of X" and "following of
   X" ordered by `createdAt`; `db push` + `generate`.
-- [ ] (T2, be, after: T1) `modules/follows`: repository/service/controller for follow/unfollow,
+- [x] (T2, be, after: T1) `modules/follows`: repository/service/controller for follow/unfollow,
   followers/following lists and suggestions, per the API contract; `FollowUser` response DTO through
   the fail-closed serializer; throttling. `UsersModule` and `PostsModule` will import this module, so
   it must not import either (resolve usernames in its own repository). Unit + e2e specs.
-- [ ] (T3, be, after: T2) Profile: add `followerCount`, `followingCount`, `isFollowing`, `followsYou`
+- [x] (T3, be, after: T2) Profile: add `followerCount`, `followingCount`, `isFollowing`, `followsYou`
   to `GET /users/:username` (and the counts to `MyProfileResponseDto`) without N+1 queries.
-- [ ] (T4, be, after: T2) Feeds: `feedAuthorIds` returns the caller + followed ids; add
+- [x] (T4, be, after: T2) Feeds: `feedAuthorIds` returns the caller + followed ids; add
   `GET /feed/for-you` (all authors) reusing the same keyset `page()`.
-- [ ] (T5, fe) API client + hooks: follow/unfollow mutation (optimistic, rolls back on error; updates
+- [x] (T5, fe) API client + hooks: follow/unfollow mutation (optimistic, rolls back on error; updates
   the target's and the caller's profile counts, list rows and suggestions; invalidates the Following
   feed), infinite followers/following queries, suggestions query, For you feed query. Follow the
   existing `post-cache.js` / `writeAfterServerChange` race rules.
-- [ ] (T6, fe, after: T5) `FollowButton` (Follow / Follow back / Following → "Unfollow" on hover and
+- [x] (T6, fe, after: T5) `FollowButton` (Follow / Follow back / Following → "Unfollow" on hover and
   focus, pending state) and the Profile page: counts row below "Joined", follow button, "Follows
   you" badge.
-- [ ] (T7, fe, after: T5, T6) `FollowListDialog`: shadcn Dialog with Following / Followers tabs,
+- [x] (T7, fe, after: T5, T6) `FollowListDialog`: shadcn Dialog with Following / Followers tabs,
   opened from the profile counts on the clicked tab; infinite list (`InfiniteListFooter`), rows with
   avatar, username, bio, profile link (closes the dialog) and `FollowButton`; loading/empty/error
   states.
-- [ ] (T8, fe, after: T5) Home: real For you / Following tabs (accessible tablist, selection kept in
+- [x] (T8, fe, after: T5) Home: real For you / Following tabs (accessible tablist, selection kept in
   the URL `?tab=for-you`), Following default, Following empty state.
-- [ ] (T9, fe, after: T5, T6) RightRail "Who to follow": up to 3 suggestions with `FollowButton`,
+- [x] (T9, fe, after: T5, T6) RightRail "Who to follow": up to 3 suggestions with `FollowButton`,
   skeleton while loading, hidden when there are none.
-- [ ] (T10, fe, after: T2, T3, T4, T6, T7, T8, T9) Docs: Runbook endpoints, backend + frontend
+- [x] (T10, fe, after: T2, T3, T4, T6, T7, T8, T9) Docs: Runbook endpoints, backend + frontend
   architecture, UI component inventory.
 
 ## Decisions
@@ -92,8 +92,20 @@ on profiles, a working "Following" feed tab, and the "Who to follow" card.
   no confirm dialog — this list sits inside a modal already, and a follow is easy to redo.
 - 2026-09-24 · framed · The suggestions route is `/users/me/suggestions`: `me` is a reserved
   username, so it can't clash with a real `/users/:username/...` path.
+- 2026-09-24 · building · Follow/unfollow are throttled at 30/min per user per route
+  (`FOLLOW_LIMIT_PER_MINUTE`). The plan said "like likes", but likes are deliberately unthrottled —
+  kept a throttle since the plan asked for one; open for Alejandro to change or drop.
+- 2026-09-24 · building · New shared components `FollowButton` and `FollowListDialog` (compose
+  existing shadcn `Button`/`Badge`/`Dialog`/`Tabs`) — **pending Alejandro's sign-off**
+  (`knowledge/decisions/shadcn-component-preference.md`). FollowButton stays clickable while a
+  request is in flight (no spinner), like the like button; bursts settle on the last confirmed state.
+- 2026-09-24 · building · Unfollowing from an open follow list keeps the row (now "Follow"), like
+  Twitter: those lists are marked stale, not refetched. FollowListDialog has no end-of-list line.
 
 ## Follow-ups
+- [ ] Close: `follows/dto/follow-user-page-response.dto.ts` comment cites a non-existent
+  `follow-user-page-response.dto.spec.ts`; the coverage lives in `follow-user-response.dto.spec.ts`.
 
 ## Log
 - 2026-09-24 · framed
+- 2026-09-24 · built — follow/unfollow (idempotent, throttled), followers/following lists + dialog, profile counts + Follows you, Following (default) / For you feeds, Who to follow; docs. BE 29 suites / 334 unit + 4 suites / 137 e2e, FE 37 suites / 381, build/lint green.
