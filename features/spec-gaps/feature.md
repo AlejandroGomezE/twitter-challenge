@@ -2,7 +2,7 @@
 slug: spec-gaps
 status: verifying
 scope: frontend
-next: /review-feature spec-gaps
+next: /close-feature spec-gaps
 ---
 # Spec gaps: tablet layout, browser E2E for auth, Runbook order
 
@@ -82,7 +82,9 @@ opens with history instead of setup steps.
   never prompts, and runs the same for a human, an agent or CI.
 
 ## Follow-ups
+- [ ] `scripts/check-env` doesn't check that Playwright's Chromium is installed · out of scope here; the Runbook covers the one-time install
 
 ## Log
 - 2026-09-25 · framed
 - 2026-09-25 · built — tablet layout from sm, Playwright auth E2E (2 passed, own servers + playwright.db), Runbook opens with First-time setup and has no "after pulling" notes; frontend build, 52 suites / 606 tests, lint green
+- 2026-09-25 · verified — layout measured in Chromium at 375–1440px (icon rail + centred 620px column at 640–1279, phone and desktop unchanged, tablet rail nav works); Playwright suite 2 passed with dev.db untouched; fresh clone following the Runbook: setup + seed OK, backend 609 unit / 213 e2e, frontend 606, browser E2E 2, all passed; Docker not exercised (no Docker files changed)
