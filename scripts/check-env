@@ -23,7 +23,7 @@ if command -v node >/dev/null; then
   if [ "${major:-0}" -gt 20 ] 2>/dev/null || { [ "${major:-0}" -eq 20 ] && [ "${minor:-0}" -ge 11 ]; }; then
     ok "node $node_version"
   else
-    warn "node $node_version — frontend/vite.config.js uses import.meta.dirname, which needs >=20.11"
+    warn "node $node_version — frontend/vite.config.ts uses import.meta.dirname, which needs >=20.11"
   fi
 else
   err "node missing"
