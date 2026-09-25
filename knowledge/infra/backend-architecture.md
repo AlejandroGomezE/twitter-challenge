@@ -1,10 +1,10 @@
 ---
 title: Backend architecture
 type: infra
-summary: Layered NestJS backend (backend/) — current implementation state (Prisma database module, Zod-validated config, global exception filter, email+password auth with cookie sessions, users module with profiles).
+summary: Layered NestJS backend (backend/) — current implementation state (Prisma database module, Zod-validated config, global exception filter, email+password auth with cookie sessions, users module with profiles, posts module with feed, likes and comments; keyset pagination, named throttlers).
 status: active
 last-verified: 2026-09-24
-tags: [backend, nestjs, architecture, prisma, config, auth]
+tags: [backend, nestjs, architecture, prisma, config, auth, posts, pagination, throttling]
 ---
 
 ## Layered architecture
@@ -35,7 +35,8 @@ backend/src/
 ├── app.setup.ts           # configureApp(app): helmet, cookie-parser, CORS, ValidationPipe,
 │                          #   ResponseSerializerInterceptor, exception filter — shared by
 │                          #   main.ts and the e2e suite
-├── app.module.ts          # root module — wires Config, Prisma, Auth, Users, (conditionally) Observe
+├── app.module.ts          # root module — wires Config, Prisma, Auth, Users, Posts, (conditionally)
+│                          #   Observe
 ├── observe.ts             # NestJS Observe APM module/instrument factory
 ├── config/
 │   ├── configuration.ts           # typed config (nodeEnv, port, database.url, frontendOrigin)
@@ -50,7 +51,10 @@ backend/src/
 │       └── response-serializer.interceptor.ts  # global fail-closed response whitelist
 │   # decorators/, exceptions/, guards/, pipes/ — not created yet
 ├── auth/
-│   ├── auth.module.ts             # imports UsersModule + ThrottlerModule; APP_GUARD = AuthGuard
+│   ├── auth.module.ts             # imports UsersModule + ThrottlerModule (global, THROTTLERS);
+│   │                              #   APP_GUARD = AuthGuard
+│   ├── throttlers.ts              # the named throttlers: `auth` (per IP) and `user` (per session
+│   │                              #   user); USER_THROTTLER, THROTTLE_TTL_MS
 │   ├── auth.controller.ts         # POST /auth/sign-up, /sign-in, /sign-out; GET /auth/me
 │   ├── auth.service.ts            # credential check, session create/validate/revoke
 │   ├── auth.guard.ts              # global guard: Origin check → @Public() → session
@@ -62,25 +66,56 @@ backend/src/
 │   ├── session.constants.ts       # cookie name, 7-day TTL
 │   └── dto/                       # request DTOs: SignUpDto, SignInDto (class-validator)
 ├── modules/
+│   ├── posts/
+│   │   ├── dto/
+│   │   │   ├── create-post.dto.ts          # CreatePostDto { body } — @IsPostBody()
+│   │   │   ├── create-comment.dto.ts       # CreateCommentDto { body } — @IsPostBody()
+│   │   │   ├── list-posts-query.dto.ts     # ListPostsQueryDto { cursor?, limit? (1–50) } — feed,
+│   │   │   │                               #   a user's posts and comments
+│   │   │   ├── post-response.dto.ts        # PostResponseDto { id, body, createdAt, author,
+│   │   │   │                               #   likeCount, commentCount, likedByMe }
+│   │   │   ├── post-author-response.dto.ts # PostAuthorResponseDto { username } (posts + comments)
+│   │   │   ├── post-page-response.dto.ts   # PostPageResponseDto { items, nextCursor }
+│   │   │   ├── comment-response.dto.ts     # CommentResponseDto { id, body, createdAt, author }
+│   │   │   ├── comment-page-response.dto.ts  # CommentPageResponseDto { items, nextCursor }
+│   │   │   └── like-state-response.dto.ts  # LikeStateResponseDto { liked, likeCount }
+│   │   ├── posts.rules.ts         # authoritative body rules: BODY_MAX_LENGTH (280), code-point
+│   │   │                          #   bodyLength, normalizeBody (trim), @IsPostBody()
+│   │   ├── pagination.ts          # keyset cursor: encodeCursor / decodeCursor, PAGE_SIZE (20),
+│   │   │                          #   MAX_PAGE_SIZE (50), resolvePageSize
+│   │   ├── posts.module.ts        # Posts / Feed / Comments controllers; exports PostsService
+│   │   ├── posts.controller.ts    # POST /posts, GET/DELETE /posts/:id, PUT/DELETE /posts/:id/like
+│   │   ├── feed.controller.ts     # GET /feed
+│   │   ├── comments.controller.ts # GET/POST /posts/:postId/comments, DELETE …/:commentId
+│   │   ├── posts.service.ts       # create, getById, delete (own), setLiked, feed, listByAuthor,
+│   │   │                          #   countByAuthor; feedAuthorIds (the follows extension point)
+│   │   ├── comments.service.ts    # list, create, delete (own)
+│   │   ├── posts.repository.ts    # Prisma access for Post + Like; countsFor (batched counts)
+│   │   └── comments.repository.ts # Prisma access for Comment
 │   └── users/
 │       ├── dto/
 │       │   ├── user-response.dto.ts        # UserResponseDto { id, email, username }
-│       │   ├── profile-response.dto.ts     # ProfileResponseDto { username, bio, createdAt }
+│       │   ├── profile-response.dto.ts     # ProfileResponseDto { username, bio, createdAt,
+│       │   │                               #   postCount }
 │       │   ├── my-profile-response.dto.ts  # MyProfileResponseDto { id, email, username, bio,
-│       │   │                               #   createdAt } — the caller's own profile
+│       │   │                               #   createdAt, postCount } — the caller's own profile
 │       │   └── update-profile.dto.ts       # UpdateProfileDto { username?, bio? }
 │       ├── username.rules.ts      # authoritative username/bio rules: RESERVED_USERNAMES,
 │       │                          #   normalizers, @IsUsername() / @IsBio() DTO decorators
-│       ├── users.module.ts        # UsersController; exports UsersService
-│       ├── users.controller.ts    # GET /users/:username, PATCH /users/me
+│       ├── users.module.ts        # UsersController; imports PostsModule; exports UsersService
+│       ├── users.controller.ts    # GET /users/:username, GET /users/:username/posts,
+│       │                          #   PATCH /users/me
 │       ├── users.service.ts       # create (argon2id hash, 409 on duplicate), lookups,
-│       │                          #   getProfile, updateProfile
+│       │                          #   getProfile, listPosts, updateProfile (+ postCount)
 │       └── users.repository.ts    # Prisma access for User
 └── generated/prisma/      # `npx prisma generate` output — gitignored, never hand-edited
 ```
 
-No other `common/` subfolder exists yet, and `modules/users/` is the only domain module
-(users are created through the auth flow; `UsersController` serves profiles). Add more, in
+No other `common/` subfolder exists yet. The domain modules are `modules/users/` (users are
+created through the auth flow; `UsersController` serves profiles and a user's posts) and
+`modules/posts/` (posts, likes and comments in one module). `UsersModule` imports `PostsModule`
+(for `postCount` and `GET /users/:username/posts`), never the other way round — no cycle. Add
+more, in
 this same layered shape, when a real feature needs them — don't scaffold empty folders
 ahead of time. See [[Code quality]] for the expected shape of each (the `common/`
 taxonomy, the generic domain-module skeleton). The auth guard and decorators live in
@@ -97,7 +132,19 @@ unique index gives case-insensitive uniqueness on SQLite without a custom collat
 pulling a schema change, run `npx prisma db push` (and `npx prisma generate`) from
 `backend/`. The profile change added a required column, so it needs
 `npx prisma db push --force-reset`, which wipes the dev DB (no backfill — there's no
-production data).
+production data). The posts change only adds tables: a plain `npx prisma db push`.
+
+Posts models — every relation is `onDelete: Cascade`: deleting a post removes its likes and
+comments, deleting a user removes their posts, likes and comments (hard delete, no soft delete).
+
+- `Post { id cuid, authorId → User, body, createdAt }` — `@@index([authorId, createdAt])` (one
+  author's posts newest first) and `@@index([createdAt])`. The latter is unused while the feed's
+  author set is just you; it lets SQLite walk time order once follows make the author list large.
+- `Like { userId → User, postId → Post, createdAt }` — `@@id([userId, postId])` (one like per
+  user per post; also what makes likes idempotent) + `@@index([postId])` for the counts.
+- `Comment { id cuid, postId → Post, authorId → User, body, createdAt }` —
+  `@@index([postId, createdAt])`. `authorId` is deliberately **not** indexed: no query filters by
+  it, only a user-delete cascade scans it.
 
 The database is **SQLite** — a local file, no server. Prisma 7 requires an explicit
 **driver adapter** (the bundled query-engine binary is gone), so `PrismaService`
@@ -168,17 +215,20 @@ running server.
   `401 Invalid email or password`; an unknown email still runs `argon2.verify` against a
   dummy hash precomputed at startup (`onModuleInit`) so timing matches. (Sign-up's 409 does reveal a registered
   email — accepted trade-off, mitigated by the rate limit.)
-- **Throttling.** `@nestjs/throttler`, configured in `AuthModule` (throttler `auth`: 5
-  requests / 60 s per client IP, per route). `ThrottlerGuard` is applied per handler
-  (`@UseGuards`) on sign-up and sign-in only — not globally → 429 beyond the limit.
+- **Throttling.** `@nestjs/throttler`: one global `ThrottlerModule.forRoot` in `AuthModule`
+  with the named throttlers of `auth/throttlers.ts`; `ThrottlerGuard` is applied per handler
+  (`@UseGuards`), never globally → 429 `Too many requests, please try again later`. Sign-up and
+  sign-in get the `auth` throttler (5 requests / 60 s per client IP, per route) — see Throttling
+  under Posts below for the design.
 
 **Profiles** (`src/modules/users/`, `UsersController`; both routes session-gated, no
 `@Public()`).
 
-- **Endpoints.** `GET /users/:username` → `ProfileResponseDto { username, bio, createdAt }`
-  (case-insensitive lookup; never email or id) or 404 `User not found`. `PATCH /users/me`
-  `{ username?, bio? }` → `MyProfileResponseDto { id, email, username, bio, createdAt }`;
-  409 `Username is already taken`. The target id comes only from `@CurrentUser()`; unknown
+- **Endpoints.** `GET /users/:username` → `ProfileResponseDto { username, bio, createdAt,
+  postCount }` (case-insensitive lookup; never email or id) or 404 `User not found`. `PATCH
+  /users/me` `{ username?, bio? }` → `MyProfileResponseDto { id, email, username, bio, createdAt,
+  postCount }`; 409 `Username is already taken`. `postCount` comes from
+  `PostsService.countByAuthor`. The target id comes only from `@CurrentUser()`; unknown
   fields are stripped by the `ValidationPipe` whitelist; an empty body is a no-op.
 - **Rules** (`username.rules.ts`, authoritative; the frontend mirror
   `frontend/src/lib/validation/profile-schemas.js` must match, `RESERVED_USERNAMES`
@@ -199,6 +249,77 @@ running server.
   email exists. `updateProfile` can only write `username`, so any P2002 there is a taken
   username (and P2025 → 404).
 
+**Posts** (`src/modules/posts/`; a user's posts on `UsersController`). Every route is
+session-gated (no `@Public()`); author and viewer ids come only from `@CurrentUser()` — an
+`authorId` in a body is stripped by the whitelist.
+
+- **Endpoints.** `POST /posts` `{ body }` → 201 `PostResponseDto` (10/min per user).
+  `GET /posts/:id` → `PostResponseDto` / 404 `Post not found`. `DELETE /posts/:id` → 204; 403
+  `You can only delete your own posts`; 404. `GET /feed?cursor=&limit=` and
+  `GET /users/:username/posts?cursor=&limit=` → `PostPageResponseDto`, newest first (the latter
+  404 `User not found`; `GET /users/me/posts` is a 404 like `GET /users/me`).
+  `PUT` / `DELETE /posts/:id/like` → 200 `LikeStateResponseDto { liked, likeCount }`, idempotent,
+  404 if the post is missing, not throttled. `GET /posts/:postId/comments?cursor=&limit=` →
+  `CommentPageResponseDto`, oldest first (404 unknown post). `POST /posts/:postId/comments`
+  `{ body }` → 201 `CommentResponseDto` (20/min per user; 404 unknown post).
+  `DELETE /posts/:postId/comments/:commentId` → 204; 403 `You can only delete your own comments`;
+  404 `Comment not found`. `GET /users/:username` and `PATCH /users/me` gain `postCount`
+  (`PostsService.countByAuthor`). The comments routes have one more segment than `:id` and a
+  literal `comments` where the like routes have `like`, so the controllers never clash.
+- **Body rules** (`posts.rules.ts`, shared by posts and comments; the frontend's `lib/text.js`
+  counts the same way). `@IsPostBody()` = a trimming `@Transform` + `@IsString()` + a
+  `ValidateBy` of 1–280 **code points** (`Array.from(value).length`, so an emoji is 1).
+  class-validator's `@Length` / `@MaxLength` count UTF-16 units, hence not used. A blank body is
+  0 after trimming → 400.
+- **Keyset pagination** (`pagination.ts`). The cursor is opaque: base64url of the JSON
+  `[createdAt ISO, id]` of a page's last item. Ordering is over `(createdAt, id)`, so equal
+  timestamps never skip or duplicate across pages. Repositories fetch `limit + 1` rows strictly
+  after the cursor — posts newest first (`createdAt < c OR (createdAt = c AND id < c.id)`,
+  `desc, desc`), comments oldest first (the `>` mirror, `asc, asc`); the extra row only says a
+  next page exists (`nextCursor` = the last returned item's cursor, else null). `decodeCursor`
+  rejects anything `encodeCursor` couldn't have produced (non-base64url, wrong shape,
+  non-canonical ISO) with 400 `Invalid cursor`, before any query — an empty `cursor=` included
+  (the frontend omits the param for the first page). `limit` defaults to 20; the query DTO
+  rejects anything outside 1–50 with 400.
+- **Counts without N+1.** `PostsRepository.countsFor(postIds, viewerId)` returns `likeCount`,
+  `commentCount` and `likedByMe` for a whole page in three queries (a `groupBy` on likes, one on
+  comments, and the viewer's likes among those ids), zero-filled — a page is one `findMany` plus
+  those three, whatever its size. `create` runs none (a new post has no activity).
+- **Feed author set.** `PostsService.feedAuthorIds(viewerId)` is the single place that decides
+  whose posts are in a feed — `[viewerId]` today. The follows feature adds followed users' ids
+  there and nowhere else; `feed()` and `listByAuthor()` share one private `page()`.
+- **Likes are idempotent.** `PostsRepository.like` is a plain `create` with P2002 (the composite
+  primary key) swallowed: of N concurrent identical requests one inserts, the rest mean "already
+  liked". Prisma's `upsert` isn't used — unless it maps to a native upsert it runs
+  read-then-create and can itself throw P2002. `unlike` is a `deleteMany` (0 rows is fine). The
+  service checks the post exists first and maps a P2003 (post deleted between the check and the
+  insert) to 404, not 500; the response re-counts the likes.
+- **Deletes.** Both deletes load the row first (404 missing, 403 not yours), then delete with
+  `deleteMany({ id, authorId })`, so a concurrent delete surfaces as 404. A comment delete also
+  checks the comment belongs to the post in the path — a comment on another post is a 404, never
+  deleted through the wrong post's URL. Comment create maps P2003 to 404 like likes do.
+- **Throttling** (`auth/throttlers.ts`). `ThrottlerGuard` evaluates **every** configured
+  throttler on each guarded route, so each named throttler selects itself with `skipIf`:
+  - `auth` — 5 / 60 s, keyed by client IP (the default tracker); skipped when `req.user` is set.
+    It exists for the `@Public()` sign-in / sign-up routes, where `AuthGuard` never sets
+    `req.user`, so skipping on it is safe: a signed-in caller can't use their session to dodge
+    the sign-in limit (the global `AuthGuard` runs before route guards, and on public routes it
+    returns before resolving any user).
+  - `user` — keyed `user:<id>` (the session user), so users behind one IP don't share a budget
+    and switching IPs doesn't reset it; skipped without a session user (its tracker throws 401
+    rather than put anonymous requests in one "undefined" bucket). Default 10 / 60 s; each route
+    sets its own with `@Throttle({ [USER_THROTTLER]: { limit, ttl: THROTTLE_TTL_MS } })` — create
+    post 10, create comment 20.
+
+  Counters are per route (the storage key includes controller + handler). A request rejected by
+  validation (400) still counts.
+- **Nested response DTOs need `@Type`.** `PostResponseDto.author`, `CommentResponseDto.author`
+  and both page DTOs' `items` carry `@Type(() => …)`. Without it `excludeExtraneousValues`
+  copies the nested value as an untyped plain object, bypassing the inner `@Expose()` whitelist —
+  a probe leaked the author's email and `passwordHash`. Guarded by
+  `posts/dto/__tests__/post-response.dto.spec.ts` (and the page / comment DTO specs) through the
+  real interceptor, plus the e2e leak guard (Tests below).
+
 **Error handling.** A single global `AllExceptionsFilter`
 (`src/common/filters/all-exceptions.filter.ts`) catches everything and normalizes the
 response to `{ statusCode, message, timestamp, path }`. Paired with a global
@@ -215,9 +336,10 @@ the matching concrete return type. The global `ResponseSerializerInterceptor`
 value to that class and emits only exposed fields, so even a full Prisma row with
 `passwordHash` can't leak. It fails closed: a body without a declared `type` (even a
 DTO instance) is a 500, never passed through unfiltered. Never return Prisma models/entities or
-internal service types (`PublicUser`, `PublicProfile`, `MyProfile`, `AuthenticatedUser`)
-directly. 204 endpoints
-(`POST /auth/sign-out`) return `void` and need no DTO.
+internal service types (`PublicUser`, `PublicProfile`, `MyProfile`, `AuthenticatedUser`,
+`PostView`, `CommentView`, `PostPage`, `LikeState`) directly. 204 endpoints (`POST
+/auth/sign-out`, the post and comment deletes) return `void` and need no DTO. A nested object or
+array in a response DTO needs `@Type(() => NestedDto)` — see Posts above.
 
 **CORS.** `app.enableCors({ origin: [FRONTEND_ORIGIN], credentials: true })` — an
 exact-match allowlist of one origin (never `*`); any other origin gets no
@@ -244,6 +366,18 @@ deletes the file and recreates it with a plain `prisma db push` before each run,
 afterwards. A guard test asserts the connected file is `e2e.db`. `tsconfig.build.json` excludes `**/*spec.ts`, so
 nothing under `__tests__/` reaches `dist/`.
 
+`test/posts.e2e-spec.ts` covers the posts feature end to end: every endpoint's exact keys
+(`author` is `{ username }` only), body rules (trim, code points — 280 emoji accepted), 401 /
+foreign-Origin 403 / not-yours 403 / 404, both rate limits (other users unaffected), paging walks
+over tied timestamps (49 posts, 27 comments — no skips, no duplicates, null cursor at the end),
+bad `limit` / `cursor` (`cursor=` included) → 400, like idempotency (10 concurrent PUTs store one
+like), per-viewer `likedByMe`, cascades on delete, and `postCount` / `commentCount` tracking. It
+builds a fresh app per test (throttle counters never carry over) and deletes the users it created
+(their data cascades). **Leak guard:** every request goes through a `call` helper that records
+the response, and `afterEach` asserts no body has a `passwordHash` / `tokenHash` key anywhere,
+nor an `email` key or any test user's email address — except `PATCH /users/me` and
+`GET /auth/me`, the caller's own. A self-check test proves the guard sees what was recorded.
+
 ## Open questions
 
 - `oxlint.json` currently turns `@typescript-eslint/no-explicit-any` **off**, while
@@ -253,5 +387,9 @@ nothing under `__tests__/` reaches `dist/`.
   `SessionsRepository` (`auth/`). Repositories are the only layer injecting
   `PrismaService` (plain `@Injectable()` classes — no interface, no injection token),
   enforced by `.claude/review-contract.md` §B.
+- The global `ValidationPipe` has `enableImplicitConversion`, so a JSON number in a string field
+  is coerced before `@IsString()` runs (`POST /posts { body: 123 }` → 201 with body `"123"`).
+  App-wide; Alejandro to decide: drop implicit conversion (adding explicit `@Type(() => Number)`
+  where query numbers need it) or accept it.
 - Throttling keys on the client IP as Express sees it; there's no `trust proxy` setting,
   so behind a reverse proxy every client would share one bucket. Revisit when deployed.

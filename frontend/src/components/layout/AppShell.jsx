@@ -2,14 +2,16 @@ import { Feather } from 'lucide-react'
 import { Outlet } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { ComingSoon } from './ComingSoon'
+import { useOpenComposer } from '@/hooks/use-open-composer'
 import { MobileNav } from './MobileNav'
 import { RightRail } from './RightRail'
 import { SideNav } from './SideNav'
 
 // Layout route for every gated page: left rail (lg+), the page in the center column, right rail
-// (xl+), and below lg a bottom nav plus the compose button. Pages render their own sticky header.
+// (xl+), and below lg a bottom nav plus the compose button (→ Home, focusing the composer). Pages render their own sticky header.
 export function AppShell() {
+  const openComposer = useOpenComposer()
+
   return (
     <TooltipProvider>
       <a
@@ -41,15 +43,14 @@ export function AppShell() {
           <RightRail />
         </aside>
 
-        <ComingSoon side="left">
-          <Button
-            type="button"
-            aria-label="New post"
-            className="fixed right-5 bottom-20 z-30 size-14 rounded-full shadow-lg lg:hidden"
-          >
-            <Feather className="size-6" aria-hidden="true" />
-          </Button>
-        </ComingSoon>
+        <Button
+          type="button"
+          aria-label="New post"
+          onClick={openComposer}
+          className="fixed right-5 bottom-20 z-30 size-14 rounded-full shadow-lg lg:hidden"
+        >
+          <Feather className="size-6" aria-hidden="true" />
+        </Button>
       </div>
     </TooltipProvider>
   )

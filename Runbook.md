@@ -29,7 +29,8 @@ their own.
 http://localhost:5173 — you land on `/sign-in`; use "Create an account" (`/sign-up`). First time
 after pulling the auth change, run `npx prisma db push` from `backend/` (see Backend → Auth);
 after pulling the profile change, run `npx prisma db push --force-reset` instead (see Backend →
-Profiles — it wipes the dev DB).
+Profiles — it wipes the dev DB); after pulling the posts change, a plain `npx prisma db push` is
+enough (additive — see Backend → Posts).
 
 ---
 
@@ -68,7 +69,8 @@ from `backend/.env` (create it from `backend/.env.example`; it's git-ignored).
   [NestJS Observe](https://observe.nestjs.com) APM; the `ObserveModule` only
   registers itself in `src/app.module.ts` when **both** are set to a non-empty
   value, so leaving them blank is a normal, supported way to run without APM).
-- **Database**: Prisma (`prisma/schema.prisma` — models `User` and `Session`; config
+- **Database**: Prisma (`prisma/schema.prisma` — models `User`, `Session`, `Post`, `Like`,
+  `Comment`; config
   in `prisma7.config.ts`),
   driver-adapter based (Prisma 7 requires one — `@prisma/adapter-better-sqlite3` +
   `better-sqlite3`, wired in `src/database/prisma.service.ts`). SQLite is a local
@@ -114,10 +116,10 @@ from `backend/.env` (create it from `backend/.env.example`; it's git-ignored).
   - **After pulling this change, run `npx prisma db push` from `backend/`** to create the
     `User`/`Session` tables (and `npx prisma generate` if the client is stale).
 - **Profiles** (`src/modules/users/`, `users.controller.ts`) — both routes session-gated:
-  - `GET /users/:username` → `{ username, bio, createdAt }` (case-insensitive lookup; never the
-    email or id) or 404 `User not found`.
+  - `GET /users/:username` → `{ username, bio, createdAt, postCount }` (case-insensitive lookup;
+    never the email or id) or 404 `User not found`.
   - `PATCH /users/me` `{ username?, bio? }` → the caller's own `{ id, email, username, bio,
-    createdAt }`; 409 `Username is already taken`, 400 on invalid input. The target is always
+    createdAt, postCount }`; 409 `Username is already taken`, 400 on invalid input. The target is always
     the session user; unknown fields are stripped.
   - **Username:** trimmed + lowercased, 3–20 chars of `a-z0-9_`, not a reserved word (`me`,
     `settings`, `auth`, `users`, `u`, `api`, `admin`, …), unique (any case).
@@ -127,6 +129,39 @@ from `backend/.env` (create it from `backend/.env.example`; it's git-ignored).
   - **After pulling this change, run `npx prisma db push --force-reset` from `backend/`.** It
     **wipes the dev DB** (the new required `username` column can't be added to existing rows) —
     re-create your accounts afterwards.
+- **Posts, likes, comments** (`src/modules/posts/`; a user's posts in `src/modules/users/`) — every
+  route session-gated (401 without a session; writes with a foreign `Origin` → 403); author/viewer
+  ids come only from the session. `Post` = `{ id, body, createdAt, author: { username }, likeCount,
+  commentCount, likedByMe }`, `Comment` = `{ id, body, createdAt, author: { username } }`, a page =
+  `{ items, nextCursor }` (`nextCursor` null on the last page):
+
+  | Method + path | Result | Errors |
+  |---|---|---|
+  | `POST /posts` `{ body }` | 201 `Post` | 400 body, 429 (10/min) |
+  | `GET /posts/:id` | 200 `Post` | 404 `Post not found` |
+  | `DELETE /posts/:id` | 204 (its likes + comments cascade) | 403 not yours, 404 |
+  | `GET /feed?cursor=&limit=` | 200 page of `Post`, newest first | 400 bad cursor/limit |
+  | `GET /users/:username/posts?cursor=&limit=` | 200 page of `Post`, newest first | 404 `User not found`, 400 |
+  | `PUT /posts/:id/like` | 200 `{ liked: true, likeCount }` (idempotent) | 404 |
+  | `DELETE /posts/:id/like` | 200 `{ liked: false, likeCount }` (idempotent) | 404 |
+  | `GET /posts/:id/comments?cursor=&limit=` | 200 page of `Comment`, oldest first | 404, 400 |
+  | `POST /posts/:id/comments` `{ body }` | 201 `Comment` | 400 body, 404, 429 (20/min) |
+  | `DELETE /posts/:id/comments/:commentId` | 204 | 403 not yours, 404 (missing or on another post) |
+
+  `GET /users/:username` and `PATCH /users/me` also return `postCount`.
+  - **Feed** = your posts + posts of users you follow; follows don't exist yet, so today it's only
+    your own posts.
+  - **Body** (posts and comments): trimmed, then 1–280 characters counted as Unicode code points
+    (an emoji counts 1); blank is 400. `src/modules/posts/posts.rules.ts` is authoritative; the
+    frontend counter (`frontend/src/lib/text.js`) counts the same way.
+  - **Paging:** opaque `cursor` (pass back the previous page's `nextCursor`), page size 20 by
+    default, `limit` 1–50. An empty `cursor=` is a 400 `Invalid cursor` — omit the param for the
+    first page.
+  - **Rate limits** (429 `Too many requests, please try again later`, rejected 400s count too):
+    create post 10/min and create comment 20/min per signed-in user; sign-in / sign-up 5/min per IP
+    (per route). Likes aren't limited.
+  - **After pulling this change, run `npx prisma db push` from `backend/`** (plain — the new
+    tables are additive, no reset) and `npx prisma generate` if the client is stale.
 - **Run**: `start:dev` (watch mode, what `scripts/be-local` uses), `start` (no watch),
   `start:debug`, `start:prod` (runs the compiled `dist/`).
 - **Test**: `test` (Vitest unit), `test:watch`, `test:cov` (coverage), `test:debug`,
@@ -158,13 +193,17 @@ shadcn/ui (Radix base, Nova preset), and `react-router` for client-side routing.
   test. Tests render **signed in** by default (the default MSW `GET /auth/me` handler
   returns a user); override it with a 401 (`server.use(...)`) to render signed out. A default
   `GET /users/:username` handler feeds the shell's profile card (`ada` → bio `null`, others →
-  404); tests routed through `AppRouter` render inside the shell, so scope queries with
-  `within(screen.getByRole('main'))`.
-- **Structure** (`src/`): `app/` (`App.jsx`, `router.jsx`, `providers.jsx`,
-  `query-client.js`), `components/ui/` (shadcn), `components/layout/` (app shell),
-  `components/feed/` (`Composer`), `components/AuthLayout.jsx`, `components/BrandMark.jsx`,
-  `components/UserAvatar.jsx`, `hooks/`,
-  `lib/api/` (HTTP client, `users.js`, `error-message.js`), `lib/avatar-color.js`,
+  404), and default `GET /feed` / `GET /users/:username/posts` handlers return an empty page
+  (`/users/<not ada>/posts` → 404); tests routed through `AppRouter` render inside the shell, so
+  scope queries with `within(screen.getByRole('main'))`.
+- **Structure** (`src/`): `app/` (`App.jsx`, `router.jsx`, `NavigationDepthTracker.jsx`,
+  `providers.jsx`, `query-client.js`), `components/ui/` (shadcn), `components/layout/` (app shell),
+  `components/feed/` (`Composer`, `PostCard`, `CommentComposer`, `CommentItem`,
+  `InfiniteListFooter`, `CharacterCounter`, `PostListSkeleton`), `components/AuthLayout.jsx`,
+  `components/BrandMark.jsx`, `components/UserAvatar.jsx`, `hooks/`,
+  `lib/api/` (HTTP client, `users.js`, `posts.js`, `post-cache.js`, `error-message.js`),
+  `lib/text.js`, `lib/format.js`, `lib/composer-focus.js`, `lib/navigation-history.js`,
+  `lib/avatar-color.js`,
   `lib/auth/` (`AuthProvider`, `useAuth()`), `lib/validation/` (Zod form schemas),
   `routes/` (`ProtectedRoute`, `PublicOnlyRoute`), `pages/`. `features/` isn't created
   yet — no concrete feature to hang it on.
@@ -200,16 +239,38 @@ shadcn/ui (Radix base, Nova preset), and `react-router` for client-side routing.
   (`xl`: search, your profile card, who to follow), and a bottom nav + compose button below
   `lg`. Nav items are configured once in `layout/nav-items.js`.
 - **Disabled items** — features without a backend yet are shown but disabled, never with fake
-  counts or users. The nav placeholders (Explore, Notifications, Messages, Bookmarks), "New
-  post" + the mobile compose button, the search box and the Following tab are wrapped in
-  `layout/ComingSoon.jsx`: `aria-disabled` (not native `disabled`, so the "Coming soon"
-  tooltip stays reachable). The composer (`feed/Composer.jsx`: textarea, icon buttons, "Post")
-  is natively `disabled` with a visible "Posting is coming soon" hint and no tooltip; "Who to
-  follow" (`layout/RightRail.jsx`) is a text-only "Coming soon" card, no `ComingSoon` wrapper.
-- **Home** (`/`) — the feed page: "For you" / "Following" (disabled) tabs, a disabled composer
-  ("Posting is coming soon") and a "No posts yet" empty state. Posts arrive in a follow-up.
+  counts or users. The nav placeholders (Explore, Notifications, Messages, Bookmarks), the
+  search box, the Following tab, the composer's attachment icons and the post cards' Repost /
+  Bookmark / Share are wrapped in `layout/ComingSoon.jsx`: `aria-disabled` (not native
+  `disabled`, so the "Coming soon" tooltip stays reachable). "Who to follow"
+  (`layout/RightRail.jsx`) is a text-only "Coming soon" card, no `ComingSoon` wrapper.
+- **New post** — the left rail's "New post" and the mobile compose button go to Home and focus
+  the composer (on Home they just focus it).
+- **Home** (`/`) — the feed: "For you" / "Following" (disabled) tabs, the composer, then your
+  posts newest first (+ followed users' once follows exist) with loading / error + Retry / empty
+  states and "You're all caught up" at the end.
+- **Composer** — live `N/280` counter (trimmed body, code points — same as the backend); Post is
+  disabled while blank or over 280; Cmd/Ctrl+Enter posts (not during IME composition); the
+  textarea is read-only while posting, cleared on success, kept on failure with the server's
+  error below (429 → "Too many posts…"). The new post appears at the top of the feed and your
+  profile without a reload. The comment composer on the detail page works the same ("Reply");
+  if the new reply isn't shown yet (older comments still to load) it says "Reply posted. Load
+  more comments to see it."
+- **Infinite scroll** — feed, a profile's posts and comments load the next page when the list's
+  end gets within 400px of the viewport, with a "Load more" button as the keyboard / fallback
+  path and Retry after a failed page.
+- **Posts** — each card: avatar + `@username` (→ profile), relative time (the link to the post),
+  body as plain text, comments (→ detail), a like toggle (optimistic, rolls back on error), and on
+  your own posts a "…" menu → Delete with a confirmation. Clicking the card (not its
+  links/buttons) opens the post.
+- **Post detail** (`/u/:username/posts/:id`, `pages/PostDetail.jsx`) — the post, a reply box and
+  its comments (oldest first, paged; delete your own with a confirmation). A wrong `:username`
+  redirects to the author's; an unknown id shows "Post not found". Back returns to the previous
+  in-app page, or to the author's profile when there is none (opened directly — redirects don't
+  count, so Back never leaves the app); deleting the post goes to the author's profile.
 - **Profiles** — `/u/:username` (`pages/Profile.jsx`: Pulse layout — banner, avatar,
-  `@username`, bio, join date, "Edit profile" on your own, Posts tab empty state) and
+  `@username` with the post count, bio, join date, "Edit profile" on your own, Posts tab with the
+  user's posts, newest first, same paging) and
   `/settings/profile` (`pages/EditProfile.jsx`), both inside the shell; the nav's Profile item
   and the right rail's card link to your profile. Data via `useProfile(username)`
   (`src/hooks/use-profile.js`, no retry on 404) keyed by `profileQueryKey(username)`
