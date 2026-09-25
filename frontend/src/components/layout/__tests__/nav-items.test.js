@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getNavItems, getSignOutItem } from '../nav-items'
+import { formatBadgeCount, getNavItems, getSignOutItem, navItemLabel } from '../nav-items'
 
 const keysOf = (items) => items.map((item) => item.key)
 const byKey = (items, key) => items.find((item) => item.key === key)
@@ -44,6 +44,14 @@ describe('getNavItems', () => {
       to: '/explore',
       disabled: false,
     })
+    for (const navItems of [items, getNavItems('ada', { mobile: true })]) {
+      expect(byKey(navItems, 'notifications')).toMatchObject({
+        label: 'Notifications',
+        to: '/notifications',
+        end: false,
+        disabled: false,
+      })
+    }
     expect(byKey(items, 'profile')).toMatchObject({
       label: 'Profile',
       to: '/u/ada',
@@ -75,18 +83,20 @@ describe('getNavItems', () => {
   it('flags the "Coming soon" items as disabled, with no path', () => {
     const items = getNavItems('ada')
 
-    for (const key of ['notifications', 'messages', 'bookmarks']) {
-      expect(byKey(items, key)).toMatchObject({ disabled: true, to: undefined })
+    for (const key of ['messages', 'bookmarks']) {
+      expect(byKey(items, key)).toMatchObject({ disabled: true, to: undefined, badge: null })
     }
-    expect(keysOf(items.filter((item) => item.disabled))).toEqual([
-      'notifications',
-      'messages',
-      'bookmarks',
-    ])
+    expect(keysOf(items.filter((item) => item.disabled))).toEqual(['messages', 'bookmarks'])
     expect(keysOf(getNavItems('ada', { mobile: true }).filter((item) => item.disabled))).toEqual([
-      'notifications',
       'messages',
     ])
+  })
+
+  it('gives only Notifications a badge (the unread-notifications count), in both navs', () => {
+    for (const items of [getNavItems('ada'), getNavItems('ada', { mobile: true })]) {
+      expect(byKey(items, 'notifications').badge).toBe('notifications')
+      expect(keysOf(items.filter((item) => item.badge))).toEqual(['notifications'])
+    }
   })
 
   it('gives every item a label and an icon component', () => {
@@ -107,5 +117,32 @@ describe('getSignOutItem', () => {
       disabled: false,
     })
     expect(getSignOutItem().icon).toBeTruthy()
+  })
+})
+
+describe('formatBadgeCount', () => {
+  it.each([undefined, null, 0, -1, 1.5, '3'])('shows nothing for %p', (count) => {
+    expect(formatBadgeCount(count)).toBeNull()
+  })
+
+  it.each([
+    [1, '1'],
+    [42, '42'],
+    [99, '99'],
+    [100, '99+'],
+    [1234, '99+'],
+  ])('shows %p as %p', (count, text) => {
+    expect(formatBadgeCount(count)).toBe(text)
+  })
+})
+
+describe('navItemLabel', () => {
+  it('adds the exact unread count to the label when there is one', () => {
+    expect(navItemLabel('Notifications', 3)).toBe('Notifications, 3 unread')
+    expect(navItemLabel('Notifications', 150)).toBe('Notifications, 150 unread')
+  })
+
+  it.each([undefined, null, 0])('is just the label when the count is %p', (count) => {
+    expect(navItemLabel('Notifications', count)).toBe('Notifications')
   })
 })

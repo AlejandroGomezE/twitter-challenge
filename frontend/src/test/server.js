@@ -39,6 +39,8 @@ export const handlers = [
   ),
   // User search (typeahead and Explore): no matches by default, whatever the query.
   http.get(apiUrl('/search/users'), () => HttpResponse.json({ items: [], nextCursor: null })),
+  // The nav's unread-notifications badge: nothing unread by default (no badge).
+  http.get(apiUrl('/notifications/unread-count'), () => HttpResponse.json({ count: 0 })),
   // Follow / unfollow succeed with a follower count of 1 / 0 by default.
   http.put(apiUrl('/users/:username/follow'), () =>
     HttpResponse.json({ following: true, followerCount: 1 }),

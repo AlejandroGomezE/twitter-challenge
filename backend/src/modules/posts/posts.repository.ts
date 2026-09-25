@@ -100,20 +100,22 @@ export class PostsRepository {
   // hit the key and are treated as "already liked". (Prisma's `upsert` is
   // not relied on here: unless it qualifies for a native database upsert it
   // runs as read-then-create, which can itself throw P2002 under a race.)
-  // Any other error — e.g. P2003 when the post was deleted meanwhile — is
-  // rethrown for the service to map.
-  async like(userId: string, postId: string): Promise<void> {
+  // Resolves true if this call inserted the like, false if it already
+  // existed. Any other error — e.g. P2003 when the post was deleted
+  // meanwhile — is rethrown for the service to map.
+  async like(userId: string, postId: string): Promise<boolean> {
     try {
       await this.prisma.like.create({
         data: { userId, postId },
         select: { postId: true },
       });
+      return true;
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === UNIQUE_CONSTRAINT_VIOLATION
       ) {
-        return;
+        return false;
       }
       throw error;
     }

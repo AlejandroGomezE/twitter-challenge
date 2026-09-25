@@ -1,10 +1,10 @@
 ---
 title: Backend architecture
 type: infra
-summary: Layered NestJS backend (backend/) — current implementation state (Prisma database module, Zod-validated config, global exception filter, email+password auth with cookie sessions, users module with profiles, display names and user search, posts module with Following / For you feeds, likes and comments, follows module with follow lists and suggestions; keyset pagination, named throttlers).
+summary: Layered NestJS backend (backend/) — current implementation state (Prisma database module, Zod-validated config, global exception filter, email+password auth with cookie sessions, users module with profiles, display names and user search, posts module with Following / For you feeds, likes and comments, follows module with follow lists and suggestions, notifications module fed by domain events; keyset pagination, named throttlers).
 status: active
 last-verified: 2026-09-24
-tags: [backend, nestjs, architecture, prisma, config, auth, posts, follows, search, pagination, throttling]
+tags: [backend, nestjs, architecture, prisma, config, auth, posts, follows, search, notifications, events, pagination, throttling]
 ---
 
 ## Layered architecture
@@ -35,8 +35,8 @@ backend/src/
 ├── app.setup.ts           # configureApp(app): helmet, cookie-parser, CORS, ValidationPipe,
 │                          #   ResponseSerializerInterceptor, exception filter — shared by
 │                          #   main.ts and the e2e suite
-├── app.module.ts          # root module — wires Config, Prisma, Auth, Users, Posts, Follows,
-│                          #   (conditionally) Observe
+├── app.module.ts          # root module — wires Config, EventEmitter, Prisma, Auth, Users, Posts,
+│                          #   Follows, Notifications, (conditionally) Observe
 ├── observe.ts             # NestJS Observe APM module/instrument factory
 ├── config/
 │   ├── configuration.ts           # typed config (nodeEnv, port, database.url, frontendOrigin)
@@ -45,6 +45,8 @@ backend/src/
 │   ├── prisma.module.ts   # @Global, exports PrismaService
 │   └── prisma.service.ts  # extends generated PrismaClient, better-sqlite3 driver adapter
 ├── common/
+│   ├── events/
+│   │   └── domain-events.ts  # DomainEvent names, payload types, emitDomainEvent (typed emit)
 │   ├── filters/
 │   │   └── all-exceptions.filter.ts  # global, normalizes every error response
 │   └── interceptors/
@@ -83,6 +85,20 @@ backend/src/
 │   │   │                          #   Users / Posts)
 │   │   └── follows.repository.ts  # Prisma access for Follow + its own username → id lookup;
 │   │                              #   relationsAmong (batched booleans), findSuggestions
+│   ├── notifications/
+│   │   ├── dto/
+│   │   │   ├── notification-response.dto.ts       # NotificationResponseDto { id, type, createdAt,
+│   │   │   │                                      #   read, actor, post, comment }
+│   │   │   ├── notification-subject-response.dto.ts  # { id, body } — the post / comment
+│   │   │   ├── notification-page-response.dto.ts  # NotificationPageResponseDto { items, nextCursor }
+│   │   │   ├── unread-count-response.dto.ts       # UnreadCountResponseDto { count }
+│   │   │   └── mark-read.dto.ts                   # MarkReadDto { until } — @IsISO8601 (strict)
+│   │   ├── notifications.module.ts      # controller + listener; imports nothing, exports nothing
+│   │   ├── notifications.controller.ts  # GET /notifications, GET /notifications/unread-count,
+│   │   │                                #   POST /notifications/read
+│   │   ├── notifications.listener.ts    # @OnEvent(…, { async: true }) per domain event → service
+│   │   ├── notifications.service.ts     # notify (skips self), retract, list, unreadCount, markRead
+│   │   └── notifications.repository.ts  # Prisma access for Notification (scoped by recipientId)
 │   ├── posts/
 │   │   ├── dto/
 │   │   │   ├── create-post.dto.ts          # CreatePostDto { body } — @IsPostBody()
@@ -141,16 +157,19 @@ backend/src/
 └── generated/prisma/      # `npx prisma generate` output — gitignored, never hand-edited
 ```
 
-No other `common/` subfolder exists yet. The domain modules are `modules/users/` (users are
-created through the auth flow; `UsersController` serves profiles and a user's posts,
+No other `common/` subfolder exists yet. `common/events/` holds the domain events — plain names +
+payload types, not a module (see Notifications below). The domain modules are `modules/users/`
+(users are created through the auth flow; `UsersController` serves profiles and a user's posts,
 `SearchController` the user search),
-`modules/posts/` (posts, likes and comments in one module) and `modules/follows/` (follows,
-follow lists, suggestions). The module graph only points one way — no cycle:
+`modules/posts/` (posts, likes and comments in one module), `modules/follows/` (follows,
+follow lists, suggestions) and `modules/notifications/`. The module graph only points one way — no
+cycle:
 
 ```text
-UsersModule   → PostsModule, FollowsModule
-PostsModule   → FollowsModule
-FollowsModule → (nothing — only the global PrismaModule / throttler)
+UsersModule         → PostsModule, FollowsModule
+PostsModule         → FollowsModule
+FollowsModule       → (nothing — only the global PrismaModule / throttler)
+NotificationsModule → (nothing — reached only through domain events on the global EventEmitter2)
 ```
 
 `UsersModule` imports `PostsModule` (for `postCount` and `GET /users/:username/posts`) and
@@ -178,7 +197,7 @@ pulling a schema change, run `npx prisma db push` (and `npx prisma generate`) fr
 `npx prisma db push --force-reset`, which wipes the dev DB (no backfill — there's no
 production data). The posts and follows changes only add tables, and the user-search change
 only adds the nullable `User.displayName` column (existing rows stay `null`, no backfill): a plain
-`npx prisma db push`. `displayName` is required by the sign-up DTO, not by the schema — it's
+`npx prisma db push`; so does the notifications change (a new table). `displayName` is required by the sign-up DTO, not by the schema — it's
 nullable only for accounts created before it existed.
 
 Posts models — every relation is `onDelete: Cascade`: deleting a post removes its likes and
@@ -200,6 +219,13 @@ lookups) + `@@index([followingId, createdAt])` ("followers of X", newest follow 
 `@@index([followerId, createdAt])` ("following of X", newest follow first). On `User` the two
 sides are `following` (relation `UserFollowing`, rows where the user is the follower) and
 `followers` (`UserFollowers`). Follows key on user ids, so a username change keeps them.
+
+Notifications model — `Notification { id cuid, recipientId → User, actorId → User, type String
+('follow' | 'like' | 'comment', validated in code — SQLite has no enums), postId? → Post,
+commentId? → Comment, readAt?, createdAt }`, every relation `onDelete: Cascade` (deleting the
+comment, the post or either user removes it) + `@@index([recipientId, createdAt])` (a user's
+notifications newest first, and their unread count). On `User` the two sides are
+`notificationsReceived` (`NotificationRecipient`) and `notificationsSent` (`NotificationActor`).
 
 The database is **SQLite** — a local file, no server. Prisma 7 requires an explicit
 **driver adapter** (the bundled query-engine binary is gone), so `PrismaService`
@@ -448,6 +474,37 @@ ignored).
   The lists and suggestions aren't throttled. Likes are deliberately unthrottled; follows got a
   limit because the feature plan asked for one — see Open questions.
 
+**Notifications** (`src/modules/notifications/`; every route session-gated, no `@Public()`; always
+the session user's own — no user id is read from the request).
+
+- **Endpoints.** `GET /notifications?cursor=&limit=` → `NotificationPageResponseDto { items:
+  NotificationResponseDto[], nextCursor }`, newest first — `{ id, type, createdAt, read (readAt !==
+  null), actor: { username, displayName }, post: { id, body } | null, comment: { id, body } | null }`
+  (actor reuses `PostAuthorResponseDto`; no ids of users, no `readAt`). One `findMany` with the
+  actor / post / comment selected alongside — no per-row lookup. Keyset paging on `(createdAt, id)`
+  desc with `posts/pagination.ts` and `ListPostsQueryDto` reused (same 400s). `GET
+  /notifications/unread-count` → `UnreadCountResponseDto { count }` (a `count` on `recipientId`,
+  `readAt: null`). `POST /notifications/read` `{ until }` → 204: one `updateMany` setting `readAt =
+  now` on the caller's unread rows with `createdAt <= until`, so one that arrived after the client
+  loaded its page stays unread. `MarkReadDto.until` is `@IsISO8601({ strict: true })` → 400 when
+  missing / invalid. All paths are literal. Not throttled.
+- **Domain events** (`common/events/domain-events.ts`). `PostsService.setLiked`,
+  `FollowsService.setFollowing` and `CommentsService.create` emit `like.created` / `like.removed`,
+  `follow.created` / `follow.removed` and `comment.created` through `@nestjs/event-emitter`
+  (`EventEmitterModule.forRoot()` in `AppModule`) with `emitDomainEvent` (name-checked payloads),
+  after the write succeeds, fire-and-forget. `*.created` fires only when a like / follow row was
+  actually inserted (the repositories' `like` / `follow` return that), so idempotent repeats don't
+  re-notify. Emitters report everything, self-actions included; listeners decide. Posts and follows
+  never import the notifications module.
+- **Listener** (`NotificationsListener`). One `@OnEvent(name, { async: true })` handler per event —
+  `async: true` is required: EventEmitter2 runs sync listeners inside `emit()`, i.e. in the
+  originating request's stack. Each calls `NotificationsService.notify` (like / comment / follow;
+  a self-action is skipped) or `.retract` (unlike / unfollow: `deleteMany` on type, actor,
+  recipient and post). Every handler catches everything: a P2003 (post, comment or user deleted
+  between the write and the listener — the cascade would remove the row anyway) is a silent no-op,
+  anything else is logged with Nest's `Logger` and never rethrown, so the originating request never
+  fails because of a notification.
+
 **Display names in embedded users.** Post / comment authors (`PostAuthorResponseDto { username,
 displayName }`) and `FollowUser` rows (`FollowUserResponseDto`) carry `displayName` (`null` until
 the user sets one). It comes from the same query as the row — `author: { select: { username,
@@ -513,8 +570,8 @@ value to that class and emits only exposed fields, so even a full Prisma row wit
 DTO instance) is a 500, never passed through unfiltered. Never return Prisma models/entities or
 internal service types (`PublicUser`, `PublicProfile`, `MyProfile`, `AuthenticatedUser`,
 `PostView`, `CommentView`, `PostPage`, `LikeState`, `FollowUserView`, `FollowUserPage`,
-`FollowUserList`, `FollowState`) directly. 204 endpoints (`POST
-/auth/sign-out`, the post and comment deletes) return `void` and need no DTO. A nested object or
+`FollowUserList`, `FollowState`, `NotificationView`, `NotificationPage`, `UnreadCount`) directly. 204 endpoints (`POST
+/auth/sign-out`, the post and comment deletes, `POST /notifications/read`) return `void` and need no DTO. A nested object or
 array in a response DTO needs `@Type(() => NestedDto)` — see Posts above.
 
 **CORS.** `app.enableCors({ origin: [FRONTEND_ORIGIN], credentials: true })` — an

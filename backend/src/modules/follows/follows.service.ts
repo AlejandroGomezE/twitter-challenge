@@ -3,6 +3,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import {
+  DomainEvent,
+  emitDomainEvent,
+} from '../../common/events/domain-events.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import {
   decodeCursor,
@@ -85,12 +90,17 @@ type PageReader = (params: FindFollowPageParams) => Promise<FollowEdge[]>;
 // FollowsRepository.
 @Injectable()
 export class FollowsService {
-  constructor(private readonly followsRepository: FollowsRepository) {}
+  constructor(
+    private readonly followsRepository: FollowsRepository,
+    private readonly eventEmitter: EventEmitter2,
+  ) {}
 
   // Follows (`following: true`) or unfollows `username` as `followerId` (the
   // session user); both idempotent. 404 for an unknown user — checked first,
   // and again via the FK violation (P2003) if the user is deleted between the
   // check and the insert, so that race is a 404, not a 500. 400 on yourself.
+  // After the write, emits `follow.created` (only if the follow was actually
+  // inserted) or `follow.removed`; never on a 400/404.
   async setFollowing(
     followerId: string,
     username: string,
@@ -102,9 +112,10 @@ export class FollowsService {
         following ? FOLLOW_SELF_MESSAGE : UNFOLLOW_SELF_MESSAGE,
       );
     }
+    let inserted = false;
     try {
       if (following) {
-        await this.followsRepository.follow(followerId, targetId);
+        inserted = await this.followsRepository.follow(followerId, targetId);
       } else {
         await this.followsRepository.unfollow(followerId, targetId);
       }
@@ -116,6 +127,12 @@ export class FollowsService {
         throw new NotFoundException(USER_NOT_FOUND_MESSAGE);
       }
       throw error;
+    }
+    const payload = { actorId: followerId, recipientId: targetId };
+    if (!following) {
+      emitDomainEvent(this.eventEmitter, DomainEvent.FollowRemoved, payload);
+    } else if (inserted) {
+      emitDomainEvent(this.eventEmitter, DomainEvent.FollowCreated, payload);
     }
     const followerCount = await this.followsRepository.followerCount(targetId);
     return { following, followerCount };
