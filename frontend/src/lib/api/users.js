@@ -42,10 +42,6 @@ export const setFollowing = (username, following) =>
     ? apiClient.put(`${userPath(username)}/follow`)
     : apiClient.delete(`${userPath(username)}/follow`);
 
-export const followUser = (username) => setFollowing(username, true);
-
-export const unfollowUser = (username) => setFollowing(username, false);
-
 // `GET /users/:username/followers` — 404 for an unknown user.
 export const fetchFollowers = (username, cursor) =>
   apiClient.get(withCursor(`${userPath(username)}/followers`, cursor));
