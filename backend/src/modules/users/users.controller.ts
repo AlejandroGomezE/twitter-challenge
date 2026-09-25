@@ -39,11 +39,15 @@ export class UsersController {
   }
 
   // Any signed-in user may view any profile; never includes the email. The
-  // service normalizes the username (case-insensitive lookup).
+  // service normalizes the username (case-insensitive lookup); the session
+  // user is the viewer the follow booleans are relative to.
   @Get(':username')
   @SerializeOptions({ type: ProfileResponseDto })
-  getProfile(@Param('username') username: string): Promise<ProfileResponseDto> {
-    return this.usersService.getProfile(username);
+  getProfile(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('username') username: string,
+  ): Promise<ProfileResponseDto> {
+    return this.usersService.getProfile(username, user.id);
   }
 
   // A user's posts, newest first, paged (the profile Posts tab). Lives here,

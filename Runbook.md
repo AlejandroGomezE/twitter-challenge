@@ -29,8 +29,8 @@ their own.
 http://localhost:5173 — you land on `/sign-in`; use "Create an account" (`/sign-up`). First time
 after pulling the auth change, run `npx prisma db push` from `backend/` (see Backend → Auth);
 after pulling the profile change, run `npx prisma db push --force-reset` instead (see Backend →
-Profiles — it wipes the dev DB); after pulling the posts change, a plain `npx prisma db push` is
-enough (additive — see Backend → Posts).
+Profiles — it wipes the dev DB); after pulling the posts or the follows change, a plain
+`npx prisma db push` is enough (additive — see Backend → Posts / Follows).
 
 ---
 
@@ -70,7 +70,7 @@ from `backend/.env` (create it from `backend/.env.example`; it's git-ignored).
   registers itself in `src/app.module.ts` when **both** are set to a non-empty
   value, so leaving them blank is a normal, supported way to run without APM).
 - **Database**: Prisma (`prisma/schema.prisma` — models `User`, `Session`, `Post`, `Like`,
-  `Comment`; config
+  `Comment`, `Follow`; config
   in `prisma7.config.ts`),
   driver-adapter based (Prisma 7 requires one — `@prisma/adapter-better-sqlite3` +
   `better-sqlite3`, wired in `src/database/prisma.service.ts`). SQLite is a local
@@ -116,11 +116,14 @@ from `backend/.env` (create it from `backend/.env.example`; it's git-ignored).
   - **After pulling this change, run `npx prisma db push` from `backend/`** to create the
     `User`/`Session` tables (and `npx prisma generate` if the client is stale).
 - **Profiles** (`src/modules/users/`, `users.controller.ts`) — both routes session-gated:
-  - `GET /users/:username` → `{ username, bio, createdAt, postCount }` (case-insensitive lookup;
-    never the email or id) or 404 `User not found`.
+  - `GET /users/:username` → `{ username, bio, createdAt, postCount, followerCount,
+    followingCount, isFollowing, followsYou }` (case-insensitive lookup; never the email or id) or
+    404 `User not found`. `isFollowing` = you follow them, `followsYou` = they follow you — both
+    `false` on your own profile.
   - `PATCH /users/me` `{ username?, bio? }` → the caller's own `{ id, email, username, bio,
-    createdAt, postCount }`; 409 `Username is already taken`, 400 on invalid input. The target is always
-    the session user; unknown fields are stripped.
+    createdAt, postCount, followerCount, followingCount }`; 409 `Username is already taken`, 400 on
+    invalid input. The target is always the session user; unknown fields are stripped. Follows key
+    on the user id, so a username change keeps them.
   - **Username:** trimmed + lowercased, 3–20 chars of `a-z0-9_`, not a reserved word (`me`,
     `settings`, `auth`, `users`, `u`, `api`, `admin`, …), unique (any case).
   - **Bio:** optional, trimmed, max 160 chars; an empty string clears it (`null`).
@@ -140,7 +143,8 @@ from `backend/.env` (create it from `backend/.env.example`; it's git-ignored).
   | `POST /posts` `{ body }` | 201 `Post` | 400 body, 429 (10/min) |
   | `GET /posts/:id` | 200 `Post` | 404 `Post not found` |
   | `DELETE /posts/:id` | 204 (its likes + comments cascade) | 403 not yours, 404 |
-  | `GET /feed?cursor=&limit=` | 200 page of `Post`, newest first | 400 bad cursor/limit |
+  | `GET /feed?cursor=&limit=` | 200 page of `Post`, newest first — **Following**: you + users you follow | 400 bad cursor/limit |
+  | `GET /feed/for-you?cursor=&limit=` | 200 page of `Post`, newest first — **For you**: every user's posts | 400 bad cursor/limit |
   | `GET /users/:username/posts?cursor=&limit=` | 200 page of `Post`, newest first | 404 `User not found`, 400 |
   | `PUT /posts/:id/like` | 200 `{ liked: true, likeCount }` (idempotent) | 404 |
   | `DELETE /posts/:id/like` | 200 `{ liked: false, likeCount }` (idempotent) | 404 |
@@ -149,8 +153,9 @@ from `backend/.env` (create it from `backend/.env.example`; it's git-ignored).
   | `DELETE /posts/:id/comments/:commentId` | 204 | 403 not yours, 404 (missing or on another post) |
 
   `GET /users/:username` and `PATCH /users/me` also return `postCount`.
-  - **Feed** = your posts + posts of users you follow; follows don't exist yet, so today it's only
-    your own posts.
+  - **Feeds** — `GET /feed` (Following) = your posts + posts of users you follow; `GET /feed/for-you`
+    (For you) = everyone's posts, no follows needed. Same `Post` shape, paging and `likedByMe` (yours)
+    for both.
   - **Body** (posts and comments): trimmed, then 1–280 characters counted as Unicode code points
     (an emoji counts 1); blank is 400. `src/modules/posts/posts.rules.ts` is authoritative; the
     frontend counter (`frontend/src/lib/text.js`) counts the same way.
@@ -159,9 +164,33 @@ from `backend/.env` (create it from `backend/.env.example`; it's git-ignored).
     first page.
   - **Rate limits** (429 `Too many requests, please try again later`, rejected 400s count too):
     create post 10/min and create comment 20/min per signed-in user; sign-in / sign-up 5/min per IP
-    (per route). Likes aren't limited.
+    (per route); follow / unfollow 30/min (see Follows). Likes aren't limited.
   - **After pulling this change, run `npx prisma db push` from `backend/`** (plain — the new
     tables are additive, no reset) and `npx prisma generate` if the client is stale.
+- **Follows** (`src/modules/follows/`, routes under `/users` beside `UsersController`) — every route
+  session-gated (401 without a session; writes with a foreign `Origin` → 403); the follower is
+  always the session user. Usernames in the path are case-insensitive. `FollowUser` = `{ username,
+  bio, isFollowing, followsYou }` (the booleans are relative to you, both `false` on your own row;
+  never an id or email):
+
+  | Method + path | Result | Errors |
+  |---|---|---|
+  | `PUT /users/:username/follow` | 200 `{ following: true, followerCount }` (idempotent) | 400 yourself, 404 `User not found`, 429 (30/min) |
+  | `DELETE /users/:username/follow` | 200 `{ following: false, followerCount }` (idempotent) | 400 yourself, 404, 429 (30/min) |
+  | `GET /users/:username/followers?cursor=&limit=` | 200 page of `FollowUser`, most recent follow first | 404, 400 bad cursor/limit |
+  | `GET /users/:username/following?cursor=&limit=` | 200 page of `FollowUser`, most recent follow first | 404, 400 |
+  | `GET /users/me/suggestions?limit=` | 200 `{ items: FollowUser[] }` — users you don't follow, never you, newest accounts first | 400 `limit` outside 1–10 |
+
+  - `followerCount` in the follow / unfollow response is the target's new total.
+  - Lists page exactly like the posts listings (opaque `cursor`, `limit` 1–50, default 20, an empty
+    `cursor=` → 400). `/users/me/followers` / `following` are a 404 (`me` is a reserved username,
+    not an alias — which is also why `/users/me/suggestions` can't clash with a real user).
+  - Suggestions: `limit` 1–10, default 3; no ranking beyond newest accounts first.
+  - **Rate limit:** `PUT` and `DELETE` get 30/min **each** per signed-in user
+    (`FOLLOW_LIMIT_PER_MINUTE`, a constant in `follows.controller.ts` — not an env var); other users
+    are unaffected. The lists and suggestions aren't limited.
+  - **After pulling this change, run `npx prisma db push` from `backend/`** (plain — `Follow` is a
+    new table, no reset) and `npx prisma generate` if the client is stale.
 - **Run**: `start:dev` (watch mode, what `scripts/be-local` uses), `start` (no watch),
   `start:debug`, `start:prod` (runs the compiled `dist/`).
 - **Test**: `test` (Vitest unit), `test:watch`, `test:cov` (coverage), `test:debug`,
@@ -193,15 +222,19 @@ shadcn/ui (Radix base, Nova preset), and `react-router` for client-side routing.
   test. Tests render **signed in** by default (the default MSW `GET /auth/me` handler
   returns a user); override it with a 401 (`server.use(...)`) to render signed out. A default
   `GET /users/:username` handler feeds the shell's profile card (`ada` → bio `null`, others →
-  404), and default `GET /feed` / `GET /users/:username/posts` handlers return an empty page
-  (`/users/<not ada>/posts` → 404); tests routed through `AppRouter` render inside the shell, so
-  scope queries with `within(screen.getByRole('main'))`.
+  404), and default `GET /feed` / `GET /feed/for-you` / `GET /users/:username/posts` handlers
+  return an empty page (`/users/<not ada>/posts` → 404). Follows have defaults too: empty
+  suggestions, empty `ada` followers / following (others → 404), and `PUT` / `DELETE
+  /users/:username/follow` answering `followerCount` 1 / 0. Tests routed through `AppRouter` render
+  inside the shell, so scope queries with `within(screen.getByRole('main'))`.
 - **Structure** (`src/`): `app/` (`App.jsx`, `router.jsx`, `NavigationDepthTracker.jsx`,
   `providers.jsx`, `query-client.js`), `components/ui/` (shadcn), `components/layout/` (app shell),
   `components/feed/` (`Composer`, `PostCard`, `CommentComposer`, `CommentItem`,
   `InfiniteListFooter`, `CharacterCounter`, `PostListSkeleton`), `components/AuthLayout.jsx`,
-  `components/BrandMark.jsx`, `components/UserAvatar.jsx`, `hooks/`,
-  `lib/api/` (HTTP client, `users.js`, `posts.js`, `post-cache.js`, `error-message.js`),
+  `components/BrandMark.jsx`, `components/UserAvatar.jsx`, `components/FollowButton.jsx`,
+  `components/FollowListDialog.jsx`, `hooks/`,
+  `lib/api/` (HTTP client, `users.js`, `posts.js`, `post-cache.js`, `follow-cache.js`,
+  `error-message.js`),
   `lib/text.js`, `lib/format.js`, `lib/composer-focus.js`, `lib/navigation-history.js`,
   `lib/avatar-color.js`,
   `lib/auth/` (`AuthProvider`, `useAuth()`), `lib/validation/` (Zod form schemas),
@@ -240,15 +273,21 @@ shadcn/ui (Radix base, Nova preset), and `react-router` for client-side routing.
   `lg`. Nav items are configured once in `layout/nav-items.js`.
 - **Disabled items** — features without a backend yet are shown but disabled, never with fake
   counts or users. The nav placeholders (Explore, Notifications, Messages, Bookmarks), the
-  search box, the Following tab, the composer's attachment icons and the post cards' Repost /
-  Bookmark / Share are wrapped in `layout/ComingSoon.jsx`: `aria-disabled` (not native
-  `disabled`, so the "Coming soon" tooltip stays reachable). "Who to follow"
-  (`layout/RightRail.jsx`) is a text-only "Coming soon" card, no `ComingSoon` wrapper.
+  search box, the composer's attachment icons and the post cards' Repost / Bookmark / Share are
+  wrapped in `layout/ComingSoon.jsx`: `aria-disabled` (not native `disabled`, so the "Coming
+  soon" tooltip stays reachable).
+- **Who to follow** (`layout/RightRail.jsx`) — up to 3 users you don't follow (newest accounts
+  first), each linking to their profile, with a Follow button; skeleton rows while loading; the card
+  is hidden when there's nobody to suggest or the request fails. Following someone flips the row to
+  "Following" until the suggestions refetch drops it.
 - **New post** — the left rail's "New post" and the mobile compose button go to Home and focus
   the composer (on Home they just focus it).
-- **Home** (`/`) — the feed: "For you" / "Following" (disabled) tabs, the composer, then your
-  posts newest first (+ followed users' once follows exist) with loading / error + Retry / empty
-  states and "You're all caught up" at the end.
+- **Home** (`/`) — two working tabs, **Following** (the default: your posts + people you follow)
+  and **For you** (everyone's posts), then the composer and the selected feed, newest first, with
+  loading / error + Retry / empty states. The tab lives in the URL: no param = Following,
+  `?tab=for-you` = For you (switching replaces the history entry). Following's empty state nudges
+  you to follow people (with an "Explore For you" button); the end reads "You're all caught up"
+  (Following) / "You've seen every post" (For you). A new post appears at the top of both feeds.
 - **Composer** — live `N/280` counter (trimmed body, code points — same as the backend); Post is
   disabled while blank or over 280; Cmd/Ctrl+Enter posts (not during IME composition); the
   textarea is read-only while posting, cleared on success, kept on failure with the server's
@@ -271,7 +310,12 @@ shadcn/ui (Radix base, Nova preset), and `react-router` for client-side routing.
 - **Profiles** — `/u/:username` (`pages/Profile.jsx`: Pulse layout — banner, avatar,
   `@username` with the post count, bio, join date, "Edit profile" on your own, Posts tab with the
   user's posts, newest first, same paging) and
-  `/settings/profile` (`pages/EditProfile.jsx`), both inside the shell; the nav's Profile item
+  `/settings/profile` (`pages/EditProfile.jsx`), both inside the shell. Someone else's profile has
+  a Follow / Follow back / Following button (reads "Unfollow" on hover and focus; one click, no
+  confirm) and a "Follows you" badge when they follow you; your own has neither. Below "Joined …",
+  `N Following  M Followers` — each opens a dialog on that list (tabs to switch, infinite scroll;
+  rows link to the profile and carry a follow button, except your own row). Follows are optimistic:
+  counts update at once and roll back on error. The nav's Profile item
   and the right rail's card link to your profile. Data via `useProfile(username)`
   (`src/hooks/use-profile.js`, no retry on 404) keyed by `profileQueryKey(username)`
   (`src/lib/api/users.js`, lowercased). The avatar is a placeholder only

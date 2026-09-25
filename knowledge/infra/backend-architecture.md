@@ -1,10 +1,10 @@
 ---
 title: Backend architecture
 type: infra
-summary: Layered NestJS backend (backend/) — current implementation state (Prisma database module, Zod-validated config, global exception filter, email+password auth with cookie sessions, users module with profiles, posts module with feed, likes and comments; keyset pagination, named throttlers).
+summary: Layered NestJS backend (backend/) — current implementation state (Prisma database module, Zod-validated config, global exception filter, email+password auth with cookie sessions, users module with profiles, posts module with Following / For you feeds, likes and comments, follows module with follow lists and suggestions; keyset pagination, named throttlers).
 status: active
 last-verified: 2026-09-24
-tags: [backend, nestjs, architecture, prisma, config, auth, posts, pagination, throttling]
+tags: [backend, nestjs, architecture, prisma, config, auth, posts, follows, pagination, throttling]
 ---
 
 ## Layered architecture
@@ -35,8 +35,8 @@ backend/src/
 ├── app.setup.ts           # configureApp(app): helmet, cookie-parser, CORS, ValidationPipe,
 │                          #   ResponseSerializerInterceptor, exception filter — shared by
 │                          #   main.ts and the e2e suite
-├── app.module.ts          # root module — wires Config, Prisma, Auth, Users, Posts, (conditionally)
-│                          #   Observe
+├── app.module.ts          # root module — wires Config, Prisma, Auth, Users, Posts, Follows,
+│                          #   (conditionally) Observe
 ├── observe.ts             # NestJS Observe APM module/instrument factory
 ├── config/
 │   ├── configuration.ts           # typed config (nodeEnv, port, database.url, frontendOrigin)
@@ -66,6 +66,21 @@ backend/src/
 │   ├── session.constants.ts       # cookie name, 7-day TTL
 │   └── dto/                       # request DTOs: SignUpDto, SignInDto (class-validator)
 ├── modules/
+│   ├── follows/
+│   │   ├── dto/
+│   │   │   ├── follow-user-response.dto.ts       # FollowUserResponseDto { username, bio,
+│   │   │   │                                     #   isFollowing, followsYou } — no id / email
+│   │   │   ├── follow-user-page-response.dto.ts  # FollowUserPageResponseDto { items, nextCursor }
+│   │   │   ├── follow-user-list-response.dto.ts  # FollowUserListResponseDto { items } (suggestions)
+│   │   │   ├── follow-state-response.dto.ts      # FollowStateResponseDto { following, followerCount }
+│   │   │   └── suggestions-query.dto.ts          # SuggestionsQueryDto { limit? (1–10) }
+│   │   ├── follows.module.ts      # FollowsController; exports FollowsService; imports nothing
+│   │   ├── follows.controller.ts  # @Controller('users'): PUT/DELETE :username/follow,
+│   │   │                          #   GET :username/followers|following, GET me/suggestions
+│   │   ├── follows.service.ts     # setFollowing, listFollowers / listFollowing, suggestions,
+│   │   │                          #   followedIds, counts, relation (exported to Users / Posts)
+│   │   └── follows.repository.ts  # Prisma access for Follow + its own username → id lookup;
+│   │                              #   relationsAmong (batched booleans), findSuggestions
 │   ├── posts/
 │   │   ├── dto/
 │   │   │   ├── create-post.dto.ts          # CreatePostDto { body } — @IsPostBody()
@@ -83,12 +98,13 @@ backend/src/
 │   │   │                          #   bodyLength, normalizeBody (trim), @IsPostBody()
 │   │   ├── pagination.ts          # keyset cursor: encodeCursor / decodeCursor, PAGE_SIZE (20),
 │   │   │                          #   MAX_PAGE_SIZE (50), resolvePageSize
-│   │   ├── posts.module.ts        # Posts / Feed / Comments controllers; exports PostsService
+│   │   ├── posts.module.ts        # Posts / Feed / Comments controllers; imports FollowsModule;
+│   │   │                          #   exports PostsService
 │   │   ├── posts.controller.ts    # POST /posts, GET/DELETE /posts/:id, PUT/DELETE /posts/:id/like
-│   │   ├── feed.controller.ts     # GET /feed
+│   │   ├── feed.controller.ts     # GET /feed (Following), GET /feed/for-you (everyone)
 │   │   ├── comments.controller.ts # GET/POST /posts/:postId/comments, DELETE …/:commentId
-│   │   ├── posts.service.ts       # create, getById, delete (own), setLiked, feed, listByAuthor,
-│   │   │                          #   countByAuthor; feedAuthorIds (the follows extension point)
+│   │   ├── posts.service.ts       # create, getById, delete (own), setLiked, feed, forYou,
+│   │   │                          #   listByAuthor, countByAuthor; feedAuthorIds (you + followed)
 │   │   ├── comments.service.ts    # list, create, delete (own)
 │   │   ├── posts.repository.ts    # Prisma access for Post + Like; countsFor (batched counts)
 │   │   └── comments.repository.ts # Prisma access for Comment
@@ -96,26 +112,40 @@ backend/src/
 │       ├── dto/
 │       │   ├── user-response.dto.ts        # UserResponseDto { id, email, username }
 │       │   ├── profile-response.dto.ts     # ProfileResponseDto { username, bio, createdAt,
-│       │   │                               #   postCount }
+│       │   │                               #   postCount, followerCount, followingCount,
+│       │   │                               #   isFollowing, followsYou }
 │       │   ├── my-profile-response.dto.ts  # MyProfileResponseDto { id, email, username, bio,
-│       │   │                               #   createdAt, postCount } — the caller's own profile
+│       │   │                               #   createdAt, postCount, followerCount,
+│       │   │                               #   followingCount } — the caller's own profile
 │       │   └── update-profile.dto.ts       # UpdateProfileDto { username?, bio? }
 │       ├── username.rules.ts      # authoritative username/bio rules: RESERVED_USERNAMES,
 │       │                          #   normalizers, @IsUsername() / @IsBio() DTO decorators
-│       ├── users.module.ts        # UsersController; imports PostsModule; exports UsersService
+│       ├── users.module.ts        # UsersController; imports PostsModule + FollowsModule;
+│       │                          #   exports UsersService
 │       ├── users.controller.ts    # GET /users/:username, GET /users/:username/posts,
 │       │                          #   PATCH /users/me
 │       ├── users.service.ts       # create (argon2id hash, 409 on duplicate), lookups,
-│       │                          #   getProfile, listPosts, updateProfile (+ postCount)
+│       │                          #   getProfile, listPosts, updateProfile (+ postCount,
+│       │                          #   follow counts / relation)
 │       └── users.repository.ts    # Prisma access for User
 └── generated/prisma/      # `npx prisma generate` output — gitignored, never hand-edited
 ```
 
 No other `common/` subfolder exists yet. The domain modules are `modules/users/` (users are
-created through the auth flow; `UsersController` serves profiles and a user's posts) and
-`modules/posts/` (posts, likes and comments in one module). `UsersModule` imports `PostsModule`
-(for `postCount` and `GET /users/:username/posts`), never the other way round — no cycle. Add
-more, in
+created through the auth flow; `UsersController` serves profiles and a user's posts),
+`modules/posts/` (posts, likes and comments in one module) and `modules/follows/` (follows,
+follow lists, suggestions). The module graph only points one way — no cycle:
+
+```text
+UsersModule   → PostsModule, FollowsModule
+PostsModule   → FollowsModule
+FollowsModule → (nothing — only the global PrismaModule / throttler)
+```
+
+`UsersModule` imports `PostsModule` (for `postCount` and `GET /users/:username/posts`) and
+`FollowsModule` (profile follow counts and relation); `PostsModule` imports `FollowsModule` (the
+Following feed's author set); `FollowsModule` imports neither — it resolves usernames in its own
+repository rather than through `UsersService`. Add more, in
 this same layered shape, when a real feature needs them — don't scaffold empty folders
 ahead of time. See [[Code quality]] for the expected shape of each (the `common/`
 taxonomy, the generic domain-module skeleton). The auth guard and decorators live in
@@ -132,19 +162,27 @@ unique index gives case-insensitive uniqueness on SQLite without a custom collat
 pulling a schema change, run `npx prisma db push` (and `npx prisma generate`) from
 `backend/`. The profile change added a required column, so it needs
 `npx prisma db push --force-reset`, which wipes the dev DB (no backfill — there's no
-production data). The posts change only adds tables: a plain `npx prisma db push`.
+production data). The posts and follows changes only add tables: a plain `npx prisma db push`.
 
 Posts models — every relation is `onDelete: Cascade`: deleting a post removes its likes and
 comments, deleting a user removes their posts, likes and comments (hard delete, no soft delete).
 
 - `Post { id cuid, authorId → User, body, createdAt }` — `@@index([authorId, createdAt])` (one
-  author's posts newest first) and `@@index([createdAt])`. The latter is unused while the feed's
-  author set is just you; it lets SQLite walk time order once follows make the author list large.
+  author's posts newest first) and `@@index([createdAt])` — what the For you listing (no author
+  filter) walks, and what lets SQLite walk time order for a Following feed with many authors.
 - `Like { userId → User, postId → Post, createdAt }` — `@@id([userId, postId])` (one like per
   user per post; also what makes likes idempotent) + `@@index([postId])` for the counts.
 - `Comment { id cuid, postId → Post, authorId → User, body, createdAt }` —
   `@@index([postId, createdAt])`. `authorId` is deliberately **not** indexed: no query filters by
   it, only a user-delete cascade scans it.
+
+Follows model — `Follow { followerId → User, followingId → User, createdAt }`, both relations
+`onDelete: Cascade` (deleting either user removes the follow). `@@id([followerId, followingId])`
+(one follow per pair; also what makes follow idempotent, and its prefix serves "who does X follow"
+lookups) + `@@index([followingId, createdAt])` ("followers of X", newest follow first) and
+`@@index([followerId, createdAt])` ("following of X", newest follow first). On `User` the two
+sides are `following` (relation `UserFollowing`, rows where the user is the follower) and
+`followers` (`UserFollowers`). Follows key on user ids, so a username change keeps them.
 
 The database is **SQLite** — a local file, no server. Prisma 7 requires an explicit
 **driver adapter** (the bundled query-engine binary is gone), so `PrismaService`
@@ -225,10 +263,14 @@ running server.
 `@Public()`).
 
 - **Endpoints.** `GET /users/:username` → `ProfileResponseDto { username, bio, createdAt,
-  postCount }` (case-insensitive lookup; never email or id) or 404 `User not found`. `PATCH
-  /users/me` `{ username?, bio? }` → `MyProfileResponseDto { id, email, username, bio, createdAt,
-  postCount }`; 409 `Username is already taken`. `postCount` comes from
-  `PostsService.countByAuthor`. The target id comes only from `@CurrentUser()`; unknown
+  postCount, followerCount, followingCount, isFollowing, followsYou }` (case-insensitive lookup;
+  never email or id) or 404 `User not found`. `PATCH /users/me` `{ username?, bio? }` →
+  `MyProfileResponseDto { id, email, username, bio, createdAt, postCount, followerCount,
+  followingCount }`; 409 `Username is already taken`. `postCount` comes from
+  `PostsService.countByAuthor`, the follow fields from `FollowsService.counts` / `.relation`
+  (relative to the session user; both booleans `false` on your own profile, where `relation` runs
+  no query). `getProfile` is a constant number of queries: the lookup, then post count, follow
+  counts and relation concurrently. The target id comes only from `@CurrentUser()`; unknown
   fields are stripped by the `ValidationPipe` whitelist; an empty body is a no-op.
 - **Rules** (`username.rules.ts`, authoritative; the frontend mirror
   `frontend/src/lib/validation/profile-schemas.js` must match, `RESERVED_USERNAMES`
@@ -255,7 +297,8 @@ session-gated (no `@Public()`); author and viewer ids come only from `@CurrentUs
 
 - **Endpoints.** `POST /posts` `{ body }` → 201 `PostResponseDto` (10/min per user).
   `GET /posts/:id` → `PostResponseDto` / 404 `Post not found`. `DELETE /posts/:id` → 204; 403
-  `You can only delete your own posts`; 404. `GET /feed?cursor=&limit=` and
+  `You can only delete your own posts`; 404. `GET /feed?cursor=&limit=` (Following: you + users
+  you follow), `GET /feed/for-you?cursor=&limit=` (For you: every user's posts) and
   `GET /users/:username/posts?cursor=&limit=` → `PostPageResponseDto`, newest first (the latter
   404 `User not found`; `GET /users/me/posts` is a 404 like `GET /users/me`).
   `PUT` / `DELETE /posts/:id/like` → 200 `LikeStateResponseDto { liked, likeCount }`, idempotent,
@@ -286,8 +329,12 @@ session-gated (no `@Public()`); author and viewer ids come only from `@CurrentUs
   comments, and the viewer's likes among those ids), zero-filled — a page is one `findMany` plus
   those three, whatever its size. `create` runs none (a new post has no activity).
 - **Feed author set.** `PostsService.feedAuthorIds(viewerId)` is the single place that decides
-  whose posts are in a feed — `[viewerId]` today. The follows feature adds followed users' ids
-  there and nowhere else; `feed()` and `listByAuthor()` share one private `page()`.
+  whose posts are in the Following feed — `[viewerId, ...FollowsService.followedIds(viewerId)]`
+  (one query for the followed ids, then the usual `authorId IN (…)` page). `forYou()` passes no
+  author set at all: `PostsRepository.findPage` treats an omitted `authorIds` as "every author"
+  (no `authorId` filter, walking the `createdAt` index). `feed()`, `forYou()` and
+  `listByAuthor()` share one private `page()`; each decodes the cursor first (`parseCursor`), so
+  a bad cursor is a 400 before the follow lookup or any other query runs.
 - **Likes are idempotent.** `PostsRepository.like` is a plain `create` with P2002 (the composite
   primary key) swallowed: of N concurrent identical requests one inserts, the rest mean "already
   liked". Prisma's `upsert` isn't used — unless it maps to a native upsert it runs
@@ -309,7 +356,7 @@ session-gated (no `@Public()`); author and viewer ids come only from `@CurrentUs
     and switching IPs doesn't reset it; skipped without a session user (its tracker throws 401
     rather than put anonymous requests in one "undefined" bucket). Default 10 / 60 s; each route
     sets its own with `@Throttle({ [USER_THROTTLER]: { limit, ttl: THROTTLE_TTL_MS } })` — create
-    post 10, create comment 20.
+    post 10, create comment 20, follow and unfollow 30 each (see Follows below).
 
   Counters are per route (the storage key includes controller + handler). A request rejected by
   validation (400) still counts.
@@ -318,7 +365,54 @@ session-gated (no `@Public()`); author and viewer ids come only from `@CurrentUs
   copies the nested value as an untyped plain object, bypassing the inner `@Expose()` whitelist —
   a probe leaked the author's email and `passwordHash`. Guarded by
   `posts/dto/__tests__/post-response.dto.spec.ts` (and the page / comment DTO specs) through the
-  real interceptor, plus the e2e leak guard (Tests below).
+  real interceptor, plus the e2e leak guard (Tests below). The follows page / list DTOs' `items`
+  carry it too, guarded by `follows/dto/__tests__/follow-user-response.dto.spec.ts`.
+
+**Follows** (`src/modules/follows/`). Every route is session-gated (no `@Public()`); the follower
+/ viewer id comes only from `@CurrentUser()`, the target only from the path (body fields are
+ignored).
+
+- **Endpoints.** `PUT` / `DELETE /users/:username/follow` → 200 `FollowStateResponseDto
+  { following, followerCount }` (the target's new total), idempotent; 400 `You cannot follow
+  yourself` / `You cannot unfollow yourself`; 404 `User not found`. `GET
+  /users/:username/followers` and `/following` `?cursor=&limit=` → `FollowUserPageResponseDto`,
+  most recent follow first; 404 unknown user. `GET /users/me/suggestions?limit=` →
+  `FollowUserListResponseDto { items }`: users the caller doesn't follow, never the caller, newest
+  accounts first (`createdAt desc, id desc`, no ranking); `limit` 1–10, default 3
+  (`SuggestionsQueryDto`, `@Type(() => Number)`). `FollowUserResponseDto` = `{ username, bio,
+  isFollowing, followsYou }` — the booleans are relative to the caller and `false` on the
+  caller's own row; no id or email. Usernames are normalized like `getProfile` (case-insensitive).
+- **Route placement.** The routes are sub-resources of `/users`, so `FollowsController` is
+  `@Controller('users')` — but it's its own controller in its own module, because `UsersModule`
+  imports `FollowsModule` and `FollowsModule` can't import back. The two controllers can't shadow
+  each other in either registration order: `UsersController` has only one-segment paths
+  (`GET :username`, `PATCH me`) plus `GET :username/posts`, while every follows route has two
+  segments whose second (`follow`, `followers`, `following`, `suggestions`) is distinct. `me` is a
+  reserved username, so `/users/me/suggestions` can't collide with a real user, and
+  `/users/me/followers` etc. are plain 404s (`me` is not an alias). An e2e test pins that
+  suggestions doesn't shadow `GET /users/:username` or `/posts`.
+- **Idempotent follow.** Same pattern as likes: `FollowsRepository.follow` is a plain `create`
+  with P2002 (the composite primary key) swallowed; `unfollow` is a `deleteMany`. The service
+  resolves the target first (404) and rejects yourself (400), then maps a P2003 (the target deleted
+  between the check and the insert) to 404, not 500; the response re-counts followers.
+- **No dependency on Users.** `FollowsRepository` does its own `username → id` lookup
+  (`findUserIdByUsername`) and selects only `{ id, username, bio }` for list rows — the id stays
+  internal (relation lookups and the cursor). `FollowsService` is exported for `UsersService`
+  (`counts`, `relation`) and `PostsService` (`followedIds`).
+- **Paging.** The same keyset scheme as posts (`posts/pagination.ts`, `ListPostsQueryDto` reused):
+  ordered by `(follow createdAt, other user's id)` desc — `followerId` for followers, `followingId`
+  for following — so ties never skip or duplicate; the cursor encodes the follow's `createdAt` and
+  the other user's id.
+- **Relation booleans without N+1.** `FollowsRepository.relationsAmong(viewerId, userIds)` returns
+  which of the ids the viewer follows and which follow the viewer — two queries whatever the page
+  size (the viewer's own id is filtered out first). A list page is the page query + those two; the
+  suggestions are one query + those two (`isFollowing` is false by construction); `relation()` on
+  a profile is the same call with one id, and none for your own profile.
+- **Throttling.** `PUT` and `DELETE` carry `@UseGuards(ThrottlerGuard)` + the `user` throttler at
+  `FOLLOW_LIMIT_PER_MINUTE` = 30 / 60 s (a constant in `follows.controller.ts`, not config) —
+  per session user and, like every throttled route, per route (PUT and DELETE count separately).
+  The lists and suggestions aren't throttled. Likes are deliberately unthrottled; follows got a
+  limit because the feature plan asked for one — see Open questions.
 
 **Error handling.** A single global `AllExceptionsFilter`
 (`src/common/filters/all-exceptions.filter.ts`) catches everything and normalizes the
@@ -341,7 +435,8 @@ value to that class and emits only exposed fields, so even a full Prisma row wit
 `passwordHash` can't leak. It fails closed: a body without a declared `type` (even a
 DTO instance) is a 500, never passed through unfiltered. Never return Prisma models/entities or
 internal service types (`PublicUser`, `PublicProfile`, `MyProfile`, `AuthenticatedUser`,
-`PostView`, `CommentView`, `PostPage`, `LikeState`) directly. 204 endpoints (`POST
+`PostView`, `CommentView`, `PostPage`, `LikeState`, `FollowUserView`, `FollowUserPage`,
+`FollowUserList`, `FollowState`) directly. 204 endpoints (`POST
 /auth/sign-out`, the post and comment deletes) return `void` and need no DTO. A nested object or
 array in a response DTO needs `@Type(() => NestedDto)` — see Posts above.
 
@@ -381,6 +476,19 @@ builds a fresh app per test (throttle counters never carry over) and deletes the
 the response, and `afterEach` asserts no body has a `passwordHash` / `tokenHash` key anywhere,
 nor an `email` key or any test user's email address — except `PATCH /users/me` and
 `GET /auth/me`, the caller's own. A self-check test proves the guard sees what was recorded.
+It also covers the Following feed (a followed user's posts appear, an unfollowed one's leave,
+paging you + followed users together with no skips / duplicates) and `GET /feed/for-you`
+(everyone's posts with no follows, paging, `likedByMe`, bad cursor, 401).
+
+`test/follows.e2e-spec.ts` covers follows the same way: follow / unfollow idempotency (10
+concurrent PUTs store one follow), `followerCount`, case-insensitive usernames, the target only
+from the path, self-follow 400, unknown-user 404, 401 / foreign-Origin 403, the 30/min limit
+(other users unaffected), list order and relation booleans from both sides, a 45-follower walk
+over tied timestamps, `me` not being an alias, bad `limit` / `cursor` → 400, suggestions (newest
+first, excluding you and whoever you follow, `limit` 1–10) and that `/users/me/suggestions`
+doesn't shadow `GET /users/:username` or `/posts`. `test/app.e2e-spec.ts` covers the new profile
+fields (both sides of the relation, your own profile, no id / email leak, and a username change
+keeping follows in both directions).
 
 ## Open questions
 
@@ -391,5 +499,8 @@ nor an `email` key or any test user's email address — except `PATCH /users/me`
   `SessionsRepository` (`auth/`). Repositories are the only layer injecting
   `PrismaService` (plain `@Injectable()` classes — no interface, no injection token),
   enforced by `.claude/review-contract.md` §B.
+- Follow / unfollow are throttled at 30/min per user per route while likes aren't. The feature
+  plan asked for follows to be throttled "like likes", which contradicts likes being unthrottled;
+  the throttle was kept. Open for Alejandro to change or drop (feature `follow-users`, Decisions).
 - Throttling keys on the client IP as Express sees it; there's no `trust proxy` setting,
   so behind a reverse proxy every client would share one bucket. Revisit when deployed.

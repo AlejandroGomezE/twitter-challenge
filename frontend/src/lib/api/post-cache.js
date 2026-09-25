@@ -3,7 +3,8 @@ import { profileQueryKey } from '@/lib/api/users';
 
 // Cache helpers shared by the post / like / comment mutations, so "change a post everywhere it's
 // cached" lives in one place. A post can be cached in:
-//   - every infinite list under `postKeys.lists()` (the feed, any user's posts) — `{ pages, pageParams }`
+//   - every infinite list under `postKeys.lists()` (the Following and For you feeds, any user's
+//     posts) — `{ pages, pageParams }`
 //     with `pages[i] = { items, nextCursor }`;
 //   - its detail entry `postKeys.detail(id)`.
 // Every helper returns the previous object untouched when nothing changed, so unrelated
@@ -78,7 +79,8 @@ export function findPostInCaches(queryClient, id) {
 }
 
 // Maps the items of every page of an infinite-query result; `undefined` (not loaded) passes through.
-function mapPages(data, mapItems) {
+// `mapItems` returns its input untouched when nothing changed. Shared with follow-cache.js.
+export function mapPages(data, mapItems) {
   if (!data?.pages) return data;
   let changed = false;
   const pages = data.pages.map((page) => {

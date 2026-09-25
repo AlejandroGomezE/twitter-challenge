@@ -6,6 +6,10 @@ import {
 import * as argon2 from 'argon2';
 import { Prisma, type User } from '../../generated/prisma/client.js';
 import {
+  type FollowCounts,
+  FollowsService,
+} from '../follows/follows.service.js';
+import {
   type PageQuery,
   type PostPage,
   PostsService,
@@ -20,11 +24,18 @@ export interface PublicUser {
 }
 
 // Another user's profile as any signed-in user may see it — never the email.
+// The two booleans are relative to the viewer and false on their own profile.
 export interface PublicProfile {
   username: string;
   bio: string | null;
   createdAt: Date;
   postCount: number;
+  followerCount: number;
+  followingCount: number;
+  // The viewer follows this user.
+  isFollowing: boolean;
+  // This user follows the viewer.
+  followsYou: boolean;
 }
 
 // The caller's own profile.
@@ -35,6 +46,8 @@ export interface MyProfile {
   bio: string | null;
   createdAt: Date;
   postCount: number;
+  followerCount: number;
+  followingCount: number;
 }
 
 // Only the keys present are changed; an empty bio (or null) clears it.
@@ -107,6 +120,7 @@ export class UsersService {
   constructor(
     private readonly usersRepository: UsersRepository,
     private readonly postsService: PostsService,
+    private readonly followsService: FollowsService,
   ) {}
 
   normalizeEmail(email: string): string {
@@ -149,13 +163,25 @@ export class UsersService {
     return user ? this.toPublicUser(user) : null;
   }
 
-  async getProfile(username: string): Promise<PublicProfile> {
+  // `username`'s profile as `viewerId` sees it. A constant number of queries
+  // (lookup, then post count, follow counts and relation concurrently); the
+  // relation costs no query on your own profile.
+  async getProfile(username: string, viewerId: string): Promise<PublicProfile> {
     const user = await this.findByUsernameOrThrow(username);
+    const [postCount, counts, relation] = await Promise.all([
+      this.postsService.countByAuthor(user.id),
+      this.followsService.counts(user.id),
+      this.followsService.relation(viewerId, user.id),
+    ]);
     return {
       username: user.username,
       bio: user.bio,
       createdAt: user.createdAt,
-      postCount: await this.postsService.countByAuthor(user.id),
+      postCount,
+      followerCount: counts.followerCount,
+      followingCount: counts.followingCount,
+      isFollowing: relation.isFollowing,
+      followsYou: relation.followsYou,
     };
   }
 
@@ -196,10 +222,12 @@ export class UsersService {
       }
       throw error;
     }
-    return this.toMyProfile(
-      user,
-      await this.postsService.countByAuthor(user.id),
-    );
+    // Follows key on the user id, so a username change keeps them.
+    const [postCount, counts] = await Promise.all([
+      this.postsService.countByAuthor(user.id),
+      this.followsService.counts(user.id),
+    ]);
+    return this.toMyProfile(user, postCount, counts);
   }
 
   toPublicUser(user: User): PublicUser {
@@ -217,7 +245,11 @@ export class UsersService {
     return user;
   }
 
-  private toMyProfile(user: User, postCount: number): MyProfile {
+  private toMyProfile(
+    user: User,
+    postCount: number,
+    counts: FollowCounts,
+  ): MyProfile {
     return {
       id: user.id,
       email: user.email,
@@ -225,6 +257,8 @@ export class UsersService {
       bio: user.bio,
       createdAt: user.createdAt,
       postCount,
+      followerCount: counts.followerCount,
+      followingCount: counts.followingCount,
     };
   }
 

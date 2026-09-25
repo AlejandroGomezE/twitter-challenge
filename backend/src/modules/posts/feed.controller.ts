@@ -5,8 +5,9 @@ import { ListPostsQueryDto } from './dto/list-posts-query.dto.js';
 import { PostPageResponseDto } from './dto/post-page-response.dto.js';
 import { PostsService } from './posts.service.js';
 
-// Gated by the global AuthGuard (no @Public()). The feed is always the
-// session user's; no user id is ever read from the request.
+// Gated by the global AuthGuard (no @Public()). Both feeds are always the
+// session user's (`likedByMe` is theirs); no user id is ever read from the
+// request. `GET /feed` is the Following feed, `GET /feed/for-you` everyone's.
 @Controller('feed')
 export class FeedController {
   constructor(private readonly postsService: PostsService) {}
@@ -18,6 +19,18 @@ export class FeedController {
     @Query() query: ListPostsQueryDto,
   ): Promise<PostPageResponseDto> {
     return this.postsService.feed(user.id, {
+      cursor: query.cursor,
+      limit: query.limit,
+    });
+  }
+
+  @Get('for-you')
+  @SerializeOptions({ type: PostPageResponseDto })
+  forYou(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: ListPostsQueryDto,
+  ): Promise<PostPageResponseDto> {
+    return this.postsService.forYou(user.id, {
       cursor: query.cursor,
       limit: query.limit,
     });

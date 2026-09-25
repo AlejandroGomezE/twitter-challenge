@@ -1,5 +1,6 @@
+import { focusManager } from '@tanstack/react-query'
 import { http, HttpResponse } from 'msw'
-import { getDefaultNormalizer, screen, within } from '@testing-library/react'
+import { act, getDefaultNormalizer, screen, waitFor, within } from '@testing-library/react'
 import { useLocation } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import { AppRouter } from '@/app/router'
@@ -294,6 +295,344 @@ describe('Profile', () => {
 
       expect(await screen.findByText('Page two')).toBeInTheDocument()
       expect(await screen.findByText("That's all of @ada's posts")).toBeInTheDocument()
+    })
+  })
+
+  describe('follows', () => {
+    const FOLLOW_PROFILES = {
+      ada: {
+        ...PROFILES.ada,
+        followingCount: 242,
+        followerCount: 1200,
+        isFollowing: false,
+        followsYou: false,
+      },
+      grace: {
+        ...PROFILES.grace,
+        followingCount: 3,
+        followerCount: 0,
+        isFollowing: false,
+        followsYou: false,
+      },
+    }
+
+    it('shows the Following / Followers counts below the join date and opens the clicked list', async () => {
+      mockProfiles(FOLLOW_PROFILES)
+
+      const { user } = renderApp('/u/ada')
+
+      expect(await screen.findByRole('heading', { name: '@ada' })).toBeInTheDocument()
+      const page = within(screen.getByRole('main'))
+      const following = page.getByRole('button', { name: '242 Following' })
+      const followers = page.getByRole('button', { name: '1.2K Followers' })
+      expect(following).toHaveAttribute('aria-expanded', 'false')
+      expect(followers).toHaveAttribute('aria-expanded', 'false')
+
+      await user.click(followers)
+      const dialog = await screen.findByRole('dialog', { name: '@ada' })
+      expect(within(dialog).getByRole('tab', { name: 'Followers' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      )
+      expect(await within(dialog).findByText("You don't have any followers yet")).toBeInTheDocument()
+      expect(followers).toHaveAttribute('aria-expanded', 'true')
+      expect(following).toHaveAttribute('aria-expanded', 'false')
+
+      // Switching tabs inside the dialog updates the page's state.
+      await user.click(within(dialog).getByRole('tab', { name: 'Following' }))
+      expect(await within(dialog).findByText("You aren't following anyone yet")).toBeInTheDocument()
+      expect(following).toHaveAttribute('aria-expanded', 'true')
+      expect(followers).toHaveAttribute('aria-expanded', 'false')
+
+      // Esc closes it and returns focus to the count button that opened it.
+      await user.keyboard('{Escape}')
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      expect(following).toHaveAttribute('aria-expanded', 'false')
+      expect(followers).toHaveAttribute('aria-expanded', 'false')
+      await waitFor(() => expect(followers).toHaveFocus())
+
+      await user.click(following)
+      const reopened = await screen.findByRole('dialog', { name: '@ada' })
+      expect(within(reopened).getByRole('tab', { name: 'Following' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      )
+    })
+
+    it('closes the follow list when a row opens another profile', async () => {
+      mockProfiles(FOLLOW_PROFILES)
+      server.use(
+        http.get(apiUrl('/users/:username/following'), ({ params }) =>
+          HttpResponse.json({
+            items:
+              params.username.toLowerCase() === 'ada'
+                ? [{ username: 'grace', bio: 'Compilers', isFollowing: true, followsYou: false }]
+                : [],
+            nextCursor: null,
+          }),
+        ),
+      )
+
+      const { user } = renderApp('/u/ada')
+
+      await user.click(await screen.findByRole('button', { name: '242 Following' }))
+      const dialog = await screen.findByRole('dialog', { name: '@ada' })
+      await user.click(await within(dialog).findByRole('link', { name: '@grace' }))
+
+      expect(await screen.findByRole('heading', { name: '@grace' })).toBeInTheDocument()
+      expect(screen.getByTestId('location')).toHaveTextContent('/u/grace')
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      expect(screen.getByRole('button', { name: '3 Following' })).toHaveAttribute(
+        'aria-expanded',
+        'false',
+      )
+    })
+
+    it('hides the counts row when the profile has no counts', async () => {
+      mockProfiles()
+
+      renderApp('/u/ada')
+
+      expect(await screen.findByRole('heading', { name: '@ada' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /Following$/ })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /Followers?$/ })).not.toBeInTheDocument()
+    })
+
+    it('shows no follow button and no "Follows you" badge on your own profile', async () => {
+      mockProfiles({ ...FOLLOW_PROFILES, ada: { ...FOLLOW_PROFILES.ada, followsYou: true } })
+
+      renderApp('/u/ada')
+
+      expect(await screen.findByRole('heading', { name: '@ada' })).toBeInTheDocument()
+      const page = within(screen.getByRole('main'))
+      expect(page.queryByRole('button', { name: /^(Follow|Follow back|Unfollow) @/ })).not.toBeInTheDocument()
+      expect(page.queryByText('Follows you')).not.toBeInTheDocument()
+    })
+
+    it("follows another user from their profile, updating the button and follower count", async () => {
+      const requests = []
+      server.use(
+        http.put(apiUrl('/users/:username/follow'), ({ params }) => {
+          requests.push(`PUT ${params.username}`)
+          return HttpResponse.json({ following: true, followerCount: 1 })
+        }),
+      )
+      mockProfiles(FOLLOW_PROFILES)
+
+      const { user } = renderApp('/u/grace')
+
+      expect(await screen.findByRole('heading', { name: '@grace' })).toBeInTheDocument()
+      const page = within(screen.getByRole('main'))
+      expect(page.getByRole('button', { name: '0 Followers' })).toBeInTheDocument()
+      expect(page.queryByText('Follows you')).not.toBeInTheDocument()
+
+      await user.click(page.getByRole('button', { name: 'Follow @grace' }))
+
+      expect(await page.findByRole('button', { name: 'Unfollow @grace' })).toBeInTheDocument()
+      expect(await page.findByRole('button', { name: '1 Follower' })).toBeInTheDocument()
+      expect(requests).toEqual(['PUT grace'])
+    })
+
+    it('unfollows in one click from "Following"', async () => {
+      const requests = []
+      server.use(
+        http.delete(apiUrl('/users/:username/follow'), ({ params }) => {
+          requests.push(`DELETE ${params.username}`)
+          return HttpResponse.json({ following: false, followerCount: 0 })
+        }),
+      )
+      mockProfiles({
+        ...FOLLOW_PROFILES,
+        grace: { ...FOLLOW_PROFILES.grace, isFollowing: true, followerCount: 1 },
+      })
+
+      const { user } = renderApp('/u/grace')
+
+      const button = await screen.findByRole('button', { name: 'Unfollow @grace' })
+      expect(button).toHaveTextContent(/^Following$/)
+
+      await user.click(button)
+
+      expect(await screen.findByRole('button', { name: 'Follow @grace' })).toBeInTheDocument()
+      expect(await screen.findByRole('button', { name: '0 Followers' })).toBeInTheDocument()
+      expect(requests).toEqual(['DELETE grace'])
+    })
+
+    describe('freshness', () => {
+      const profileLink = () =>
+        within(
+          within(screen.getByRole('banner')).getByRole('navigation', { name: 'Primary' }),
+        ).getByRole('link', { name: 'Profile' })
+
+      it('refetches the profile when it is shown again within 30s, keeping the cached counts on screen meanwhile', async () => {
+        const profiles = { ...FOLLOW_PROFILES }
+        const state = mockProfiles(profiles)
+        const adaRequests = () => state.requests.filter((username) => username === 'ada')
+
+        const { user } = renderApp('/u/ada')
+
+        expect(await screen.findByRole('button', { name: '1.2K Followers' })).toBeInTheDocument()
+        expect(adaRequests()).toHaveLength(1)
+
+        await user.click(within(screen.getByRole('main')).getByRole('link', { name: 'Back to home' }))
+        await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(/^\/$/))
+
+        // The next profile request is held, so we can see what's on screen while it's in flight.
+        let release
+        const gate = new Promise((resolve) => {
+          release = resolve
+        })
+        profiles.ada = { ...FOLLOW_PROFILES.ada, followingCount: 243 }
+        server.use(
+          http.get(apiUrl('/users/:username'), async ({ params }) => {
+            state.requests.push(params.username)
+            await gate
+            return HttpResponse.json(profiles[params.username.toLowerCase()])
+          }),
+        )
+
+        await user.click(profileLink())
+
+        await waitFor(() => expect(adaRequests()).toHaveLength(2))
+        // Cached profile shown (no skeleton) while the refetch is in flight.
+        const page = within(screen.getByRole('main'))
+        expect(page.getByRole('heading', { name: '@ada' })).toBeInTheDocument()
+        expect(page.getByRole('button', { name: '242 Following' })).toBeInTheDocument()
+        expect(screen.queryByRole('status', { name: 'Loading' })).not.toBeInTheDocument()
+
+        release()
+
+        expect(await page.findByRole('button', { name: '243 Following' })).toBeInTheDocument()
+        expect(adaRequests()).toHaveLength(2)
+      })
+
+      it('refetches the profile on window focus', async () => {
+        const profiles = { ...FOLLOW_PROFILES }
+        const state = mockProfiles(profiles)
+        const graceRequests = () => state.requests.filter((username) => username === 'grace')
+
+        renderApp('/u/grace')
+
+        expect(await screen.findByRole('button', { name: '3 Following' })).toBeInTheDocument()
+        expect(graceRequests()).toHaveLength(1)
+
+        profiles.grace = { ...FOLLOW_PROFILES.grace, followingCount: 4 }
+        try {
+          act(() => {
+            focusManager.setFocused(false)
+            focusManager.setFocused(true)
+          })
+          expect(await screen.findByRole('button', { name: '4 Following' })).toBeInTheDocument()
+        } finally {
+          focusManager.setFocused(undefined)
+        }
+        expect(graceRequests()).toHaveLength(2)
+      })
+
+      it('refetches when :username changes back to a profile cached moments ago', async () => {
+        const profiles = { ...FOLLOW_PROFILES }
+        const state = mockProfiles(profiles)
+        const adaRequests = () => state.requests.filter((username) => username === 'ada')
+        server.use(
+          http.get(apiUrl('/users/:username/following'), ({ params }) =>
+            HttpResponse.json({
+              items:
+                params.username.toLowerCase() === 'ada'
+                  ? [{ username: 'grace', bio: null, isFollowing: false, followsYou: false }]
+                  : [],
+              nextCursor: null,
+            }),
+          ),
+        )
+
+        const { user } = renderApp('/u/ada')
+
+        await user.click(await screen.findByRole('button', { name: '242 Following' }))
+        const dialog = await screen.findByRole('dialog', { name: '@ada' })
+        await user.click(await within(dialog).findByRole('link', { name: '@grace' }))
+        expect(await screen.findByRole('heading', { name: '@grace' })).toBeInTheDocument()
+        expect(adaRequests()).toHaveLength(1)
+
+        profiles.ada = { ...FOLLOW_PROFILES.ada, followingCount: 243 }
+        await user.click(profileLink())
+
+        expect(await screen.findByRole('button', { name: '243 Following' })).toBeInTheDocument()
+        expect(adaRequests()).toHaveLength(2)
+      })
+
+      it('keeps an optimistic follow still in flight when a navigation refetches the profile', async () => {
+        const profiles = { ...FOLLOW_PROFILES }
+        const state = mockProfiles(profiles)
+        const graceRequests = () => state.requests.filter((username) => username === 'grace')
+        let release
+        const gate = new Promise((resolve) => {
+          release = resolve
+        })
+        server.use(
+          // The server hasn't applied the follow yet: every read still says "not following".
+          http.put(apiUrl('/users/:username/follow'), async () => {
+            await gate
+            return HttpResponse.json({ following: true, followerCount: 1 })
+          }),
+          http.get(apiUrl('/users/:username/following'), ({ params }) =>
+            HttpResponse.json({
+              items:
+                params.username.toLowerCase() === 'ada'
+                  ? [{ username: 'grace', bio: null, isFollowing: false, followsYou: false }]
+                  : [],
+              nextCursor: null,
+            }),
+          ),
+        )
+
+        const { user } = renderApp('/u/grace')
+
+        const main = () => within(screen.getByRole('main'))
+        expect(await screen.findByRole('heading', { name: '@grace' })).toBeInTheDocument()
+        await user.click(main().getByRole('button', { name: 'Follow @grace' }))
+        expect(await main().findByRole('button', { name: 'Unfollow @grace' })).toBeInTheDocument()
+        expect(main().getByRole('button', { name: '1 Follower' })).toBeInTheDocument()
+
+        // /u/grace → /u/ada → (ada's Following list) → /u/grace while the PUT is still pending.
+        await user.click(profileLink())
+        // Your own profile, fetched mid-follow, counts the pending follow (the server says 242).
+        await user.click(await screen.findByRole('button', { name: '243 Following' }))
+        const dialog = await screen.findByRole('dialog', { name: '@ada' })
+        // The list row, fetched mid-burst, shows the optimistic state too.
+        expect(
+          await within(dialog).findByRole('button', { name: 'Unfollow @grace' }),
+        ).toBeInTheDocument()
+        await user.click(within(dialog).getByRole('link', { name: '@grace' }))
+
+        await waitFor(() => expect(graceRequests()).toHaveLength(2))
+        await waitFor(() => expect(main().getByRole('heading', { name: '@grace' })).toBeInTheDocument())
+        // Let the refetch's (stale) response land.
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        expect(main().getByRole('button', { name: 'Unfollow @grace' })).toBeInTheDocument()
+        expect(main().getByRole('button', { name: '1 Follower' })).toBeInTheDocument()
+
+        profiles.grace = { ...FOLLOW_PROFILES.grace, isFollowing: true, followerCount: 1 }
+        release()
+
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+        // Settled on the server's answer: still following, with its follower count.
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        expect(main().getByRole('button', { name: 'Unfollow @grace' })).toBeInTheDocument()
+        expect(main().getByRole('button', { name: '1 Follower' })).toBeInTheDocument()
+      })
+    })
+
+    it('shows "Follows you" and "Follow back" when they follow you', async () => {
+      mockProfiles({ ...FOLLOW_PROFILES, grace: { ...FOLLOW_PROFILES.grace, followsYou: true } })
+
+      renderApp('/u/grace')
+
+      expect(await screen.findByRole('heading', { name: '@grace' })).toBeInTheDocument()
+      const page = within(screen.getByRole('main'))
+      expect(page.getByText('Follows you')).toBeInTheDocument()
+      expect(page.getByRole('button', { name: 'Follow back @grace' })).toHaveTextContent(
+        /^Follow back$/,
+      )
     })
   })
 })

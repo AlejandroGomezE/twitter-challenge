@@ -4,13 +4,15 @@ import { apiClient } from '@/lib/api/client';
 // likeCount, commentCount, likedByMe }`; `Comment` = `{ id, body, createdAt, author: { username } }`;
 // a page = `{ items, nextCursor }` (`nextCursor` is null on the last page).
 
-// Query-key factory. Every post list (feed, a user's posts) lives under `['posts', 'list', …]` so
-// cache helpers (post-cache.js) can reach all of them with one prefix. Usernames are lowercased:
+// Query-key factory. Every post list (both feeds, a user's posts) lives under `['posts', 'list', …]`
+// so cache helpers (post-cache.js) can reach all of them with one prefix. `feed` (Following) and
+// `forYou` are siblings, not nested, so invalidating one never touches the other. Usernames are lowercased:
 // `/u/Ada` and `/u/ada` share a cache entry (same as `profileQueryKey`).
 export const postKeys = {
   all: ['posts'],
   lists: () => ['posts', 'list'],
   feed: () => ['posts', 'list', 'feed'],
+  forYou: () => ['posts', 'list', 'for-you'],
   userPosts: (username) => ['posts', 'list', 'user', username.toLowerCase()],
   details: () => ['posts', 'detail'],
   detail: (id) => ['posts', 'detail', id],
@@ -23,8 +25,11 @@ const withCursor = (path, cursor) =>
 
 const postPath = (id) => `/posts/${encodeURIComponent(id)}`;
 
-// `GET /feed` — newest first.
+// `GET /feed` — the Following feed (the caller + everyone they follow), newest first.
 export const fetchFeed = (cursor) => apiClient.get(withCursor('/feed', cursor));
+
+// `GET /feed/for-you` — the For you feed (every user's posts), newest first.
+export const fetchForYouFeed = (cursor) => apiClient.get(withCursor('/feed/for-you', cursor));
 
 // `GET /users/:username/posts` — newest first; 404 for an unknown user.
 export const fetchUserPosts = (username, cursor) =>

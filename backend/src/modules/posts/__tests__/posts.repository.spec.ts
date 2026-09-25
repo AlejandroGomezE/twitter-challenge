@@ -68,6 +68,36 @@ describe('PostsRepository', () => {
       );
     });
 
+    it('has no author filter when authorIds is omitted (every author)', async () => {
+      const createdAt = new Date('2026-09-24T10:00:00.000Z');
+
+      await repository.findPage({ limit: 10 });
+      await repository.findPage({
+        cursor: { createdAt, id: 'post-9' },
+        limit: 10,
+      });
+
+      expect(prisma.post.findMany).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          where: {},
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: 11,
+        }),
+      );
+      expect(prisma.post.findMany).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          where: {
+            OR: [
+              { createdAt: { lt: createdAt } },
+              { createdAt, id: { lt: 'post-9' } },
+            ],
+          },
+        }),
+      );
+    });
+
     it("selects the author's username only (never the whole user row)", async () => {
       await repository.findPage({ authorIds: ['user-1'], limit: 1 });
 

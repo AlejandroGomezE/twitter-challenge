@@ -1,7 +1,7 @@
 ---
 title: UI component inventory
 type: infra
-summary: Inventory of frontend/src/components/ui — all stock shadcn/ui, installed via `shadcn add --all` — plus the app compositions built on them (UserAvatar, BrandMark, AuthLayout, the app shell in components/layout, the feed components — Composer, PostCard, comments, InfiniteListFooter, CharacterCounter, PostListSkeleton). Grounds the shadcn-first convention in knowledge/decisions/shadcn-component-preference.md.
+summary: Inventory of frontend/src/components/ui — all stock shadcn/ui, installed via `shadcn add --all` — plus the app compositions built on them (UserAvatar, BrandMark, AuthLayout, the app shell in components/layout, the feed components — Composer, PostCard, comments, InfiniteListFooter, CharacterCounter, PostListSkeleton; the follow components — FollowButton, FollowListDialog). Grounds the shadcn-first convention in knowledge/decisions/shadcn-component-preference.md.
 status: active
 last-verified: 2026-09-24
 tags: [frontend, shadcn, ui, design-system]
@@ -43,7 +43,8 @@ No new primitive. App-level compositions of stock primitives live in
 - `UserAvatar.jsx` — `UserAvatar({ username, size, className, fallbackClassName })`, the
   avatar placeholder: shadcn `Avatar` + `AvatarFallback` showing the username's initial on
   a colour derived from the username (`lib/avatar-color.js`, Pulse tints with per-tint text
-  colours). Used by the profile page, the rails and the composer. For a custom size keep the
+  colours). Used by the profile page, the rails, the composer, post / comment cards and the
+  follow lists. For a custom size keep the
   default `size` and pass a `size-*` class; with `size="lg"` / `"sm"` a `size-*` class loses to
   the stock `data-[size=lg]:size-10` / `data-[size=sm]:size-6` in `ui/avatar.jsx`.
 - `BrandMark.jsx` — `BrandMark({ className, iconClassName })`, the logo: lucide `Feather` in a
@@ -65,8 +66,11 @@ after them note their own status):
   Sign out. Uses `Button` (+ `UserAvatar`, `BrandMark`, `ComingSoon`).
 - `layout/MobileNav.jsx` — bottom bar below `lg`, icons only, same nav config. No shadcn
   primitive (react-router `NavLink` + `ComingSoon`).
-- `layout/RightRail.jsx` — right rail (`xl`): disabled search, "Your profile" card, "Who to
-  follow" placeholder. Uses `Input`, `Button`, `Skeleton` (+ `UserAvatar`, `ComingSoon`).
+- `layout/RightRail.jsx` — right rail (`xl`): disabled search, "Your profile" card, and the live
+  "Who to follow" card (follow-users feature): up to 3 suggestions, each a profile link (avatar,
+  `@username`, one line of bio) + `FollowButton`; 3 skeleton rows while loading; the card isn't
+  rendered on an error or with no suggestions. Uses `Input`, `Button`, `Skeleton` (+ `UserAvatar`,
+  `ComingSoon`, `FollowButton`).
 - `layout/ComingSoon.jsx` — `ComingSoon({ children, side })`, the disabled-feature wrapper:
   `aria-disabled` + click `preventDefault` + a "Coming soon" tooltip on one focusable child.
   Uses `Tooltip`, `TooltipTrigger`, `TooltipContent` (needs a `TooltipProvider` above).
@@ -107,9 +111,35 @@ Posts compositions (`components/feed/`, twitter-posts feature). `PostCard` is th
   post-shaped lists (feed, profile posts, comments): `count` card skeletons + an sr-only status.
   Uses `Skeleton`, `Spinner`. **Signed off by Alejandro (2026-09-24).**
 
+Follow compositions (`components/`, follow-users feature). Both were listed in the feature plan
+Alejandro framed; behaviour is in [[Frontend architecture]] → Follows.
+
+- `FollowButton.jsx` — `FollowButton({ username, isFollowing, followsYou = false, className })`,
+  the follow toggle (`useToggleFollow`): not following → filled pill "Follow", or "Follow back"
+  when `followsYou`; following → outline pill "Following" that reads "Unfollow" (destructive tint)
+  while hovered **or focused** — one click unfollows, no confirm dialog. `aria-label` "Follow
+  @x" / "Follow back @x" / "Unfollow @x". Stays clickable while a request is in flight (optimistic;
+  rapid clicks are handled by the hook). Its click calls `preventDefault` + `stopPropagation`, so
+  it can sit inside rows that link to a profile. Used by Profile, `FollowListDialog` and the right
+  rail. Uses `Button`. **Signed off by Alejandro (2026-09-24).**
+- `FollowListDialog.jsx` — `FollowListDialog({ username, tab, onTabChange, onClose, isOwnProfile
+  })`, the profile's follow lists in a modal: `@username` title, Following / Followers tabs, only
+  the visible tab fetched; each list shows skeleton rows, an error + Retry, an empty state worded
+  for your own profile or someone else's, or rows (avatar, `@username` link stretched over the row
+  that closes the dialog, bio, `FollowButton` except on your own row) + `InfiniteListFooter`.
+  Returns focus to the element that opened it (the profile's count button). Uses `Dialog`,
+  `Tabs` (`line` variant), `Alert`, `Button`, `Skeleton`, `Spinner` (+ `UserAvatar`,
+  `FollowButton`, `InfiniteListFooter`). **Signed off by Alejandro (2026-09-24).**
+
+The profile's "Follows you" label is a stock `Badge` (`secondary`), and its "N Following  M
+Followers" row is plain buttons inside `Profile.jsx`, not a component.
+
 Home's feed tabs and the profile's Posts tab are plain markup with tab semantics, not shadcn
-`Tabs` (Radix triggers activate on focus/mousedown, which `ComingSoon` can't block) — see
-[[Frontend architecture]] → Pages.
+`Tabs`. Home's two tabs (Following, the default, and For you) now switch: the selection is URL
+state (`?tab=for-you`) and both share one panel (composer + the selected feed), which Radix's
+one-panel-per-tab model doesn't fit; activation is manual, with roving arrow-key focus. The
+profile's single Posts tab doesn't switch. `FollowListDialog` does use shadcn `Tabs` — each tab
+has its own panel there. See [[Frontend architecture]] → Pages.
 
 ## Shared hooks / utils
 

@@ -10,8 +10,8 @@ import { SESSION_COOKIE } from './../src/auth/session.constants.js';
 import { PrismaService } from './../src/database/prisma.service.js';
 import { UsersService } from './../src/modules/users/users.service.js';
 
-// E2e coverage of the twitter-posts feature: posts, feed, a user's posts,
-// likes and comments. Runs on the dedicated e2e.db (vitest.config.e2e.ts).
+// E2e coverage of the twitter-posts feature: posts, feeds (Following and
+// For you), a user's posts, likes and comments. Runs on the dedicated e2e.db (vitest.config.e2e.ts).
 // beforeEach builds a fresh app, so the in-memory throttle counters never
 // leak between tests; afterEach deletes every created user (their posts,
 // likes and comments cascade).
@@ -671,6 +671,137 @@ describe('Posts (e2e)', () => {
     it('without a session returns 401', async () => {
       expect((await call('get', '/feed')).status).toBe(401);
     });
+
+    it("after A follows B, A's feed has B's posts but not C's; unfollowing removes them", async () => {
+      const a = await createUserWithSession();
+      const b = await createUserWithSession();
+      const c = await createUserWithSession();
+      const mine = await createPost(a, 'from a');
+      const fromB = await createPost(b, 'from b');
+      await createPost(c, 'from c');
+
+      const followed = await call('put', `/users/${b.username}/follow`, {
+        token: a.token,
+      });
+      expect(followed.status).toBe(200);
+
+      const withB = await walk<PostJson>('/feed', a.token);
+      withB.items.forEach(expectPostShape);
+      expect(withB.items.map((p) => p.id).sort()).toEqual(
+        [mine.id, fromB.id].sort(),
+      );
+      expect(
+        withB.items.map((p) => p.author.username).includes(c.username),
+      ).toBe(false);
+
+      const unfollowed = await call('delete', `/users/${b.username}/follow`, {
+        token: a.token,
+      });
+      expect(unfollowed.status).toBe(200);
+
+      const withoutB = await walk<PostJson>('/feed', a.token);
+      expect(withoutB.items.map((p) => p.id)).toEqual([mine.id]);
+    });
+
+    it("pages the viewer's and followed users' posts together with no skips or duplicates", async () => {
+      const a = await createUserWithSession();
+      const b = await createUserWithSession();
+      const c = await createUserWithSession();
+      const base = new Date(Date.now() - 3 * 60 * 60 * 1000);
+      const seeded = [
+        ...(await seedPosts(a.userId, 9, 3, base)),
+        ...(await seedPosts(b.userId, 8, 3, base)),
+      ];
+      await seedPosts(c.userId, 7, 3, base);
+      const expected = seeded.sort(newestFirst).map((p) => p.id);
+
+      const res = await call('put', `/users/${b.username}/follow`, {
+        token: a.token,
+      });
+      expect(res.status).toBe(200);
+
+      const byLimit4 = await walk<PostJson>('/feed', a.token, 4);
+      expect(byLimit4.pageSizes).toEqual([4, 4, 4, 4, 1]);
+      expect(byLimit4.items.map((p) => p.id)).toEqual(expected);
+    });
+  });
+
+  describe('GET /feed/for-you', () => {
+    // The e2e database is shared with other spec files running at the same
+    // time, so the walk may include their posts: assertions are scoped to
+    // this test's users, plus no duplicates across the whole walk.
+    it("lists everyone's posts (A, B and C, no follows needed), newest first, paged with no skips or duplicates", async () => {
+      const a = await createUserWithSession();
+      const b = await createUserWithSession();
+      const c = await createUserWithSession();
+      const base = new Date(Date.now() - 4 * 60 * 60 * 1000);
+      const seeded = [
+        ...(await seedPosts(a.userId, 5, 2, base)),
+        ...(await seedPosts(b.userId, 6, 2, base)),
+        ...(await seedPosts(c.userId, 7, 2, base)),
+      ];
+      const expected = seeded.sort(newestFirst).map((p) => p.id);
+      const ours = new Set(expected);
+      const usernames = new Set([a.username, b.username, c.username]);
+
+      for (const limit of [3, undefined, 50]) {
+        const walked = await walk<PostJson>('/feed/for-you', a.token, limit);
+        walked.items.forEach(expectPostShape);
+        const ids = walked.items.map((p) => p.id);
+        expect(new Set(ids).size).toBe(ids.length);
+        const scoped = walked.items.filter((p) => ours.has(p.id));
+        expect(scoped.map((p) => p.id)).toEqual(expected);
+        expect(scoped.every((p) => usernames.has(p.author.username))).toBe(
+          true,
+        );
+      }
+    });
+
+    it("carries the viewer's likedByMe and the post's counts", async () => {
+      const me = await createUserWithSession();
+      const other = await createUserWithSession();
+      const post = await createPost(other, 'like me');
+      expect(
+        (await call('put', `/posts/${post.id}/like`, { token: me.token }))
+          .status,
+      ).toBe(200);
+      await createComment(other, post.id, 'a comment');
+
+      const page = await walk<PostJson>('/feed/for-you', me.token, 50);
+      expect(page.items.find((p) => p.id === post.id)).toEqual({
+        ...post,
+        likeCount: 1,
+        commentCount: 1,
+        likedByMe: true,
+      });
+    });
+
+    it.each([
+      ['0', { limit: 0 }],
+      ['51', { limit: 51 }],
+      ['abc', { limit: 'abc' }],
+    ])('limit=%s returns 400', async (_label, query) => {
+      const me = await createUserWithSession();
+      const res = await call('get', '/feed/for-you', {
+        token: me.token,
+        query,
+      });
+      expect(res.status).toBe(400);
+    });
+
+    it('an invalid cursor returns 400 Invalid cursor', async () => {
+      const me = await createUserWithSession();
+      const res = await call('get', '/feed/for-you', {
+        token: me.token,
+        query: { cursor: 'not a cursor!' },
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe('Invalid cursor');
+    });
+
+    it('without a session returns 401', async () => {
+      expect((await call('get', '/feed/for-you')).status).toBe(401);
+    });
   });
 
   describe('GET /users/:username/posts', () => {
@@ -998,7 +1129,13 @@ describe('Posts (e2e)', () => {
       const post = await createPost(author, 'rules');
       const path = `/posts/${post.id}/comments`;
 
-      for (const body of ['', '   \n ', 'a'.repeat(281), '😀'.repeat(281), 123]) {
+      for (const body of [
+        '',
+        '   \n ',
+        'a'.repeat(281),
+        '😀'.repeat(281),
+        123,
+      ]) {
         const res = await call('post', path, {
           token: author.token,
           body: { body },

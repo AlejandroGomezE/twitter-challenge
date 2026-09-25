@@ -23,14 +23,30 @@ function mockProfile(status = 200) {
   return paths
 }
 
-// `queries` overrides the app's QueryClient defaults (retryDelay 0 keeps retries instant).
-function renderUseProfile(username, queries = {}) {
+// `queries` overrides the app's QueryClient defaults (retryDelay 0 keeps retries instant);
+// `options` is passed to useProfile. `renderAnother()` mounts a second observer on the same client.
+function renderUseProfile(username, queries = {}, options) {
   const queryClient = createQueryClient({ queries: { retryDelay: 0, gcTime: Infinity, ...queries } })
   const wrapper = ({ children }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   )
-  return { queryClient, ...renderHook(() => useProfile(username), { wrapper }) }
+  const renderAnother = () => renderHook(() => useProfile(username, options), { wrapper })
+  return { queryClient, renderAnother, ...renderHook(() => useProfile(username, options), { wrapper }) }
 }
+
+// Answers every `GET /users/*` with PROFILE whose bio is `bio-<n>` (n = 1-based request count).
+function mockCountedProfile() {
+  const paths = []
+  server.use(
+    http.get(apiUrl('/users/*'), ({ request }) => {
+      paths.push(new URL(request.url).pathname)
+      return HttpResponse.json({ ...PROFILE, bio: `bio-${paths.length}` })
+    }),
+  )
+  return paths
+}
+
+const flush = () => new Promise((resolve) => setTimeout(resolve, 20))
 
 describe('profileQueryKey', () => {
   it('lowercases the username so /u/Ada and /u/ada share a cache entry', () => {
@@ -109,6 +125,33 @@ describe('useProfile', () => {
 
     await waitFor(() => expect(result.current.isError).toBe(true))
 
+    expect(paths).toHaveLength(1)
+  })
+
+  it('with alwaysFresh, refetches when a second observer mounts within 30s, showing cached data meanwhile', async () => {
+    const paths = mockCountedProfile()
+    const { result, renderAnother } = renderUseProfile('ada', {}, { alwaysFresh: true })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(paths).toHaveLength(1)
+
+    const second = renderAnother()
+
+    expect(second.result.current.data).toEqual({ ...PROFILE, bio: 'bio-1' })
+    expect(second.result.current.isFetching).toBe(true)
+    await waitFor(() => expect(second.result.current.data.bio).toBe('bio-2'))
+    expect(paths).toHaveLength(2)
+  })
+
+  it('without alwaysFresh, does not refetch when a second observer mounts within 30s', async () => {
+    const paths = mockCountedProfile()
+    const { result, renderAnother } = renderUseProfile('ada')
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    const second = renderAnother()
+
+    expect(second.result.current.data).toEqual({ ...PROFILE, bio: 'bio-1' })
+    expect(second.result.current.isFetching).toBe(false)
+    await flush()
     expect(paths).toHaveLength(1)
   })
 })

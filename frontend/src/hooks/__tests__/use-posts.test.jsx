@@ -8,7 +8,7 @@ import { useAuth } from '@/lib/auth/use-auth'
 import { postKeys } from '@/lib/api/posts'
 import { profileQueryKey } from '@/lib/api/users'
 import { apiUrl, server } from '@/test/server'
-import { useCreatePost, useDeletePost, useFeed, useToggleLike } from '../use-posts'
+import { useCreatePost, useDeletePost, useFeed, useForYouFeed, useToggleLike } from '../use-posts'
 
 const post = (id, overrides = {}) => ({
   id,
@@ -248,6 +248,67 @@ describe('useCreatePost / useDeletePost', () => {
     expect(feedItems(queryClient).map((item) => item.id)).toEqual(['p2'])
     expect(queryClient.getQueryData(postKeys.detail('p1'))).toBeUndefined()
     expect(queryClient.getQueryData(profileQueryKey('ada')).postCount).toBe(1)
+  })
+})
+
+describe('useForYouFeed', () => {
+  const forYouItems = (queryClient) =>
+    queryClient.getQueryData(postKeys.forYou()).pages.flatMap((page) => page.items)
+
+  async function renderBothFeeds() {
+    mockFeed([post('p1')])
+    server.use(
+      http.get(apiUrl('/feed/for-you'), () =>
+        HttpResponse.json({ items: [post('p1'), post('p9', { author: { username: 'bob' } })], nextCursor: null }),
+      ),
+    )
+    const queryClient = createQueryClient({ queries: { retry: false, gcTime: Infinity } })
+    const wrapper = ({ children }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    )
+    const hook = renderHook(
+      () => ({
+        feed: useFeed(),
+        forYou: useForYouFeed(),
+        like: useToggleLike(),
+        create: useCreatePost(),
+        remove: useDeletePost(),
+      }),
+      { wrapper },
+    )
+    await waitFor(() => expect(hook.result.current.forYou.isSuccess).toBe(true))
+    await waitFor(() => expect(hook.result.current.feed.isSuccess).toBe(true))
+    return { queryClient, ...hook }
+  }
+
+  it('loads every user’s posts from GET /feed/for-you, apart from the Following feed', async () => {
+    const { queryClient } = await renderBothFeeds()
+    expect(forYouItems(queryClient).map((item) => item.id)).toEqual(['p1', 'p9'])
+    expect(feedItems(queryClient).map((item) => item.id)).toEqual(['p1'])
+  })
+
+  it('gets likes, new posts and deletes like the Following feed', async () => {
+    server.use(
+      http.put(apiUrl('/posts/:id/like'), () => HttpResponse.json({ liked: true, likeCount: 8 })),
+      http.post(apiUrl('/posts'), () => HttpResponse.json(post('p2'), { status: 201 })),
+      http.delete(apiUrl('/posts/:id'), () => new HttpResponse(null, { status: 204 })),
+    )
+    const { result, queryClient } = await renderBothFeeds()
+
+    await act(() => result.current.like.mutateAsync({ postId: 'p9', liked: true }))
+    await settled(queryClient)
+    expect(forYouItems(queryClient).find((item) => item.id === 'p9')).toMatchObject({
+      likedByMe: true,
+      likeCount: 8,
+    })
+
+    await act(() => result.current.create.mutateAsync('post p2'))
+    expect(forYouItems(queryClient).map((item) => item.id)).toEqual(['p2', 'p1', 'p9'])
+    expect(feedItems(queryClient).map((item) => item.id)).toEqual(['p2', 'p1'])
+
+    await act(() => result.current.remove.mutateAsync(post('p1')))
+    expect(forYouItems(queryClient).map((item) => item.id)).toEqual(['p2', 'p9'])
+    expect(feedItems(queryClient).map((item) => item.id)).toEqual(['p2'])
   })
 })
 
