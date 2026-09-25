@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button'
 import { useOpenComposer } from '@/hooks/use-open-composer'
 import { useAuth } from '@/lib/auth/use-auth'
 import { cn } from '@/lib/utils'
-import { ComingSoon } from './ComingSoon'
 import { formatBadgeCount, getNavItems, getSignOutItem, navItemLabel } from './nav-items'
 import { useNavBadgeCounts } from './use-nav-badge-counts'
 
@@ -39,17 +38,10 @@ export function SideNav() {
       </Link>
 
       <nav aria-label="Primary" className="flex flex-col gap-1">
-        {items.map(({ key, label, icon: Icon, to, end, disabled, badge }) => {
+        {items.map(({ key, label, icon: Icon, to, end, badge }) => {
           const count = badge ? badgeCounts[badge] : undefined
           const badgeText = formatBadgeCount(count)
-          return disabled ? (
-            <ComingSoon key={key}>
-              <button type="button" aria-label={label} className={cn(itemClassName, 'text-foreground/80')}>
-                <Icon className="size-6" aria-hidden="true" />
-                <span className="hidden xl:inline">{label}</span>
-              </button>
-            </ComingSoon>
-          ) : (
+          return (
             <NavLink
               key={key}
               to={to}

@@ -393,10 +393,11 @@ shadcn/ui (Radix base, Nova preset), and `react-router` for client-side routing.
   box's focus ring isn't clipped), and a bottom nav + compose button below `lg`. Nav items are
   configured once in `layout/nav-items.ts`; Explore is a working item (side and bottom nav).
 - **Disabled items** — features without a backend yet are shown but disabled, never with fake
-  counts or users. The nav placeholders (Notifications, Messages, Bookmarks), the composer's
-  attachment icons and the post cards' Repost / Bookmark / Share are wrapped in
+  counts or users. The composer's attachment icons and the post cards' Repost / Bookmark /
+  Share are wrapped in
   `layout/ComingSoon.tsx`: `aria-disabled` (not native `disabled`, so the "Coming
-  soon" tooltip stays reachable).
+  soon" tooltip stays reachable). The nav has no placeholders: Messages and Bookmarks were
+  removed rather than shown disabled.
 - **Display names** — everywhere a user appears (profile header, post cards, comments, follow
   lists, Who to follow, the rail's profile card, search results) `components/UserName.tsx` shows
   the display name in bold followed by the muted `@username`, or just `@username` when the user has
