@@ -73,11 +73,14 @@ with an unread badge. Live push over SSE is out of scope: it becomes its own fea
 - [ ] Live push over SSE (`realtime-updates` feature) · out of scope by decision.
 - [ ] Group repeated events ("A and 3 others liked your post") · out of scope by decision.
 - [ ] Like → unlike → like creates a fresh notification each cycle. Consider a cooldown if it becomes spammy · edge case, not worth the complexity in v1.
-- [ ] Close: make the `AppShell.test.jsx` "no badge when the count cannot be loaded" test wait for the failed request to finish. Right now it passes while the count is still loading, so it doesn't test the error path · T5 reviewer, test quality.
+- [x] Close: make the `AppShell.test.jsx` "no badge when the count cannot be loaded" test wait for the failed request to finish. Right now it passes while the count is still loading, so it doesn't test the error path · T5 reviewer, test quality.
 - [ ] Coming back to `/notifications` within the 30s `staleTime` shows the cached rows, which still say `read: false`. They're highlighted again and a harmless mark-read is sent again. Possible fix: flip the cached rows to read in `useMarkNotificationsRead`'s `onSuccess` via `setQueryData`, since `useUnreadThisVisit` already keeps the highlight for the current visit · cosmetic, T6 reviewer said it can wait.
 - [ ] `EditProfile.test.jsx` fails intermittently (1–3 tests, e.g. "sends bio \"\" when the bio is cleared"). It also fails with this feature's files removed · pre-existing, unrelated.
 - [ ] `tsc -p tsconfig.json` reports 16 type errors in `follows.controller.spec.ts` / `comments.controller.spec.ts` (`displayName` missing on `PublicUser` fixtures). `nest build` and vitest are unaffected · pre-existing, unrelated.
 - [ ] `scripts/be-local`, `scripts/fe-local` and `scripts/check-env` are committed without the executable bit (mode `100644`, while `down-be`/`down-fe` are `100755`). On a fresh clone `scripts/be-local` fails with "permission denied", which contradicts the Runbook. Fix: `git update-index --chmod=+x` · found during Verify, unrelated to this feature.
+
+## PRs
+- #12 · https://github.com/AlejandroGomezE/twitter-challenge/pull/12
 
 ## Log
 - 2026-09-24 · framed
