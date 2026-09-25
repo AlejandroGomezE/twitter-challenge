@@ -4,6 +4,7 @@ import { useLocation } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import { AppRouter } from '@/app/router'
 import { notificationKeys } from '@/lib/api/notifications'
+import { FakeEventSource, installFakeEventSource } from '@/test/fake-event-source'
 import { renderWithProviders } from '@/test/render'
 import { apiUrl, server } from '@/test/server'
 
@@ -254,6 +255,34 @@ describe('AppShell', () => {
 
       const link = await nav().findByRole('link', { name: 'Notifications, 150 unread' })
       expect(link.querySelector('[data-slot="badge"]')).toHaveTextContent('99+')
+    })
+
+    it('updates the badge from a notifications.changed push, with no request', async () => {
+      const uninstall = installFakeEventSource()
+      try {
+        let countRequests = 0
+        server.use(
+          http.get(apiUrl('/notifications/unread-count'), () => {
+            countRequests += 1
+            return HttpResponse.json({ count: 1 })
+          }),
+        )
+        await renderShell()
+        await primaryNav().findByRole('link', { name: 'Notifications, 1 unread' })
+        expect(FakeEventSource.instances).toHaveLength(1)
+        FakeEventSource.latest.open()
+
+        FakeEventSource.latest.emit('notifications.changed', { unreadCount: 4 })
+
+        for (const nav of [primaryNav, mobileNav]) {
+          expect(
+            await nav().findByRole('link', { name: 'Notifications, 4 unread' }),
+          ).toBeInTheDocument()
+        }
+        expect(countRequests).toBe(1)
+      } finally {
+        uninstall()
+      }
     })
 
     it('shows no badge when the count cannot be loaded', async () => {

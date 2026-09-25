@@ -96,6 +96,22 @@ export class FollowsRepository {
     return rows.map((row) => row.followingId);
   }
 
+  // Of `candidateIds`, the ones following `userId` (one query; none when the
+  // batch is empty).
+  async followerIdsAmong(
+    userId: string,
+    candidateIds: string[],
+  ): Promise<string[]> {
+    if (candidateIds.length === 0) {
+      return [];
+    }
+    const rows = await this.prisma.follow.findMany({
+      where: { followingId: userId, followerId: { in: candidateIds } },
+      select: { followerId: true },
+    });
+    return rows.map((row) => row.followerId);
+  }
+
   // Users following `userId`, most recent follow first (createdAt DESC,
   // follower id DESC), strictly after `cursor`. Returns up to `limit + 1`
   // rows: the extra row only tells the caller that a next page exists.

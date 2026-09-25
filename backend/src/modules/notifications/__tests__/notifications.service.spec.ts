@@ -1,5 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Test } from '@nestjs/testing';
+import { DomainEvent } from '../../../common/events/domain-events.js';
 import { decodeCursor, encodeCursor } from '../../posts/pagination.js';
 import {
   type NotificationRow,
@@ -45,6 +47,7 @@ describe('NotificationsService', () => {
     countUnread: vi.fn(),
     markReadUntil: vi.fn(),
   };
+  const eventEmitter = { emit: vi.fn() };
 
   beforeEach(async () => {
     vi.resetAllMocks();
@@ -56,9 +59,82 @@ describe('NotificationsService', () => {
           provide: NotificationsRepository,
           useValue: notificationsRepository,
         },
+        { provide: EventEmitter2, useValue: eventEmitter },
       ],
     }).compile();
     service = moduleRef.get(NotificationsService);
+  });
+
+  describe('notify', () => {
+    const input = {
+      type: 'like' as const,
+      recipientId: RECIPIENT_ID,
+      actorId: 'user-actor',
+      postId: 'post-1',
+    };
+
+    it('stores the row and emits notification.changed for the recipient', async () => {
+      await service.notify(input);
+
+      expect(notificationsRepository.create).toHaveBeenCalledWith(input);
+      expect(eventEmitter.emit).toHaveBeenCalledTimes(1);
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        DomainEvent.NotificationChanged,
+        { recipientId: RECIPIENT_ID },
+      );
+    });
+
+    it('skips a self-action: no row, no event', async () => {
+      await service.notify({ ...input, actorId: RECIPIENT_ID });
+
+      expect(notificationsRepository.create).not.toHaveBeenCalled();
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
+    });
+
+    it('emits nothing when the insert fails', async () => {
+      notificationsRepository.create.mockRejectedValue(new Error('P2003'));
+
+      await expect(service.notify(input)).rejects.toThrow('P2003');
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('retract', () => {
+    const input = {
+      type: 'follow' as const,
+      recipientId: RECIPIENT_ID,
+      actorId: 'user-actor',
+    };
+
+    it('emits notification.changed when a row was removed', async () => {
+      notificationsRepository.deleteMatching.mockResolvedValue(1);
+
+      await service.retract(input);
+
+      expect(notificationsRepository.deleteMatching).toHaveBeenCalledWith(
+        input,
+      );
+      expect(eventEmitter.emit).toHaveBeenCalledTimes(1);
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        DomainEvent.NotificationChanged,
+        { recipientId: RECIPIENT_ID },
+      );
+    });
+
+    it('emits nothing when there was nothing to remove', async () => {
+      notificationsRepository.deleteMatching.mockResolvedValue(0);
+
+      await service.retract(input);
+
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
+    });
+
+    it('skips a self-action: no delete, no event', async () => {
+      await service.retract({ ...input, actorId: RECIPIENT_ID });
+
+      expect(notificationsRepository.deleteMatching).not.toHaveBeenCalled();
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
+    });
   });
 
   describe('list', () => {
@@ -207,6 +283,26 @@ describe('NotificationsService', () => {
         CREATED_AT,
         now,
       );
+    });
+
+    it('emits notification.changed when at least one row was marked', async () => {
+      notificationsRepository.markReadUntil.mockResolvedValue(2);
+
+      await service.markRead(RECIPIENT_ID, '2026-09-24T10:00:00.000Z');
+
+      expect(eventEmitter.emit).toHaveBeenCalledTimes(1);
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        DomainEvent.NotificationChanged,
+        { recipientId: RECIPIENT_ID },
+      );
+    });
+
+    it('emits nothing when no row was marked', async () => {
+      notificationsRepository.markReadUntil.mockResolvedValue(0);
+
+      await service.markRead(RECIPIENT_ID, '2026-09-24T10:00:00.000Z');
+
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
     });
   });
 });

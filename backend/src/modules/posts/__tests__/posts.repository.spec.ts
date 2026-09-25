@@ -9,7 +9,7 @@ describe('PostsRepository', () => {
   let repository: PostsRepository;
 
   const prisma = {
-    post: { findMany: vi.fn(), count: vi.fn() },
+    post: { findMany: vi.fn(), findUnique: vi.fn(), count: vi.fn() },
     like: { create: vi.fn(), deleteMany: vi.fn(), count: vi.fn() },
   };
 
@@ -30,6 +30,30 @@ describe('PostsRepository', () => {
       ],
     }).compile();
     repository = moduleRef.get(PostsRepository);
+  });
+
+  describe('activityCounts', () => {
+    it("reads the post's like and comment totals in one query", async () => {
+      prisma.post.findUnique.mockResolvedValue({
+        _count: { likes: 3, comments: 2 },
+      });
+
+      await expect(repository.activityCounts('post-1')).resolves.toEqual({
+        likeCount: 3,
+        commentCount: 2,
+      });
+      expect(prisma.post.findUnique).toHaveBeenCalledTimes(1);
+      expect(prisma.post.findUnique).toHaveBeenCalledWith({
+        where: { id: 'post-1' },
+        select: { _count: { select: { likes: true, comments: true } } },
+      });
+    });
+
+    it('resolves null when the post does not exist', async () => {
+      prisma.post.findUnique.mockResolvedValue(null);
+
+      await expect(repository.activityCounts('gone')).resolves.toBeNull();
+    });
   });
 
   describe('findPage', () => {

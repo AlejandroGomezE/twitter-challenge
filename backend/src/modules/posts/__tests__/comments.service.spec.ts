@@ -249,6 +249,11 @@ describe('CommentsService', () => {
         'comment-1',
         AUTHOR_ID,
       );
+      expect(eventEmitter.emit).toHaveBeenCalledTimes(1);
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        DomainEvent.CommentRemoved,
+        { actorId: AUTHOR_ID, postId: 'post-1', commentId: 'comment-1' },
+      );
     });
 
     it('throws 404 Comment not found for an unknown comment', async () => {
@@ -259,6 +264,7 @@ describe('CommentsService', () => {
       await expect(promise).rejects.toBeInstanceOf(NotFoundException);
       await expect(promise).rejects.toThrow('Comment not found');
       expect(commentsRepository.deleteByIdAndAuthor).not.toHaveBeenCalled();
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
     });
 
     it('throws 404 when the comment belongs to another post', async () => {
@@ -269,6 +275,7 @@ describe('CommentsService', () => {
       await expect(promise).rejects.toBeInstanceOf(NotFoundException);
       await expect(promise).rejects.toThrow('Comment not found');
       expect(commentsRepository.deleteByIdAndAuthor).not.toHaveBeenCalled();
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
     });
 
     it("throws 403 for someone else's comment and deletes nothing", async () => {
@@ -281,6 +288,7 @@ describe('CommentsService', () => {
         'You can only delete your own comments',
       );
       expect(commentsRepository.deleteByIdAndAuthor).not.toHaveBeenCalled();
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
     });
 
     it('throws 404 when the comment is deleted concurrently (0 rows)', async () => {
@@ -291,6 +299,7 @@ describe('CommentsService', () => {
 
       await expect(promise).rejects.toBeInstanceOf(NotFoundException);
       await expect(promise).rejects.toThrow('Comment not found');
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
     });
   });
 });
