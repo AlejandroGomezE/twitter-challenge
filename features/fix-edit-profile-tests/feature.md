@@ -1,8 +1,8 @@
 ---
 slug: fix-edit-profile-tests
-status: framed
+status: verifying
 scope: frontend
-next: /implement fix-edit-profile-tests
+next: /review-feature fix-edit-profile-tests
 ---
 # Fix EditProfile test race
 
@@ -41,13 +41,15 @@ wrong. Separately, the rename test ("no stale username cached") may be showing a
   tests already cover (no-op save, trimming, rename, name/bio, validation errors).
 
 ## Tasks
-- [ ] (T1, fe) Make `EditProfile.test.jsx`'s API mock keep state: `mockPatch` updates the profiles that `mockProfiles` serves, including moving the entry on a rename, and the default handler echoes the saved profile. Then prove the race is gone with 10 consecutive runs of the file and 3 full-suite runs.
-- [ ] (T2, fe, after: T1) Settle the rename "no stale username cached" case. Instrument it to show whether `profileQueryKey('ada')` is recreated after `removeQueries`, and by which observer. If the leak is real, fix it in `EditProfile.jsx` without changing any visible behavior; if not, make the test assert the end state properly. Report the evidence either way.
+- [x] (T1, fe) Make `EditProfile.test.jsx`'s API mock keep state: `mockPatch` updates the profiles that `mockProfiles` serves, including moving the entry on a rename, and the default handler echoes the saved profile. Then prove the race is gone with 10 consecutive runs of the file and 3 full-suite runs.
+- [x] (T2, fe, after: T1) Settle the rename "no stale username cached" case. Instrument it to show whether `profileQueryKey('ada')` is recreated after `removeQueries`, and by which observer. If the leak is real, fix it in `EditProfile.jsx` without changing any visible behavior; if not, make the test assert the end state properly. Report the evidence either way.
 
 ## Decisions
 - 2026-09-25 · framed · Fix the test mock, not the app. The profile page's `alwaysFresh` refetch is intentional, and a real server returns the saved data, so only the mock was modelling the API wrongly. This is a separate PR from `realtime-updates`, as Alejandro chose.
+- 2026-09-25 · building · The rename leak was real. During `navigate()` in `onSuccess`, the right rail's `ProfileCard` re-rendered with the stale `me.username`, because TanStack's notifyManager delivers the new `me` on `setTimeout(0)`. That re-created the just-removed `ada` query, which fetched and returned 404. Fix: `removeQueryOnceUnobserved` in `EditProfile.jsx` removes the old entry once nothing observes it, using public QueryCache events only.
 
 ## Follow-ups
 
 ## Log
 - 2026-09-25 · framed
+- 2026-09-25 · built — stateful test mock (T1) + rename stale-cache fix with a pinning test (T2). EditProfile 25/25 on 5 extra consecutive runs; full suite 52 files / 607 tests green twice; build + lint green
