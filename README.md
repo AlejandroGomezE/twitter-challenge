@@ -19,6 +19,8 @@ on first start. For running without Docker (`scripts/be-local` + `scripts/fe-loc
 setup, tests and every endpoint, see the [Runbook](Runbook.md):
 [Run with Docker](Runbook.md#run-with-docker),
 [First-time setup](Runbook.md#first-time-setup-fresh-clone--new-machine),
+[Environment variables](Runbook.md#environment-variables),
+[Run all tests](Runbook.md#run-all-tests),
 [Backend](Runbook.md#backend-backend), [Frontend](Runbook.md#frontend-frontend).
 
 Before you start, check [Known setup gotchas](#known-setup-gotchas).
@@ -369,11 +371,18 @@ Details: [Run with Docker](Runbook.md#run-with-docker).
   - Following (`components/__tests__/FollowButton.test.tsx`, and
     `pages/__tests__/Profile.test.tsx` "follows another user from their profile").
   - Route guards (`app/__tests__/router.test.tsx`).
-- **Coverage.** Run `npm run test:cov` in `backend/` and in `frontend/` (Vitest with v8). No
-  coverage figure is quoted here because none has been measured on `main` yet.
+- **Coverage.** Measured on `main` on 2026-09-25 with `npm run test:cov` (Vitest, v8, Node 24):
 
-Commands for each app: [Runbook, Backend](Runbook.md#backend-backend) and
-[Runbook, Frontend](Runbook.md#frontend-frontend).
+  | Suite | Tests | Statements | Branches | Functions | Lines |
+  |---|---|---|---|---|---|
+  | Backend unit | 609 passed | 94.79% | 88.78% | 91.49% | 94.73% |
+  | Backend e2e | 213 passed | not measured | | | |
+  | Frontend | 606 passed | 95.39% | 91.22% | 93.91% | 96.14% |
+
+  Backend coverage comes from the unit suite alone. The e2e suite exercises the same code
+  through HTTP but isn't counted, so these figures are a floor.
+
+How to run everything: [Runbook, Run all tests](Runbook.md#run-all-tests).
 
 ---
 
