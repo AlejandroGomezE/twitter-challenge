@@ -1,8 +1,8 @@
 ---
 slug: twitter-posts
-status: verifying
+status: done
 scope: full-stack
-next: /close-feature twitter-posts
+next: —
 ---
 # Posts: create, delete, feed, profile posts, likes, post detail + comments
 
@@ -160,11 +160,14 @@ next: /close-feature twitter-posts
 - [ ] **Follows (next feature):** follow/unfollow, add followed authors to the feed's author set,
   enable the "Following" tab and "Who to follow", follower/following counts.
 - [ ] Reposts, bookmarks and share on post cards stay disabled ("Coming soon").
-- [ ] (fixed on `main` by PR #8 `c16d33d` — at Close: merge `main` into this branch, add a
-  `POST /posts { body: 123 } → 400` e2e assertion, then tick) The global `ValidationPipe` had
+- [x] (fixed on `main` by PR #8 `c16d33d`; merged in at Close, e2e now asserts
+  `{ body: 123 } → 400` for posts and comments) The global `ValidationPipe` had
   `enableImplicitConversion`, so a JSON number in a string field is coerced before `@IsString()` runs
   (`POST /posts { body: 123 }` → 201 with body "123"). Affects every DTO. Either drop implicit
   conversion (and add explicit `@Type(() => Number)` where query numbers need it) or accept it.
+
+## PRs
+- https://github.com/AlejandroGomezE/twitter-challenge/pull/9
 
 ## Log
 - 2026-09-24 · framed
@@ -173,3 +176,4 @@ next: /close-feature twitter-posts
   post detail + flat comments; per-user rate limits; docs. BE 24 suites / 254 unit + 92 e2e,
   FE 30 suites / 315, build/lint/tsc green.
 - 2026-09-24 · verified — all 8 ACs driven in headless Chrome + API (create/delete, feed paging to end, profile count, likes persist, detail/back/canonical/not-found, comments, New post focus); sign-out and mobile width intact
+- 2026-09-24 · closed — PR #9, merged (Close: cache first-load restart + comment write tests, navigation-history depth test, numeric-body e2e; review fixes: post-delete focus in lists, PostCard tests, pagination nits)
