@@ -2,6 +2,7 @@ import { http, HttpResponse } from 'msw'
 import { screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { AppRouter } from '@/app/router'
+import { FakeEventSource, installFakeEventSource } from '@/test/fake-event-source'
 import { renderWithProviders } from '@/test/render'
 import { apiUrl, server } from '@/test/server'
 
@@ -113,6 +114,36 @@ describe('Notifications', () => {
 
     expect(state.readBodies).toHaveLength(1)
     expect(within(list).getAllByRole('article')[0]).toHaveAttribute('data-unread', 'true')
+  })
+
+  it('shows a pushed notification at the top, keeping the highlights and marking read only once', async () => {
+    const uninstall = installFakeEventSource()
+    try {
+      const pages = [[notification('n2', 'like'), notification('n3', 'follow', { read: true })]]
+      const state = mockNotifications(pages)
+      await renderNotifications()
+      await waitFor(() => expect(state.readBodies).toHaveLength(1))
+      FakeEventSource.latest.open()
+
+      // The server now has the visit's row read and a newer unread one on top.
+      pages[0] = [
+        notification('n1', 'comment'),
+        notification('n2', 'like', { read: true }),
+        notification('n3', 'follow', { read: true }),
+      ]
+      FakeEventSource.latest.emit('notifications.changed', { unreadCount: 1 })
+
+      const list = main().getByRole('list', { name: 'Notifications' })
+      await waitFor(() => expect(within(list).getAllByRole('article')).toHaveLength(3))
+      const rows = within(list).getAllByRole('article')
+      expect(rows[0]).toHaveAccessibleName('Bob Builder commented on your post')
+      expect(rows[0]).toHaveAttribute('data-unread', 'true')
+      expect(rows[1]).toHaveAttribute('data-unread', 'true') // unread earlier in this visit
+      expect(rows[2]).not.toHaveAttribute('data-unread')
+      expect(state.readBodies).toHaveLength(1)
+    } finally {
+      uninstall()
+    }
   })
 
   it('does not mark anything when the first page has no unread items', async () => {

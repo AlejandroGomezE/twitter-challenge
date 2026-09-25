@@ -69,15 +69,16 @@ describe('NotificationsRepository', () => {
     ).rejects.toBe(error);
   });
 
-  it('deleteMatching deletes by type, recipient, actor and post', async () => {
+  it('deleteMatching deletes by type, recipient, actor and post and returns the count', async () => {
     const match = {
       type: 'like',
       recipientId: RECIPIENT_ID,
       actorId: 'user-actor',
       postId: 'post-1',
     };
+    prisma.notification.deleteMany.mockResolvedValue({ count: 1 });
 
-    await repository.deleteMatching(match);
+    await expect(repository.deleteMatching(match)).resolves.toBe(1);
 
     expect(prisma.notification.deleteMany).toHaveBeenCalledWith({
       where: match,
@@ -129,11 +130,14 @@ describe('NotificationsRepository', () => {
     });
   });
 
-  it('markReadUntil updates only the recipient’s unread rows up to `until`', async () => {
+  it('markReadUntil updates only the recipient’s unread rows up to `until` and returns the count', async () => {
     const until = new Date('2026-09-24T10:00:00.000Z');
     const readAt = new Date('2026-09-24T12:00:00.000Z');
+    prisma.notification.updateMany.mockResolvedValue({ count: 3 });
 
-    await repository.markReadUntil(RECIPIENT_ID, until, readAt);
+    await expect(
+      repository.markReadUntil(RECIPIENT_ID, until, readAt),
+    ).resolves.toBe(3);
 
     expect(prisma.notification.updateMany).toHaveBeenCalledWith({
       where: {

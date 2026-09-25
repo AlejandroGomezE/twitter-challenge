@@ -53,6 +53,12 @@ export interface LikeState {
   likeCount: number;
 }
 
+// A post's like and comment totals, independent of any viewer.
+export interface ActivityCounts {
+  likeCount: number;
+  commentCount: number;
+}
+
 const POST_NOT_FOUND_MESSAGE = 'Post not found';
 // Prisma's code for a foreign-key violation.
 const FOREIGN_KEY_VIOLATION = 'P2003';
@@ -73,11 +79,16 @@ export class PostsService {
   ) {}
 
   // `authorId` is always the session user's id. A new post has no likes or
-  // comments yet, so no count queries are needed.
+  // comments yet, so no count queries are needed. Emits `post.created` once
+  // the post is stored.
   async create(authorId: string, body: string): Promise<PostView> {
     const post = await this.postsRepository.create({
       authorId,
       body: normalizeBody(body),
+    });
+    emitDomainEvent(this.eventEmitter, DomainEvent.PostCreated, {
+      postId: post.id,
+      authorId,
     });
     return this.toView(post, NO_ACTIVITY);
   }
@@ -92,7 +103,8 @@ export class PostsService {
   }
 
   // Hard delete; likes and comments cascade. The delete itself is also
-  // scoped to the author, so a concurrent delete surfaces as a 404.
+  // scoped to the author, so a concurrent delete surfaces as a 404. Emits
+  // `post.deleted` only after a successful delete.
   async delete(id: string, userId: string): Promise<void> {
     const post = await this.postsRepository.findById(id);
     if (!post) {
@@ -105,6 +117,10 @@ export class PostsService {
     if (deleted === 0) {
       throw new NotFoundException(POST_NOT_FOUND_MESSAGE);
     }
+    emitDomainEvent(this.eventEmitter, DomainEvent.PostDeleted, {
+      postId: id,
+      authorId: userId,
+    });
   }
 
   // Likes (`liked: true`) or unlikes the post as `userId` (the session
@@ -174,6 +190,12 @@ export class PostsService {
       this.parseCursor(query),
       query.limit,
     );
+  }
+
+  // The post's current like/comment totals, or null if it no longer exists
+  // (for the realtime `post.counts` message).
+  counts(postId: string): Promise<ActivityCounts | null> {
+    return this.postsRepository.activityCounts(postId);
   }
 
   countByAuthor(authorId: string): Promise<number> {

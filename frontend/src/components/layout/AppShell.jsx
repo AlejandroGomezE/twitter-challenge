@@ -2,15 +2,21 @@ import { Feather } from 'lucide-react'
 import { Outlet } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { useNotificationsRealtimeSync } from '@/hooks/use-notifications'
 import { useOpenComposer } from '@/hooks/use-open-composer'
+import { usePostsRealtimeSync } from '@/hooks/use-posts-realtime'
 import { MobileNav } from './MobileNav'
 import { RightRail } from './RightRail'
 import { SideNav } from './SideNav'
 
 // Layout route for every gated page: left rail (lg+), the page in the center column, right rail
 // (xl+), and below lg a bottom nav plus the compose button (→ Home, focusing the composer). Pages render their own sticky header.
+// Also keeps the notification badge and list, and cached posts (counts, deletions), in step with
+// the realtime stream.
 export function AppShell() {
   const openComposer = useOpenComposer()
+  useNotificationsRealtimeSync()
+  usePostsRealtimeSync()
 
   return (
     <TooltipProvider>

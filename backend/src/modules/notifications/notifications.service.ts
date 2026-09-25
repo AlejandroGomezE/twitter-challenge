@@ -1,4 +1,9 @@
 import { Injectable } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import {
+  DomainEvent,
+  emitDomainEvent,
+} from '../../common/events/domain-events.js';
 import {
   decodeCursor,
   encodeCursor,
@@ -56,25 +61,32 @@ function isNotificationType(type: string): type is NotificationType {
 export class NotificationsService {
   constructor(
     private readonly notificationsRepository: NotificationsRepository,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   // Records a notification for `input.recipientId`. Self-actions (liking or
   // commenting on your own post) never notify. Errors (e.g. P2003 when a
-  // referenced row was deleted meanwhile) propagate to the caller.
+  // referenced row was deleted meanwhile) propagate to the caller. Emits
+  // `notification.changed` once the row is stored.
   async notify(input: NotificationInput): Promise<void> {
     if (input.actorId === input.recipientId) {
       return;
     }
     await this.notificationsRepository.create(input);
+    this.emitChanged(input.recipientId);
   }
 
   // Removes the notification(s) an undone like or follow created.
-  // Idempotent; a self-action has none to remove.
+  // Idempotent; a self-action has none to remove. Emits
+  // `notification.changed` only when at least one row was removed.
   async retract(input: Omit<NotificationInput, 'commentId'>): Promise<void> {
     if (input.actorId === input.recipientId) {
       return;
     }
-    await this.notificationsRepository.deleteMatching(input);
+    const deleted = await this.notificationsRepository.deleteMatching(input);
+    if (deleted > 0) {
+      this.emitChanged(input.recipientId);
+    }
   }
 
   // `recipientId`'s notifications, newest first, keyset-paged on
@@ -109,13 +121,23 @@ export class NotificationsService {
 
   // Marks `recipientId`'s unread notifications created at or before `until`
   // (an ISO-8601 date, validated by MarkReadDto) as read now. One created
-  // later — after the client loaded its page — stays unread.
+  // later — after the client loaded its page — stays unread. Emits
+  // `notification.changed` only when at least one row was marked.
   async markRead(recipientId: string, until: string): Promise<void> {
-    await this.notificationsRepository.markReadUntil(
+    const updated = await this.notificationsRepository.markReadUntil(
       recipientId,
       new Date(until),
       new Date(),
     );
+    if (updated > 0) {
+      this.emitChanged(recipientId);
+    }
+  }
+
+  private emitChanged(recipientId: string): void {
+    emitDomainEvent(this.eventEmitter, DomainEvent.NotificationChanged, {
+      recipientId,
+    });
   }
 
   // null (dropped from the page) for a type this code doesn't know; only

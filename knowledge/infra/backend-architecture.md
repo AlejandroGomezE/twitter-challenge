@@ -1,10 +1,10 @@
 ---
 title: Backend architecture
 type: infra
-summary: Layered NestJS backend (backend/) — current implementation state (Prisma database module, Zod-validated config, global exception filter, email+password auth with cookie sessions, users module with profiles, display names and user search, posts module with Following / For you feeds, likes and comments, follows module with follow lists and suggestions, notifications module fed by domain events; keyset pagination, named throttlers).
+summary: Layered NestJS backend (backend/) — current implementation state (Prisma database module, Zod-validated config, global exception filter, email+password auth with cookie sessions, users module with profiles, display names and user search, posts module with Following / For you feeds, likes and comments, follows module with follow lists and suggestions, notifications module fed by domain events, realtime module pushing domain events over an SSE stream; keyset pagination, named throttlers).
 status: active
-last-verified: 2026-09-24
-tags: [backend, nestjs, architecture, prisma, config, auth, posts, follows, search, notifications, events, pagination, throttling]
+last-verified: 2026-09-25
+tags: [backend, nestjs, architecture, prisma, config, auth, posts, follows, search, notifications, events, realtime, sse, pagination, throttling]
 ---
 
 ## Layered architecture
@@ -36,7 +36,7 @@ backend/src/
 │                          #   ResponseSerializerInterceptor, exception filter — shared by
 │                          #   main.ts and the e2e suite
 ├── app.module.ts          # root module — wires Config, EventEmitter, Prisma, Auth, Users, Posts,
-│                          #   Follows, Notifications, (conditionally) Observe
+│                          #   Follows, Notifications, Realtime, (conditionally) Observe
 ├── observe.ts             # NestJS Observe APM module/instrument factory
 ├── config/
 │   ├── configuration.ts           # typed config (nodeEnv, port, database.url, frontendOrigin)
@@ -81,10 +81,11 @@ backend/src/
 │   │   ├── follows.controller.ts  # @Controller('users'): PUT/DELETE :username/follow,
 │   │   │                          #   GET :username/followers|following, GET me/suggestions
 │   │   ├── follows.service.ts     # setFollowing, listFollowers / listFollowing, suggestions,
-│   │   │                          #   followedIds, counts, relation, relationsFor (exported to
-│   │   │                          #   Users / Posts)
+│   │   │                          #   followedIds, followerIdsAmong, counts, relation,
+│   │   │                          #   relationsFor (exported to Users / Posts / Realtime)
 │   │   └── follows.repository.ts  # Prisma access for Follow + its own username → id lookup;
-│   │                              #   relationsAmong (batched booleans), findSuggestions
+│   │                              #   relationsAmong (batched booleans), followerIdsAmong,
+│   │                              #   findSuggestions
 │   ├── notifications/
 │   │   ├── dto/
 │   │   │   ├── notification-response.dto.ts       # NotificationResponseDto { id, type, createdAt,
@@ -93,11 +94,13 @@ backend/src/
 │   │   │   ├── notification-page-response.dto.ts  # NotificationPageResponseDto { items, nextCursor }
 │   │   │   ├── unread-count-response.dto.ts       # UnreadCountResponseDto { count }
 │   │   │   └── mark-read.dto.ts                   # MarkReadDto { until } — @IsISO8601 (strict)
-│   │   ├── notifications.module.ts      # controller + listener; imports nothing, exports nothing
+│   │   ├── notifications.module.ts      # controller + listener; imports nothing; exports
+│   │   │                                #   NotificationsService (for Realtime)
 │   │   ├── notifications.controller.ts  # GET /notifications, GET /notifications/unread-count,
 │   │   │                                #   POST /notifications/read
 │   │   ├── notifications.listener.ts    # @OnEvent(…, { async: true }) per domain event → service
-│   │   ├── notifications.service.ts     # notify (skips self), retract, list, unreadCount, markRead
+│   │   ├── notifications.service.ts     # notify (skips self), retract, list, unreadCount, markRead;
+│   │   │                                #   emits notification.changed on an actual change
 │   │   └── notifications.repository.ts  # Prisma access for Notification (scoped by recipientId)
 │   ├── posts/
 │   │   ├── dto/
@@ -123,10 +126,25 @@ backend/src/
 │   │   ├── feed.controller.ts     # GET /feed (Following), GET /feed/for-you (everyone)
 │   │   ├── comments.controller.ts # GET/POST /posts/:postId/comments, DELETE …/:commentId
 │   │   ├── posts.service.ts       # create, getById, delete (own), setLiked, feed, forYou,
-│   │   │                          #   listByAuthor, countByAuthor; feedAuthorIds (you + followed)
+│   │   │                          #   listByAuthor, countByAuthor, counts (one post's totals);
+│   │   │                          #   feedAuthorIds (you + followed)
 │   │   ├── comments.service.ts    # list, create, delete (own)
-│   │   ├── posts.repository.ts    # Prisma access for Post + Like; countsFor (batched counts)
+│   │   ├── posts.repository.ts    # Prisma access for Post + Like; countsFor (batched counts),
+│   │   │                          #   activityCounts (one post, one query)
 │   │   └── comments.repository.ts # Prisma access for Comment
+│   ├── realtime/
+│   │   ├── dto/
+│   │   │   └── server-event-response.dto.ts  # ServerEventResponseDto { type?, data?, comment? } —
+│   │   │                                     #   one SSE message (Nest's MessageEvent)
+│   │   ├── realtime.constants.ts  # REALTIME_HEARTBEAT_INTERVAL_MS (token), DEFAULT_HEARTBEAT_
+│   │   │                          #   INTERVAL_MS (25s), MAX_STREAMS_PER_USER (5), RealtimeEvent
+│   │   │                          #   (stream event names)
+│   │   ├── realtime.module.ts     # imports Auth / Posts / Follows / Notifications; exports
+│   │   │                          #   RealtimeHub
+│   │   ├── realtime.controller.ts # @Sse() GET /events: hub connection + session-checking heartbeat
+│   │   ├── realtime.hub.ts        # RealtimeHub: in-memory open streams per user; connect,
+│   │   │                          #   sendToUser, broadcast (exceptUserId), connectedUserIds
+│   │   └── realtime.listener.ts   # @OnEvent(…, { async: true }) per domain event → hub messages
 │   └── users/
 │       ├── dto/
 │       │   ├── user-response.dto.ts        # UserResponseDto { id, email, username, displayName }
@@ -162,20 +180,24 @@ payload types, not a module (see Notifications below). The domain modules are `m
 (users are created through the auth flow; `UsersController` serves profiles and a user's posts,
 `SearchController` the user search),
 `modules/posts/` (posts, likes and comments in one module), `modules/follows/` (follows,
-follow lists, suggestions) and `modules/notifications/`. The module graph only points one way — no
-cycle:
+follow lists, suggestions), `modules/notifications/` and `modules/realtime/` (the SSE stream). The
+module graph only points one way — no cycle:
 
 ```text
 UsersModule         → PostsModule, FollowsModule
 PostsModule         → FollowsModule
 FollowsModule       → (nothing — only the global PrismaModule / throttler)
 NotificationsModule → (nothing — reached only through domain events on the global EventEmitter2)
+RealtimeModule      → AuthModule, PostsModule, FollowsModule, NotificationsModule
+                      (nothing imports it — it's fed only by domain events)
 ```
 
 `UsersModule` imports `PostsModule` (for `postCount` and `GET /users/:username/posts`) and
 `FollowsModule` (profile follow counts and relation); `PostsModule` imports `FollowsModule` (the
 Following feed's author set); `FollowsModule` imports neither — it resolves usernames in its own
-repository rather than through `UsersService`. `SearchController` adds no edge: it lives in
+repository rather than through `UsersService`. `RealtimeModule` sits at the top: it reads through
+the exported `PostsService`, `FollowsService` and `NotificationsService` (and `AuthService` for the
+heartbeat), and none of those modules import it back. `SearchController` adds no edge: it lives in
 `UsersModule` and reaches follows through the `FollowsService` that module already imports. Add
 more, in
 this same layered shape, when a real feature needs them — don't scaffold empty folders
@@ -195,7 +217,7 @@ unique index gives case-insensitive uniqueness on SQLite without a custom collat
 pulling a schema change, run `npx prisma db push` (and `npx prisma generate`) from
 `backend/`. The profile change added a required column, so it needs
 `npx prisma db push --force-reset`, which wipes the dev DB (no backfill — there's no
-production data). The posts and follows changes only add tables, and the user-search change
+production data). The realtime change has no schema change at all. The posts and follows changes only add tables, and the user-search change
 only adds the nullable `User.displayName` column (existing rows stay `null`, no backfill): a plain
 `npx prisma db push`; so does the notifications change (a new table). `displayName` is required by the sign-up DTO, not by the schema — it's
 nullable only for accounts created before it existed.
@@ -495,7 +517,18 @@ the session user's own — no user id is read from the request).
   after the write succeeds, fire-and-forget. `*.created` fires only when a like / follow row was
   actually inserted (the repositories' `like` / `follow` return that), so idempotent repeats don't
   re-notify. Emitters report everything, self-actions included; listeners decide. Posts and follows
-  never import the notifications module.
+  never import the notifications module. Added for realtime (consumed by `RealtimeListener`, not by
+  `NotificationsListener`):
+  - `post.created` (`PostsService.create`, once stored) and `post.deleted` (`PostsService.delete`,
+    only after a successful delete — never on a 403 / 404) — `PostEventPayload { postId, authorId }`.
+  - `comment.removed` (`CommentsService.delete`, only after a successful delete) —
+    `CommentRemovedPayload { actorId, postId, commentId }`.
+  - `notification.changed` (`NotificationsService`) — `NotificationChangedPayload { recipientId }`,
+    emitted only when the recipient's notifications actually changed: `notify` stored a row,
+    `retract` deleted at least one (`deleteMatching` returns the count), or `markRead` marked at
+    least one (`markReadUntil` returns the count). Rows removed by an FK cascade (a post, comment or
+    user deleted) emit nothing — they're gone before any listener runs (accepted, feature
+    `realtime-updates`, Decisions).
 - **Listener** (`NotificationsListener`). One `@OnEvent(name, { async: true })` handler per event —
   `async: true` is required: EventEmitter2 runs sync listeners inside `emit()`, i.e. in the
   originating request's stack. Each calls `NotificationsService.notify` (like / comment / follow;
@@ -504,6 +537,66 @@ the session user's own — no user id is read from the request).
   between the write and the listener — the cascade would remove the row anyway) is a silent no-op,
   anything else is logged with Nest's `Logger` and never rethrown, so the originating request never
   fails because of a notification.
+
+**Realtime** (`src/modules/realtime/`; `GET /events` is session-gated, no `@Public()`; the user id
+comes only from `@CurrentUser()`). Server-Sent Events — one multiplexed stream per tab, server →
+client only, over plain HTTP with the existing cookie session and CORS `credentials` (feature
+`realtime-updates`, Decisions).
+
+- **Endpoint.** `GET /events` (`@Sse()`) → `text/event-stream`. The global `AuthGuard` answers 401
+  before any stream opens. Not throttled (no `ThrottlerGuard`) — `EventSource` reconnects on its
+  own. Each message is `event: <name>` + `data: <json>`; the heartbeat is the comment line
+  `: ping`. No replay (`Last-Event-ID` isn't supported): the client refetches after a reconnect.
+- **`RealtimeHub`** — an in-memory `Map<userId, Set<Subject>>` of open streams. `connect(userId)`
+  returns `{ stream, close() }`: unsubscribing (the client disconnected) removes the connection,
+  `close()` removes it and completes the stream (idempotent). At most `MAX_STREAMS_PER_USER` (5)
+  per user — connecting a 6th closes the oldest (a `Set` keeps insertion order), never the one just
+  opened. `sendToUser(userId, event, data)`, `broadcast(event, data, { exceptUserId? })` and
+  `connectedUserIds()`. `data` is `JSON.stringify`'d once per call and handed on as a string. It
+  lives in this process only: more than one backend instance would need a shared pub/sub (e.g.
+  Redis) to fan messages out — documented, not built.
+- **`RealtimeController`** — `events()` wraps the stream in `defer`, so the hub connection and the
+  heartbeat timer exist only while subscribed. It merges the hub stream with an `interval` of the
+  heartbeat period whose ticks call `AuthService.validateSession(token)` (`exhaustMap`, so a slow
+  check never overlaps the next): valid → `{ comment: 'ping' }`, invalid (sign-out or expiry) →
+  the stream completes and the response ends. It fails closed — a lookup error ends the stream
+  too, and the client reconnects and authenticates afresh. The raw `sid` token is read once
+  (`readSessionToken`) and kept only in that closure. `finalize` closes the hub connection on
+  every exit (client disconnect, hub close, invalid session). This covers both sign-out and expiry
+  without touching the auth module; a signed-out tab's stream stays open at most one heartbeat.
+- **Why `@SerializeOptions({ type: ServerEventResponseDto })`.** The global
+  `ResponseSerializerInterceptor` runs on every emitted SSE message and fails closed without a
+  declared type, so the handler declares `ServerEventResponseDto` (`@Expose()`d `type`, `data`,
+  `comment` — the `MessageEvent` fields used). `data` is sent pre-encoded as a string (by the hub) so
+  the serializer passes it through verbatim rather than transforming a nested payload object; on
+  the wire it's the same `data: {json}` line.
+- **Heartbeat token.** The interval is injected through `REALTIME_HEARTBEAT_INTERVAL_MS` (a
+  `Symbol` token; `RealtimeModule` provides `DEFAULT_HEARTBEAT_INTERVAL_MS` = 25 000 — below
+  common 30–60 s proxy idle timeouts). Tests override it (`overrideProvider(…).useValue(100)` in
+  `test/realtime.e2e-spec.ts`) instead of waiting 25 s.
+- **`RealtimeListener`** — one `@OnEvent(name, { async: true })` handler per domain event, maps it
+  to a stream event (`RealtimeEvent` in `realtime.constants.ts`). Payloads are exactly the stream
+  contract — never author / actor ids or other user data. The author / actor is always excluded:
+  their own client already applied the change optimistically. No query runs when nobody who would
+  receive the message is connected.
+
+  | Domain event | Stream event → data | Recipients | Queries |
+  |---|---|---|---|
+  | `post.created` | `post.created` → `{ id, following }` | every connected user but the author | `FollowsService.followerIdsAmong(authorId, connected)` — one query for all candidates |
+  | `post.deleted` | `post.deleted` → `{ id }` | every connected user but the author | none |
+  | `like.created` / `like.removed` / `comment.created` / `comment.removed` | `post.counts` → `{ id, likeCount, commentCount }` | every connected user but the actor | `PostsService.counts(postId)` (one query); skipped when the post no longer exists |
+  | `notification.changed` | `notifications.changed` → `{ unreadCount }` | the recipient only (all their tabs) | `NotificationsService.unreadCount` |
+
+  `async: true` for the same reason as `NotificationsListener` (sync listeners run inside `emit()`,
+  in the originating request's stack), and every handler catches, logs (Nest `Logger`) and never
+  rethrows, so a realtime failure never fails the originating request. `follow.*` have no stream
+  event.
+- **Service methods added for it.** `FollowsService.followerIdsAmong(userId, candidateIds)` →
+  `FollowsRepository.followerIdsAmong`: which candidates follow `userId`, one `findMany` on
+  `followingId = userId AND followerId IN (…)` (none for an empty batch). `PostsService.counts(postId)`
+  → `PostsRepository.activityCounts`: one post's `{ likeCount, commentCount }` via a single
+  `findUnique` with `_count` (`ActivityCounts`, viewer-independent), or `null` when the post is
+  gone. `NotificationsModule` now exports `NotificationsService` (for `unreadCount`).
 
 **Display names in embedded users.** Post / comment authors (`PostAuthorResponseDto { username,
 displayName }`) and `FollowUser` rows (`FollowUserResponseDto`) carry `displayName` (`null` until
@@ -570,7 +663,9 @@ value to that class and emits only exposed fields, so even a full Prisma row wit
 DTO instance) is a 500, never passed through unfiltered. Never return Prisma models/entities or
 internal service types (`PublicUser`, `PublicProfile`, `MyProfile`, `AuthenticatedUser`,
 `PostView`, `CommentView`, `PostPage`, `LikeState`, `FollowUserView`, `FollowUserPage`,
-`FollowUserList`, `FollowState`, `NotificationView`, `NotificationPage`, `UnreadCount`) directly. 204 endpoints (`POST
+`FollowUserList`, `FollowState`, `NotificationView`, `NotificationPage`, `UnreadCount`,
+`ActivityCounts`, `RealtimeMessage`) directly — the SSE handler declares `ServerEventResponseDto`
+per message (see Realtime above). 204 endpoints (`POST
 /auth/sign-out`, the post and comment deletes, `POST /notifications/read`) return `void` and need no DTO. A nested object or
 array in a response DTO needs `@Type(() => NestedDto)` — see Posts above.
 
@@ -632,6 +727,14 @@ order (no skips / duplicates), default 20 / max 50, 400s for a missing / empty /
 / too long / repeated `q` and for a garbage / empty / posts cursor, 50 emoji accepted, and 401
 without a session. `users.repository.spec.ts` pins `containsPattern` and the raw SQL's shape
 (escaped `LIKE … ESCAPE`, username OR display name, `limit + 1`, no email / password hash).
+
+`test/realtime.e2e-spec.ts` covers `GET /events` over a real HTTP listener (heartbeat overridden
+to 100 ms): 401 without / with an unknown session, a credentialed `text/event-stream` that delivers
+hub messages and `: ping`s, the stream closing on the next heartbeat after the session is revoked,
+`post.created` reaching every other connected user with their own `following` flag, `post.counts`
+following likes and comments for everyone but the actor, `notifications.changed` carrying the
+unread count to the recipient only, and `post.deleted` reaching everyone but the author.
+`test/notifications.e2e-spec.ts` now waits only on the events `NotificationsListener` subscribes to.
 
 ## Open questions
 

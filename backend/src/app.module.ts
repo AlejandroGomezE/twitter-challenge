@@ -9,6 +9,7 @@ import { PrismaModule } from './database/prisma.module.js';
 import { FollowsModule } from './modules/follows/follows.module.js';
 import { NotificationsModule } from './modules/notifications/notifications.module.js';
 import { PostsModule } from './modules/posts/posts.module.js';
+import { RealtimeModule } from './modules/realtime/realtime.module.js';
 import { UsersModule } from './modules/users/users.module.js';
 
 const { OBSERVE_APP_KEY, OBSERVE_APP_SECRET } = process.env;
@@ -27,6 +28,7 @@ const { OBSERVE_APP_KEY, OBSERVE_APP_SECRET } = process.env;
     PostsModule,
     FollowsModule,
     NotificationsModule,
+    RealtimeModule,
     ...(OBSERVE_APP_KEY && OBSERVE_APP_SECRET
       ? [
           ObserveModule.forRoot({

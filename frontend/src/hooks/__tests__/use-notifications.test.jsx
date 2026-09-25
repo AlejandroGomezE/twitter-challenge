@@ -1,14 +1,18 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createQueryClient } from '@/app/query-client'
 import { notificationKeys } from '@/lib/api/notifications'
+import { AuthProvider } from '@/lib/auth/AuthProvider'
+import { RealtimeProvider } from '@/lib/realtime/RealtimeProvider'
+import { FakeEventSource, installFakeEventSource } from '@/test/fake-event-source'
 import { apiUrl, server } from '@/test/server'
 import {
   UNREAD_COUNT_REFETCH_INTERVAL,
   useMarkNotificationsRead,
   useNotifications,
+  useNotificationsRealtimeSync,
   useUnreadNotificationCount,
 } from '../use-notifications'
 
@@ -25,13 +29,27 @@ const notification = (id, overrides = {}) => ({
 
 const page = (items, nextCursor = null) => ({ items, nextCursor })
 
-function renderWithClient(useHooks) {
+// `realtime: true` adds the signed-in AuthProvider + RealtimeProvider (a stream opens once `GET
+// /auth/me` resolves, if `window.EventSource` exists).
+function renderWithClient(useHooks, { realtime = false } = {}) {
   const queryClient = createQueryClient({ queries: { retry: false, gcTime: Infinity } })
   const wrapper = ({ children }) => (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <QueryClientProvider client={queryClient}>
+      {realtime ? (
+        <AuthProvider>
+          <RealtimeProvider>{children}</RealtimeProvider>
+        </AuthProvider>
+      ) : (
+        children
+      )}
+    </QueryClientProvider>
   )
   return { queryClient, ...renderHook(useHooks, { wrapper }) }
 }
+
+const unreadCountOptions = (queryClient) =>
+  queryClient.getQueryCache().find({ queryKey: notificationKeys.unreadCount(), exact: true })
+    .options
 
 // `GET /notifications`: the first page (no cursor) points at 'c1'; the `c1` page is the last.
 // Records the cursor of every request.
@@ -99,16 +117,14 @@ describe('useUnreadNotificationCount', () => {
     expect(result.current.data).toEqual({ count: 7 })
   })
 
-  it('polls every 30s and refetches on window focus', async () => {
+  it('polls every 30s without a stream and refetches on window focus', async () => {
     mockUnreadCount(0)
     const { result, queryClient } = renderWithClient(() => useUnreadNotificationCount())
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(UNREAD_COUNT_REFETCH_INTERVAL).toBe(30_000)
-    const { options } = queryClient.getQueryCache().find({
-      queryKey: notificationKeys.unreadCount(),
-      exact: true,
-    })
+    // No realtime stream here (no provider), so the polling fallback is on.
+    const options = unreadCountOptions(queryClient)
     expect(options.refetchInterval).toBe(UNREAD_COUNT_REFETCH_INTERVAL)
     expect(options.refetchOnWindowFocus).toBe(true)
   })
@@ -167,5 +183,66 @@ describe('useMarkNotificationsRead', () => {
 
     expect(countCalls.count).toBe(1)
     expect(result.current.count.data).toEqual({ count: 2 })
+  })
+})
+
+describe('notifications over the realtime stream', () => {
+  let uninstall
+  beforeEach(() => {
+    uninstall = installFakeEventSource()
+  })
+  afterEach(() => uninstall())
+
+  async function renderSynced() {
+    const cursors = mockList()
+    const countCalls = mockUnreadCount(2)
+    const utils = renderWithClient(
+      () => {
+        useNotificationsRealtimeSync()
+        return { list: useNotifications(), count: useUnreadNotificationCount() }
+      },
+      { realtime: true },
+    )
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+    await waitFor(() => expect(utils.result.current.list.isSuccess).toBe(true))
+    await waitFor(() => expect(utils.result.current.count.data).toEqual({ count: 2 }))
+    return { ...utils, cursors, countCalls }
+  }
+
+  it('notifications.changed sets the unread count and refetches the list', async () => {
+    const { result, cursors, countCalls } = await renderSynced()
+    FakeEventSource.latest.open()
+
+    FakeEventSource.latest.emit('notifications.changed', { unreadCount: 5 })
+
+    await waitFor(() => expect(result.current.count.data).toEqual({ count: 5 }))
+    await waitFor(() => expect(cursors).toEqual([null, null]))
+    // The count came from the push, not a request.
+    expect(countCalls.count).toBe(1)
+  })
+
+  it('refetches the unread count after a reconnect, not after the first open', async () => {
+    const { countCalls } = await renderSynced()
+    FakeEventSource.latest.open()
+    expect(countCalls.count).toBe(1)
+
+    FakeEventSource.latest.drop()
+    FakeEventSource.latest.open()
+
+    await waitFor(() => expect(countCalls.count).toBe(2))
+  })
+
+  it('stops polling the unread count while the stream is open, keeping focus refetch', async () => {
+    const { queryClient } = await renderSynced()
+    expect(unreadCountOptions(queryClient).refetchInterval).toBe(UNREAD_COUNT_REFETCH_INTERVAL)
+
+    FakeEventSource.latest.open()
+    await waitFor(() => expect(unreadCountOptions(queryClient).refetchInterval).toBe(false))
+    expect(unreadCountOptions(queryClient).refetchOnWindowFocus).toBe(true)
+
+    FakeEventSource.latest.fail()
+    await waitFor(() =>
+      expect(unreadCountOptions(queryClient).refetchInterval).toBe(UNREAD_COUNT_REFETCH_INTERVAL),
+    )
   })
 })

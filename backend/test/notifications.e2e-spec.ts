@@ -66,7 +66,16 @@ const LISTENER_METHODS = [
   'onFollowRemoved',
   'onCommentCreated',
 ] as const;
-const DOMAIN_EVENT_NAMES = new Set<string>(Object.values(DomainEvent));
+// Only the domain events NotificationsListener subscribes to (one per wrapped
+// method above); other events (post.*, comment.removed,
+// notification.changed) have no run of this listener to wait for.
+const DOMAIN_EVENT_NAMES = new Set<string>([
+  DomainEvent.LikeCreated,
+  DomainEvent.LikeRemoved,
+  DomainEvent.FollowCreated,
+  DomainEvent.FollowRemoved,
+  DomainEvent.CommentCreated,
+]);
 
 const SETTLE_TIMEOUT_MS = 2000;
 const SETTLE_INTERVAL_MS = 5;
@@ -266,7 +275,10 @@ describe('Notifications (e2e)', () => {
     return res;
   }
 
-  async function createPost(user: TestUser, body: string): Promise<SubjectJson> {
+  async function createPost(
+    user: TestUser,
+    body: string,
+  ): Promise<SubjectJson> {
     const res = await call('post', '/posts', {
       token: user.token,
       body: { body },
@@ -498,7 +510,7 @@ describe('Notifications (e2e)', () => {
       expect((await listNotifications(a)).items).toEqual([]);
     });
 
-    it("deleting the post removes its like and comment notifications but keeps the follow", async () => {
+    it('deleting the post removes its like and comment notifications but keeps the follow', async () => {
       const a = await createUserWithSession();
       const b = await createUserWithSession();
       const post = await createPost(a, 'to be deleted');

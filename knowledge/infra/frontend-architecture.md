@@ -1,10 +1,10 @@
 ---
 title: Frontend architecture
 type: infra
-summary: Vite + React SPA (frontend/) structure and current implementation state — TanStack Query, shadcn/ui, react-router, HTTP client, cookie-session auth (useAuth, ProtectedRoute), Pulse theme (tokens, OS dark mode), the app shell layout route with "Coming soon" disabled items, the Home page with Following / For you feed tabs, user profiles (view + edit, avatar placeholder, display names, follow counts and lists), posts (feeds, profile posts, post detail + comments, likes), follows (follow button, follow lists, who to follow) and user search (right-rail typeahead, Explore page) with infinite queries and race-safe cache updates.
+summary: Vite + React SPA (frontend/) structure and current implementation state — TanStack Query, shadcn/ui, react-router, HTTP client, cookie-session auth (useAuth, ProtectedRoute), Pulse theme (tokens, OS dark mode), the app shell layout route with "Coming soon" disabled items, the Home page with Following / For you feed tabs, user profiles (view + edit, avatar placeholder, display names, follow counts and lists), posts (feeds, profile posts, post detail + comments, likes), follows (follow button, follow lists, who to follow) user search (right-rail typeahead, Explore page), notifications, and realtime updates (one SSE stream per signed-in tab, live counts, the "N new posts" pill) with infinite queries and race-safe cache updates.
 status: active
-last-verified: 2026-09-24
-tags: [frontend, react, vite, architecture, tanstack-query, shadcn, auth, theme, layout, posts, follows, search]
+last-verified: 2026-09-25
+tags: [frontend, react, vite, architecture, tanstack-query, shadcn, auth, theme, layout, posts, follows, search, notifications, realtime]
 ---
 
 ## Structure
@@ -40,7 +40,9 @@ frontend/src/
 │                       #   useSuggestions, useToggleFollow; use-comments.js;
 │                       #   use-user-search.js — useUserTypeahead, useUserSearch;
 │                       #   use-debounced-value.js; use-retry-unless-not-found.js;
-│                       #   use-open-composer.js; use-post-removal-focus.js
+│                       #   use-open-composer.js; use-post-removal-focus.js;
+│                       #   use-notifications.js (+ useNotificationsRealtimeSync);
+│                       #   use-posts-realtime.js — usePostsRealtimeSync (see Realtime)
 ├── lib/
 │   ├── api/            # client.js — apiClient, ApiError; users.js — profileQueryKey,
 │   │                   #   fetchProfile, updateMyProfile, followKeys + follow calls; posts.js —
@@ -49,6 +51,9 @@ frontend/src/
 │   │                   #   helpers; follow-cache.js — follow cache helpers; error-message.js —
 │   │                   #   getApiErrorMessage
 │   ├── auth/           # AuthProvider.jsx, use-auth.js, auth-context.js, auth-error-message.js
+│   ├── realtime/       # RealtimeProvider.jsx, realtime-context.js, use-realtime.js — the SSE
+│   │                   #   stream; NewPostsProvider.jsx, new-posts-store.js, use-new-posts.js —
+│   │                   #   Home's "N new posts" pill (see Realtime)
 │   ├── validation/     # auth-schemas.js (sign-in / sign-up), profile-schemas.js (username, bio,
 │   │                   #   display name)
 │   ├── avatar-color.js # getAvatarColor / getAvatarInitial for the avatar placeholder
@@ -58,9 +63,10 @@ frontend/src/
 │   ├── format.js       # formatCount ("1.2K"), formatRelativeShort ("3h"), formatFullDate
 │   └── composer-focus.js # COMPOSER_TEXTAREA_ID, FOCUS_COMPOSER_STATE, focusComposer()
 ├── pages/              # Home (feed), SignIn, SignUp, SignOut, Profile, EditProfile, PostDetail,
-│                       #   Explore (user search)
+│                       #   Explore (user search), Notifications
 ├── routes/             # ProtectedRoute.jsx, PublicOnlyRoute.jsx
-└── test/               # shared test helpers — setup.js, server.js (MSW), render.jsx
+└── test/               # shared test helpers — setup.js, server.js (MSW), render.jsx,
+                        #   fake-event-source.js (see Realtime)
 ```
 
 Each feature, once one exists, should follow:
@@ -138,8 +144,9 @@ that `<title>`, the feather `favicon.svg`, `<meta name="color-scheme" content="l
   `className`.
 - **Nav config (`nav-items.js`)** is the single source for `SideNav` and `MobileNav`. An item
   with a `to` builder is a working route (Home `/`, Explore `/explore`, Profile `/u/<me>` — left
-  out while there's no username, Settings `/settings/profile`); an item without one is a disabled
-  placeholder (Notifications, Messages, Bookmarks). `mobile` picks the bottom bar's items (no
+  out while there's no username, Notifications `/notifications`, Settings `/settings/profile`); an
+  item without one is a disabled placeholder (Messages, Bookmarks). A working item may name a
+  `badge` count — Notifications shows the unread count (see Realtime for how it stays fresh). `mobile` picks the bottom bar's items (no
   Bookmarks, no Settings); `desktop: false` keeps Sign out out of the rail's nav —
   `getSignOutItem()` hands it to `SideNav`'s footer (under the user chip), while the bottom bar
   shows it as its last icon. Sign out always links to `/sign-out`. Working items are
@@ -624,6 +631,51 @@ navigates, so a plain panel is the simpler fit.
   a `FollowButton` (above the link, `z-10`) except on your own row — the same shape as
   `FollowListDialog`'s rows (a shared row is a noted follow-up).
 
+## Realtime (`src/lib/realtime/`)
+
+Live updates come over one Server-Sent Events stream, `GET /events` (contract in
+`features/realtime-updates/feature.md`).
+
+- **`RealtimeProvider`** — mounted in `ProtectedRoute` around the signed-in tree, so it opens
+  **one `EventSource` per signed-in tab** (`withCredentials`, the session cookie) and never on the
+  public pages; signing out closes it. Transient drops are retried by the browser; a stream that
+  ends `CLOSED` (a 401, server gone) is reopened with capped exponential backoff (1s, 2s, 4s …
+  30s, reset on open), only while signed in. Without `window.EventSource` (jsdom) it renders its
+  children and does nothing else. Outside the provider every hook below is a no-op.
+- **Hooks (`use-realtime.js`)** — `useRealtimeEvent(name, handler)` calls `handler(data)` with the
+  parsed JSON of each `name` message (malformed bodies dropped; the latest handler is used, no
+  resubscribe per render); `useRealtimeReconnect(handler)` fires on every open **after** the
+  first — events aren't replayed, so refresh what may have been missed there;
+  `useRealtimeStatus()` → `'connecting' | 'open' | 'closed'`.
+- **Who handles what** — mount each sync hook once (the first two live in `AppShell`):
+  - `useNotificationsRealtimeSync` (`hooks/use-notifications.js`) ← `notifications.changed`:
+    writes the pushed unread count and marks the notifications list stale; refetches the count on
+    reconnect. The nav badge's `useUnreadNotificationCount` refetches on window focus and polls
+    every 30s **only while the stream isn't open** (a fallback, not the primary path).
+  - `usePostsRealtimeSync` (`hooks/use-posts-realtime.js`) ← `post.counts` (live like / comment
+    counts) and `post.deleted` (removes the post from the caches). Neither is sent to the user who
+    caused it.
+  - `NewPostsProvider` / `useNewPosts(tab)` ← `post.created` `{ id, following }` and
+    `post.deleted`: tracks pending post ids per Home tab (For you always, Following only when
+    `following`) in `new-posts-store.js`. Mounted in `ProtectedRoute` (inside
+    `RealtimeProvider`), so counts build up while you're on another page. `syncNewPostsWithFeeds`
+    drops ids the feed cache now shows, and ids pending when a first-page fetch started once it
+    succeeds ("load more" and manual cache writes don't count). `useShowNewPosts(tab)` is the
+    pill's action: clear, trim the feed to its first page, refetch.
+- **The "N new posts" pill (Home)** — new posts are never inserted on their own. The pill has its
+  **own animated row** between the composer and the feed (`grid-template-rows` 0fr → 1fr), so the
+  list moves once when the first post arrives and once when it clears; later arrivals only change
+  the label ("99+" cap; a debounced polite live region announces it). The pill itself is a
+  zero-height sticky sibling of the row that **docks at `top-[101px]`** — PageHeader's height on
+  Home (border 1 + pt-4 16 + h1 28 + tabs mt-3 12 + tab 44). **If PageHeader or Home's tabs change
+  height, update that value.** Clicking it scrolls to the top and focuses the feed panel.
+  `motion-reduce:` drops the transitions.
+- **Tests** — `src/test/fake-event-source.js`: `installFakeEventSource()` puts a controllable
+  `FakeEventSource` on `window` (instances in `FakeEventSource.instances` / `.latest`); drive a
+  stream with `open()`, `emit(event, data)`, `drop()` (transient) and `fail()` (ends `CLOSED`),
+  each wrapped in `act`; uninstall after the test. Store logic is tested without rendering —
+  `lib/realtime/__tests__/new-posts-store.test.js` uses a real `QueryClient` + MSW.
+
 ## Tests
 
 Vitest + jsdom + React Testing Library + MSW (`npm test`; config in `vite.config.js`'s
@@ -681,15 +733,16 @@ shell), `components/feed/` (posts, comments, composers, infinite lists),
 `components/AuthLayout.jsx`, `components/BrandMark.jsx`, `components/UserAvatar.jsx`,
 `components/UserName.jsx`, `components/FollowButton.jsx`, `components/FollowListDialog.jsx`,
 `hooks/`, `lib/api/` (`client.js`, `users.js`, `posts.js`, `search.js`, `post-cache.js`,
-`follow-cache.js`, `error-message.js`),
-`lib/auth/`, `lib/validation/`, `lib/text.js`, `lib/format.js`, `lib/composer-focus.js`,
+`follow-cache.js`, `notifications.js`, `error-message.js`),
+`lib/auth/`, `lib/realtime/` (SSE stream, new-posts pill), `lib/validation/`, `lib/text.js`, `lib/format.js`, `lib/composer-focus.js`,
 `lib/navigation-history.js`,
 `lib/avatar-color.js`, `lib/utils.js`, `routes/` (`ProtectedRoute`, `PublicOnlyRoute`), `test/`
 (Vitest + RTL + MSW helpers), and `pages/` — `SignIn`, `SignUp`, `SignOut`, `Home` (Following /
-For you feeds), `Profile` (with follows), `EditProfile`, `PostDetail` and `Explore` (user
-search, also the right rail's typeahead).
+For you feeds), `Profile` (with follows), `EditProfile`, `PostDetail`, `Explore` (user
+search, also the right rail's typeahead) and `Notifications`. Live updates (unread count, post
+counts, deletions, new posts) come over the realtime stream.
 
-**Pending:** repost, bookmark and share on post cards, Notifications, Messages and Bookmarks
+**Pending:** repost, bookmark and share on post cards, Messages and Bookmarks
 stay "Coming soon" until their features exist. Explore only searches users (no trends / topics).
 
 **Not implemented, intentionally:** `features/` (profiles and the shell live in the flat
