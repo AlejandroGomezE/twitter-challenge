@@ -1,8 +1,8 @@
 ---
 slug: user-search
-status: verifying
+status: done
 scope: full-stack
-next: /close-feature user-search
+next: —
 ---
 # User search (with display names)
 
@@ -120,7 +120,6 @@ name or username: a typeahead dropdown under the right-rail search box, plus a f
 ## Follow-ups
 - [ ] `ExploreRow` (`pages/Explore.jsx`) and `FollowListRow` (`components/FollowListDialog.jsx`) are
   near-identical user rows (avatar, UserName, bio, FollowButton) · could become one shared row.
-
 - [ ] Verify seeded dev-DB users `sa_qsyh`, `sb_qsyh`, `sc_qsyh` (+ a post, a comment, follows) · clean up if
   unwanted.
 - [ ] A backend (`node dist/main`) and a Vite dev server started at 20:52 during Build were left running
@@ -134,3 +133,4 @@ name or username: a typeahead dropdown under the right-rail search box, plus a f
 - 2026-09-24 · framed
 - 2026-09-24 · built — display names (required at sign-up, set/change in Edit profile, shown via UserName everywhere), GET /search/users (username or display name, literal %/_), right-rail typeahead, Explore page + nav, unclipped search focus ring (wider rail), stable scrollbar gutter; docs. BE 35 suites / 437 unit + 5 / 182 e2e, FE 43 suites / 492, build/lint green.
 - 2026-09-24 · verified — all 5 ACs + T9 driven in headless Chrome + API and a real Chrome window (sign-up Name, edit/can't clear, names everywhere + fallback, typeahead keys/Enter/Escape, Explore via nav + mobile, unclipped focus ring, 0px scrollbar/dialog shift vs 7px without the fix)
+- 2026-09-24 · closed — PR #11, merged (Close: CommentItem + sign-up schema tests; review fix: FollowUser shape in backend-architecture.md)
