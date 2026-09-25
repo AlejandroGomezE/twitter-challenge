@@ -95,6 +95,9 @@ in the Runbook).
   `next: /close-feature` although PR #17 is merged · its close bookkeeping commit was never made;
   separate chore.
 
+## PRs
+- #18 — https://github.com/AlejandroGomezE/twitter-challenge/pull/18
+
 ## Log
 - 2026-09-25 · framed
 - 2026-09-25 · built — seed module + runSeed, db:seed CLI / prisma db seed, Docker first-boot seeding (SEED_ON_START), Runbook seed section + sample credentials; verified against scratch DBs and a real docker compose run; BE build + lint clean, 45/556 unit and 7/205 e2e green
