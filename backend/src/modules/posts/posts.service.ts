@@ -4,7 +4,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client.js';
-import { decodeCursor, encodeCursor, resolvePageSize } from './pagination.js';
+import { FollowsService } from '../follows/follows.service.js';
+import {
+  type CursorPosition,
+  decodeCursor,
+  encodeCursor,
+  resolvePageSize,
+} from './pagination.js';
 import {
   type PostCounts,
   PostsRepository,
@@ -55,7 +61,10 @@ const NO_ACTIVITY: PostCounts = {
 
 @Injectable()
 export class PostsService {
-  constructor(private readonly postsRepository: PostsRepository) {}
+  constructor(
+    private readonly postsRepository: PostsRepository,
+    private readonly followsService: FollowsService,
+  ) {}
 
   // `authorId` is always the session user's id. A new post has no likes or
   // comments yet, so no count queries are needed.
@@ -124,44 +133,62 @@ export class PostsService {
     return { liked, likeCount };
   }
 
-  // The viewer's home feed: posts by everyone in the feed author set.
-  feed(viewerId: string, query: PageQuery): Promise<PostPage> {
-    return this.page(this.feedAuthorIds(viewerId), viewerId, query);
+  // The viewer's Following feed: posts by everyone in the feed author set.
+  // The cursor is validated before the author set is read.
+  async feed(viewerId: string, query: PageQuery): Promise<PostPage> {
+    const cursor = this.parseCursor(query);
+    const authorIds = await this.feedAuthorIds(viewerId);
+    return this.page(authorIds, viewerId, cursor, query.limit);
+  }
+
+  // The "for you" feed: every user's posts, newest first.
+  async forYou(viewerId: string, query: PageQuery): Promise<PostPage> {
+    return this.page(undefined, viewerId, this.parseCursor(query), query.limit);
   }
 
   // One author's posts (the profile Posts tab). `authorId` must be an
   // existing user's id — the users module resolves the username.
-  listByAuthor(
+  async listByAuthor(
     authorId: string,
     viewerId: string,
     query: PageQuery,
   ): Promise<PostPage> {
-    return this.page([authorId], viewerId, query);
+    return this.page(
+      [authorId],
+      viewerId,
+      this.parseCursor(query),
+      query.limit,
+    );
   }
 
   countByAuthor(authorId: string): Promise<number> {
     return this.postsRepository.countByAuthor(authorId);
   }
 
-  // THE feed extension point: whose posts appear in `viewerId`'s feed. Today
-  // that's only the viewer; the follows feature adds the ids of the users
-  // the viewer follows here (and nowhere else).
-  private feedAuthorIds(viewerId: string): string[] {
-    return [viewerId];
+  // THE feed extension point: whose posts appear in `viewerId`'s Following
+  // feed — the viewer plus every user they follow (one query).
+  private async feedAuthorIds(viewerId: string): Promise<string[]> {
+    const followedIds = await this.followsService.followedIds(viewerId);
+    return [viewerId, ...followedIds];
   }
 
-  // Keyset page over (createdAt, id): one query for the posts (limit + 1
-  // rows to detect a next page) plus the constant count queries of
-  // countsFor — never one query per post. An invalid cursor is a 400
-  // `Invalid cursor`, checked before any query runs.
+  // Decodes the query's cursor; an invalid one is a 400 `Invalid cursor`,
+  // thrown before any query runs.
+  private parseCursor(query: PageQuery): CursorPosition | undefined {
+    return query.cursor === undefined ? undefined : decodeCursor(query.cursor);
+  }
+
+  // Keyset page over (createdAt, id), by `authorIds` or by everyone when
+  // undefined: one query for the posts (limit + 1 rows to detect a next
+  // page) plus the constant count queries of countsFor — never one query
+  // per post.
   private async page(
-    authorIds: string[],
+    authorIds: string[] | undefined,
     viewerId: string,
-    query: PageQuery,
+    cursor: CursorPosition | undefined,
+    requestedLimit: number | undefined,
   ): Promise<PostPage> {
-    const cursor =
-      query.cursor === undefined ? undefined : decodeCursor(query.cursor);
-    const limit = resolvePageSize(query.limit);
+    const limit = resolvePageSize(requestedLimit);
     const rows = await this.postsRepository.findPage({
       authorIds,
       cursor,

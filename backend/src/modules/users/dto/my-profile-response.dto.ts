@@ -23,4 +23,12 @@ export class MyProfileResponseDto {
   // Number of posts the user has written.
   @Expose()
   postCount: number;
+
+  // Number of users following this user.
+  @Expose()
+  followerCount: number;
+
+  // Number of users this user follows.
+  @Expose()
+  followingCount: number;
 }

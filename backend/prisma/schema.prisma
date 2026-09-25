@@ -23,6 +23,10 @@ model User {
   posts        Post[]
   likes        Like[]
   comments     Comment[]
+  // Follow rows where this user is the follower (i.e. the accounts this user follows).
+  following    Follow[]  @relation("UserFollowing")
+  // Follow rows where this user is the one being followed (i.e. this user's followers).
+  followers    Follow[]  @relation("UserFollowers")
 }
 
 model Session {
@@ -70,4 +74,20 @@ model Comment {
   createdAt DateTime @default(now())
 
   @@index([postId, createdAt])
+}
+
+model Follow {
+  // The user who follows.
+  followerId  String
+  follower    User     @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  // The user being followed.
+  followingId String
+  following   User     @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@id([followerId, followingId])
+  // "Followers of X", newest follow first.
+  @@index([followingId, createdAt])
+  // "Following of X", newest follow first.
+  @@index([followerId, createdAt])
 }

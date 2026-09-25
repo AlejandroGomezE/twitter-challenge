@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { useLocation } from 'react-router'
 import { describe, expect, it } from 'vitest'
@@ -7,13 +7,17 @@ import { renderWithProviders } from '@/test/render'
 import { apiUrl, server } from '@/test/server'
 import { Home } from '../Home'
 
-// Shows the router's current `location.state`, to check Home clears it.
+// Shows the router's current `location.search` and `location.state`, to check Home updates them.
 function LocationState() {
   const location = useLocation()
-  return <output data-testid="location-state">{JSON.stringify(location.state)}</output>
+  return (
+    <>
+      <output data-testid="location-search">{location.search}</output>
+      <output data-testid="location-state">{JSON.stringify(location.state)}</output>
+    </>
+  )
 }
 
-// The AppShell provides the TooltipProvider the "Coming soon" tab needs.
 const renderHome = (route = '/') =>
   renderWithProviders(
     <TooltipProvider>
@@ -34,11 +38,11 @@ const post = (id, overrides = {}) => ({
   ...overrides,
 })
 
-// `GET /feed` serving `pages` in order: page i is `{ items: pages[i], nextCursor: 'c<i+1>' }`, the
+// `GET /feed` (or `path`) serving `pages` in order: page i is `{ items: pages[i], nextCursor: 'c<i+1>' }`, the
 // last with `nextCursor: null`. The cursor picks the page.
-function mockFeed(pages) {
+function mockFeed(pages, path = '/feed') {
   server.use(
-    http.get(apiUrl('/feed'), ({ request }) => {
+    http.get(apiUrl(path), ({ request }) => {
       const cursor = new URL(request.url).searchParams.get('cursor')
       const index = cursor ? Number(cursor.slice(1)) : 0
       return HttpResponse.json({
@@ -49,36 +53,29 @@ function mockFeed(pages) {
   )
 }
 
-const main = () => screen.getByRole('tabpanel', { name: 'For you' })
+const main = () => screen.getByRole('tabpanel', { name: 'Following' })
 const composer = () => screen.getByRole('textbox', { name: 'Compose a new post' })
 
 describe('Home', () => {
-  it('shows the "Home" header with For you selected and Following coming soon', () => {
+  it('shows the "Home" header with the Following tab selected by default', () => {
     renderHome()
 
     expect(screen.getByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument()
     expect(screen.getByText('created by Alejandro Gomez')).toBeInTheDocument()
 
     const tablist = screen.getByRole('tablist', { name: 'Feed' })
-    const forYou = within(tablist).getByRole('tab', { name: 'For you' })
-    const following = within(tablist).getByRole('tab', { name: 'Following' })
-    expect(forYou).toHaveAttribute('aria-selected', 'true')
-    expect(following).toHaveAttribute('aria-selected', 'false')
-    expect(following).toHaveAttribute('aria-disabled', 'true')
-    expect(screen.getByRole('tabpanel', { name: 'For you' })).toBeInTheDocument()
-  })
+    const tabs = within(tablist).getAllByRole('tab')
+    expect(tabs.map((tab) => tab.textContent)).toEqual(['Following', 'For you'])
+    const [following, forYou] = tabs
+    expect(following).toHaveAttribute('aria-selected', 'true')
+    expect(following).toHaveAttribute('tabindex', '0')
+    expect(forYou).toHaveAttribute('aria-selected', 'false')
+    expect(forYou).toHaveAttribute('tabindex', '-1')
+    expect(following).not.toHaveAttribute('aria-disabled')
 
-  // fireEvent (no focus/pointer move) so the Radix tooltip, which needs ResizeObserver, stays shut.
-  it('makes Following an aria-disabled tab whose activation is prevented', () => {
-    renderHome()
-    const following = screen.getByRole('tab', { name: 'Following' })
-
-    expect(following).toHaveAttribute('aria-disabled', 'true')
-    expect(following).not.toHaveAttribute('aria-controls')
-    // fireEvent returns false when a handler called preventDefault() (ComingSoon's guard).
-    expect(fireEvent.click(following)).toBe(false)
-    expect(following).toHaveAttribute('aria-selected', 'false')
-    expect(screen.getByRole('tabpanel', { name: 'For you' })).toBeInTheDocument()
+    const panel = screen.getByRole('tabpanel', { name: 'Following' })
+    expect(following).toHaveAttribute('aria-controls', panel.id)
+    expect(forYou).toHaveAttribute('aria-controls', panel.id)
   })
 
   it('shows an enabled composer with a 0/280 counter and a disabled Post button', async () => {
@@ -97,16 +94,145 @@ describe('Home', () => {
     }
   })
 
-  it('shows the empty state when the feed has no posts', async () => {
-    renderHome()
+  it('shows the Following empty state, whose button switches to For you', async () => {
+    const { user } = renderHome()
 
-    expect(await screen.findByRole('heading', { name: 'No posts yet' })).toBeInTheDocument()
-    expect(
-      screen.getByText(
-        'Your posts and posts from people you follow will show up here. Write your first one above.',
-      ),
-    ).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Your Following feed is empty' })).toBeInTheDocument()
+    expect(screen.getByText('Follow people to see their posts here.')).toBeInTheDocument()
     expect(screen.queryByText("You're all caught up")).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Explore For you' }))
+
+    expect(screen.getByRole('tab', { name: 'For you' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByTestId('location-search')).toHaveTextContent('?tab=for-you')
+    expect(await screen.findByRole('heading', { name: 'No posts yet' })).toBeInTheDocument()
+  })
+
+  describe('tabs', () => {
+    // Serves one post from each feed endpoint and counts the requests to each.
+    function countFeedRequests() {
+      const calls = { following: 0, forYou: 0 }
+      server.use(
+        http.get(apiUrl('/feed'), () => {
+          calls.following += 1
+          return HttpResponse.json({ items: [post('f1', { body: 'Following post' })], nextCursor: null })
+        }),
+        http.get(apiUrl('/feed/for-you'), () => {
+          calls.forYou += 1
+          return HttpResponse.json({ items: [post('y1', { body: 'For you post' })], nextCursor: null })
+        }),
+      )
+      return calls
+    }
+
+    it('loads GET /feed for the default Following tab', async () => {
+      const calls = countFeedRequests()
+      renderHome()
+
+      expect(await within(main()).findByText('Following post')).toBeInTheDocument()
+      expect(calls).toEqual({ following: 1, forYou: 0 })
+      expect(screen.getByTestId('location-search')).toBeEmptyDOMElement()
+    })
+
+    it('switches to For you: loads GET /feed/for-you and sets ?tab=for-you', async () => {
+      const calls = countFeedRequests()
+      const { user } = renderHome()
+      await screen.findByText('Following post')
+
+      await user.click(screen.getByRole('tab', { name: 'For you' }))
+
+      const panel = screen.getByRole('tabpanel', { name: 'For you' })
+      expect(await within(panel).findByText('For you post')).toBeInTheDocument()
+      expect(screen.queryByText('Following post')).not.toBeInTheDocument()
+      expect(screen.getByRole('tab', { name: 'For you' })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.getByRole('tab', { name: 'Following' })).toHaveAttribute('aria-selected', 'false')
+      expect(screen.getByTestId('location-search')).toHaveTextContent('?tab=for-you')
+      expect(calls.forYou).toBe(1)
+
+      // And back: the param is removed.
+      await user.click(screen.getByRole('tab', { name: 'Following' }))
+      expect(await screen.findByText('Following post')).toBeInTheDocument()
+      expect(screen.getByTestId('location-search')).toBeEmptyDOMElement()
+    })
+
+    it('keeps the other search params when switching', async () => {
+      countFeedRequests()
+      const { user } = renderHome('/?ref=nav')
+
+      await user.click(screen.getByRole('tab', { name: 'For you' }))
+
+      const search = new URLSearchParams(screen.getByTestId('location-search').textContent)
+      expect(search.get('ref')).toBe('nav')
+      expect(search.get('tab')).toBe('for-you')
+    })
+
+    it('selects For you when loaded with ?tab=for-you', async () => {
+      const calls = countFeedRequests()
+      renderHome('/?tab=for-you')
+
+      expect(screen.getByRole('tab', { name: 'For you' })).toHaveAttribute('aria-selected', 'true')
+      const panel = screen.getByRole('tabpanel', { name: 'For you' })
+      expect(await within(panel).findByText('For you post')).toBeInTheDocument()
+      expect(calls).toEqual({ following: 0, forYou: 1 })
+    })
+
+    it('falls back to Following for an unknown tab value', async () => {
+      countFeedRequests()
+      renderHome('/?tab=nope')
+
+      expect(screen.getByRole('tab', { name: 'Following' })).toHaveAttribute('aria-selected', 'true')
+      expect(await within(main()).findByText('Following post')).toBeInTheDocument()
+    })
+
+    it('shows the plain "No posts yet" empty state on For you', async () => {
+      renderHome('/?tab=for-you')
+
+      expect(await screen.findByRole('heading', { name: 'No posts yet' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Explore For you' })).not.toBeInTheDocument()
+    })
+
+    it('moves focus between tabs with the arrow keys and activates with Enter', async () => {
+      const calls = countFeedRequests()
+      const { user } = renderHome()
+      const following = screen.getByRole('tab', { name: 'Following' })
+      const forYou = screen.getByRole('tab', { name: 'For you' })
+
+      following.focus()
+      await user.keyboard('{ArrowRight}')
+      expect(forYou).toHaveFocus()
+      expect(forYou).toHaveAttribute('tabindex', '0')
+      expect(following).toHaveAttribute('tabindex', '-1')
+      // Manual activation: moving focus alone doesn't switch the tab.
+      expect(following).toHaveAttribute('aria-selected', 'true')
+
+      await user.keyboard('{ArrowRight}')
+      expect(following).toHaveFocus()
+      await user.keyboard('{ArrowLeft}')
+      expect(forYou).toHaveFocus()
+
+      await user.keyboard('{Enter}')
+      expect(forYou).toHaveAttribute('aria-selected', 'true')
+      expect(forYou).toHaveFocus()
+      expect(await screen.findByText('For you post')).toBeInTheDocument()
+      expect(calls.forYou).toBe(1)
+    })
+
+    it('shows a For you specific error with Retry when that feed fails', async () => {
+      server.use(http.get(apiUrl('/feed/for-you'), () => HttpResponse.json({ message: 'Boom' }, { status: 500 })))
+      renderHome('/?tab=for-you')
+
+      expect(await screen.findByText(/Couldn't load the For you feed/)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
+    })
+
+    it('keeps the tab when focusing the composer from a navigation', async () => {
+      renderHome({ pathname: '/', search: '?tab=for-you', state: { focusComposer: true } })
+
+      await waitFor(() => expect(composer()).toHaveFocus())
+      await waitFor(() => expect(screen.getByTestId('location-state')).toHaveTextContent('null'))
+      expect(screen.getByTestId('location-search')).toHaveTextContent('?tab=for-you')
+      expect(screen.getByRole('tab', { name: 'For you' })).toHaveAttribute('aria-selected', 'true')
+    })
   })
 
   describe('feed', () => {
@@ -119,7 +245,7 @@ describe('Home', () => {
       expect(articles[0]).toHaveTextContent('Second thoughts')
       expect(articles[1]).toHaveTextContent('First light')
       expect(within(articles[0]).getByRole('link', { name: '@ada' })).toHaveAttribute('href', '/u/ada')
-      expect(screen.queryByRole('heading', { name: 'No posts yet' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: 'Your Following feed is empty' })).not.toBeInTheDocument()
     })
 
     it('shows loading skeletons until the feed arrives', async () => {
@@ -153,11 +279,11 @@ describe('Home', () => {
       )
       const { user } = renderHome()
 
-      expect(await screen.findByText(/Couldn't load your feed/)).toBeInTheDocument()
+      expect(await screen.findByText(/Couldn't load your Following feed/)).toBeInTheDocument()
       await user.click(screen.getByRole('button', { name: 'Retry' }))
 
       expect(await screen.findByText('Back again')).toBeInTheDocument()
-      expect(screen.queryByText(/Couldn't load your feed/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/Couldn't load your Following feed/)).not.toBeInTheDocument()
       expect(calls).toBe(2)
     })
 
@@ -213,7 +339,7 @@ describe('Home', () => {
     it("doesn't take focus on a normal visit", async () => {
       renderHome()
 
-      await screen.findByRole('heading', { name: 'No posts yet' })
+      await screen.findByRole('heading', { name: 'Your Following feed is empty' })
       expect(composer()).not.toHaveFocus()
       expect(document.body).toHaveFocus()
     })

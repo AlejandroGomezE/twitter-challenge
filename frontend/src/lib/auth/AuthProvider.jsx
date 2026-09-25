@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { resetFollowBursts } from '@/hooks/use-follows'
 import { resetLikeBursts } from '@/hooks/use-posts'
 import { ApiError, apiClient } from '@/lib/api/client'
 import { AUTH_ME_QUERY_KEY, AuthContext, isAuthMeQuery } from './auth-context'
@@ -69,9 +70,10 @@ export function AuthProvider({ children }) {
       queryClient.setQueryData(AUTH_ME_QUERY_KEY, null)
       queryClient.removeQueries({ predicate: (query) => !isAuthMeQuery(query) })
       queryClient.getMutationCache().clear()
-      // Like bursts live outside the cache (per QueryClient) — forget them too, so a like still in
-      // flight can't write into the next user's cache.
+      // Like / follow bursts live outside the cache (per QueryClient) — forget them too, so a like
+      // or follow still in flight can't write into the next user's cache.
       resetLikeBursts(queryClient)
+      resetFollowBursts(queryClient)
     }
   }, [queryClient])
 

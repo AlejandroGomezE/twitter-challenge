@@ -129,14 +129,34 @@ describe('AppShell', () => {
       expect(card.queryByText('No bio yet.')).not.toBeInTheDocument()
     })
 
-    it('shows "Who to follow" as coming soon, with no suggested users', async () => {
+    it('hides "Who to follow" when there is nobody to suggest (default handlers)', async () => {
       await renderShell()
-      const card = within(rightRail().getByRole('region', { name: 'Who to follow' }))
+      await within(rightRail().getByRole('region', { name: 'Your profile' })).findByText(
+        'No bio yet.',
+      )
 
-      expect(card.getByText('Coming soon')).toBeInTheDocument()
-      expect(card.queryAllByRole('img')).toHaveLength(0)
-      expect(card.queryAllByRole('link')).toHaveLength(0)
-      expect(card.queryAllByRole('button')).toHaveLength(0)
+      await waitFor(() =>
+        expect(
+          rightRail().queryByRole('region', { name: 'Who to follow' }),
+        ).not.toBeInTheDocument(),
+      )
+    })
+
+    it('shows "Who to follow" suggestions with Follow buttons', async () => {
+      server.use(
+        http.get(apiUrl('/users/me/suggestions'), () =>
+          HttpResponse.json({
+            items: [{ username: 'grace', bio: null, isFollowing: false, followsYou: false }],
+          }),
+        ),
+      )
+      await renderShell()
+
+      const link = await rightRail().findByRole('link', { name: '@grace' })
+      const card = within(rightRail().getByRole('region', { name: 'Who to follow' }))
+      expect(link).toHaveAttribute('href', '/u/grace')
+      expect(card.getByRole('button', { name: 'Follow @grace' })).toBeInTheDocument()
+      expect(card.queryByText('Coming soon')).not.toBeInTheDocument()
     })
 
     it('shows the search box as a read-only, aria-disabled input', async () => {

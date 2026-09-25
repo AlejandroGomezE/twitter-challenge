@@ -404,6 +404,27 @@ describe('App (e2e)', () => {
       return token ? req.set('Cookie', cookieFor(token)) : req;
     }
 
+    const PROFILE_KEYS = [
+      'bio',
+      'createdAt',
+      'followerCount',
+      'followingCount',
+      'followsYou',
+      'isFollowing',
+      'postCount',
+      'username',
+    ];
+
+    // Setup only: the follow endpoints are covered by follows.e2e-spec.ts.
+    async function follow(
+      followerId: string,
+      followingId: string,
+    ): Promise<void> {
+      await app
+        .get(PrismaService)
+        .follow.create({ data: { followerId, followingId } });
+    }
+
     function patchMe(
       body: Record<string, unknown>,
       token?: string,
@@ -421,25 +442,104 @@ describe('App (e2e)', () => {
         await getProfile(username).expect(401);
       });
 
-      it("returns another user's public profile only: { username, bio, createdAt, postCount }", async () => {
+      it("returns another user's public profile only: { username, bio, createdAt, postCount, followerCount, followingCount, isFollowing, followsYou }", async () => {
         const viewer = await createUserWithSession();
         const target = await createUserWithSession();
 
         const res = await getProfile(target.username, viewer.token).expect(200);
-        expect(Object.keys(res.body as object).sort()).toEqual([
-          'bio',
-          'createdAt',
-          'postCount',
-          'username',
-        ]);
+        expect(Object.keys(res.body as object).sort()).toEqual(PROFILE_KEYS);
         expect(res.body).toEqual({
           username: target.username,
           bio: null,
           createdAt: expect.any(String),
           postCount: 0,
+          followerCount: 0,
+          followingCount: 0,
+          isFollowing: false,
+          followsYou: false,
         });
         const createdAt = (res.body as { createdAt: string }).createdAt;
         expect(new Date(createdAt).toISOString()).toBe(createdAt);
+      });
+
+      it('counts followers and following after follows', async () => {
+        const viewer = await createUserWithSession();
+        const target = await createUserWithSession();
+        const fan = await createUserWithSession();
+        const idol = await createUserWithSession();
+        await follow(viewer.userId, target.userId);
+        await follow(fan.userId, target.userId);
+        await follow(target.userId, idol.userId);
+
+        const res = await getProfile(target.username, viewer.token).expect(200);
+        expect(res.body).toMatchObject({
+          followerCount: 2,
+          followingCount: 1,
+        });
+      });
+
+      it('reports isFollowing / followsYou from both sides', async () => {
+        const alice = await createUserWithSession();
+        const bob = await createUserWithSession();
+        await follow(alice.userId, bob.userId);
+
+        const bobSeenByAlice = await getProfile(
+          bob.username,
+          alice.token,
+        ).expect(200);
+        expect(bobSeenByAlice.body).toMatchObject({
+          isFollowing: true,
+          followsYou: false,
+          followerCount: 1,
+          followingCount: 0,
+        });
+
+        const aliceSeenByBob = await getProfile(
+          alice.username,
+          bob.token,
+        ).expect(200);
+        expect(aliceSeenByBob.body).toMatchObject({
+          isFollowing: false,
+          followsYou: true,
+          followerCount: 0,
+          followingCount: 1,
+        });
+
+        await follow(bob.userId, alice.userId);
+        const mutual = await getProfile(bob.username, alice.token).expect(200);
+        expect(mutual.body).toMatchObject({
+          isFollowing: true,
+          followsYou: true,
+        });
+      });
+
+      it('your own profile has isFollowing and followsYou false, with your counts', async () => {
+        const me = await createUserWithSession();
+        const other = await createUserWithSession();
+        await follow(me.userId, other.userId);
+        await follow(other.userId, me.userId);
+
+        const res = await getProfile(me.username, me.token).expect(200);
+        expect(res.body).toMatchObject({
+          isFollowing: false,
+          followsYou: false,
+          followerCount: 1,
+          followingCount: 1,
+        });
+      });
+
+      it('never exposes an id or email, even with follows', async () => {
+        const viewer = await createUserWithSession();
+        const target = await createUserWithSession();
+        await follow(viewer.userId, target.userId);
+        await follow(target.userId, viewer.userId);
+
+        const res = await getProfile(target.username, viewer.token).expect(200);
+        expect(Object.keys(res.body as object).sort()).toEqual(PROFILE_KEYS);
+        const json = JSON.stringify(res.body);
+        expect(json).not.toContain(target.userId);
+        expect(json).not.toContain(viewer.userId);
+        expect(json).not.toContain('@example.test');
       });
 
       it('looks the username up case-insensitively', async () => {
@@ -490,6 +590,8 @@ describe('App (e2e)', () => {
           'bio',
           'createdAt',
           'email',
+          'followerCount',
+          'followingCount',
           'id',
           'postCount',
           'username',
@@ -501,6 +603,8 @@ describe('App (e2e)', () => {
           bio: 'Hello there',
           createdAt: expect.any(String),
           postCount: 0,
+          followerCount: 0,
+          followingCount: 0,
         });
 
         const profile = await getProfile(me.username, viewer.token).expect(200);
@@ -540,6 +644,39 @@ describe('App (e2e)', () => {
           .set('Cookie', cookieFor(me.token))
           .expect(200);
         expect(authMe.body.username).toBe(newUsername);
+      });
+
+      it('a username change keeps follows in both directions', async () => {
+        const me = await createUserWithSession();
+        const fan = await createUserWithSession();
+        const idol = await createUserWithSession();
+        await follow(fan.userId, me.userId);
+        await follow(me.userId, idol.userId);
+        const newUsername = uniqueUsername();
+
+        const res = await patchMe({ username: newUsername }, me.token).expect(
+          200,
+        );
+        expect(res.body).toMatchObject({
+          username: newUsername,
+          followerCount: 1,
+          followingCount: 1,
+        });
+
+        const seenByFan = await getProfile(newUsername, fan.token).expect(200);
+        expect(seenByFan.body).toMatchObject({
+          isFollowing: true,
+          followsYou: false,
+          followerCount: 1,
+          followingCount: 1,
+        });
+        const seenByIdol = await getProfile(newUsername, idol.token).expect(
+          200,
+        );
+        expect(seenByIdol.body).toMatchObject({
+          isFollowing: false,
+          followsYou: true,
+        });
       });
 
       it('a username taken by someone else (any case) returns 409', async () => {

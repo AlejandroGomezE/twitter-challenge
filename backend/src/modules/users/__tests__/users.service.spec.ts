@@ -2,6 +2,7 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as argon2 from 'argon2';
 import { Prisma, type User } from '../../../generated/prisma/client.js';
+import { FollowsService } from '../../follows/follows.service.js';
 import { PostsService } from '../../posts/posts.service.js';
 import { UsersRepository } from '../users.repository.js';
 import { UsersService } from '../users.service.js';
@@ -66,15 +67,28 @@ describe('UsersService', () => {
     countByAuthor: vi.fn(),
     listByAuthor: vi.fn(),
   };
+  const followsService = {
+    counts: vi.fn(),
+    relation: vi.fn(),
+  };
 
   beforeEach(async () => {
     for (const fn of [
       ...Object.values(repository),
       ...Object.values(postsService),
+      ...Object.values(followsService),
     ]) {
       fn.mockReset();
     }
     postsService.countByAuthor.mockResolvedValue(4);
+    followsService.counts.mockResolvedValue({
+      followerCount: 2,
+      followingCount: 3,
+    });
+    followsService.relation.mockResolvedValue({
+      isFollowing: true,
+      followsYou: false,
+    });
     // Echo the stored data back as a full record, like Prisma would.
     repository.create.mockImplementation(
       (data: { email: string; username: string; passwordHash: string }) =>
@@ -95,6 +109,7 @@ describe('UsersService', () => {
         UsersService,
         { provide: UsersRepository, useValue: repository },
         { provide: PostsService, useValue: postsService },
+        { provide: FollowsService, useValue: followsService },
       ],
     }).compile();
     service = moduleRef.get(UsersService);
@@ -269,35 +284,93 @@ describe('UsersService', () => {
   });
 
   describe('getProfile', () => {
-    it('looks the username up normalized and returns only { username, bio, createdAt, postCount }', async () => {
+    it('looks the username up normalized and returns the profile with counts and the relation to the viewer', async () => {
       repository.findByUsername.mockResolvedValue(makeUser({ bio: 'hello' }));
 
-      const result = await service.getProfile('  SomeOne ');
+      const result = await service.getProfile('  SomeOne ', 'viewer-1');
 
       expect(repository.findByUsername).toHaveBeenCalledWith('someone');
+      // One call each: a constant number of queries per profile.
       expect(postsService.countByAuthor).toHaveBeenCalledTimes(1);
       expect(postsService.countByAuthor).toHaveBeenCalledWith('user-1');
+      expect(followsService.counts).toHaveBeenCalledTimes(1);
+      expect(followsService.counts).toHaveBeenCalledWith('user-1');
+      expect(followsService.relation).toHaveBeenCalledTimes(1);
+      expect(followsService.relation).toHaveBeenCalledWith(
+        'viewer-1',
+        'user-1',
+      );
       expect(result).toEqual({
         username: 'someone',
         bio: 'hello',
         createdAt: CREATED_AT,
         postCount: 4,
+        followerCount: 2,
+        followingCount: 3,
+        isFollowing: true,
+        followsYou: false,
       });
       expect(Object.keys(result).sort()).toEqual([
         'bio',
         'createdAt',
+        'followerCount',
+        'followingCount',
+        'followsYou',
+        'isFollowing',
         'postCount',
         'username',
       ]);
     });
 
+    it('runs the post count, follow counts and relation concurrently', async () => {
+      repository.findByUsername.mockResolvedValue(makeUser());
+      // None of these settle until released, so a sequential await would
+      // leave only the first one started.
+      const started: string[] = [];
+      const releases: Array<() => void> = [];
+      const pending = <T>(name: string, value: T) =>
+        new Promise<T>((resolve) => {
+          started.push(name);
+          releases.push(() => resolve(value));
+        });
+      postsService.countByAuthor.mockImplementation(() => pending('posts', 1));
+      followsService.counts.mockImplementation(() =>
+        pending('counts', { followerCount: 0, followingCount: 0 }),
+      );
+      followsService.relation.mockImplementation(() =>
+        pending('relation', { isFollowing: false, followsYou: false }),
+      );
+
+      const promise = service.getProfile('someone', 'viewer-1');
+      await vi.waitFor(() => expect(started.length).toBeGreaterThan(0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect([...started].sort()).toEqual(['counts', 'posts', 'relation']);
+      releases.forEach((release) => release());
+      await expect(promise).resolves.toMatchObject({ postCount: 1 });
+    });
+
+    it("passes the viewer's own id through when viewing your own profile (relation is false/false)", async () => {
+      repository.findByUsername.mockResolvedValue(makeUser());
+      followsService.relation.mockResolvedValue({
+        isFollowing: false,
+        followsYou: false,
+      });
+
+      const result = await service.getProfile('someone', 'user-1');
+
+      expect(followsService.relation).toHaveBeenCalledWith('user-1', 'user-1');
+      expect(result).toMatchObject({ isFollowing: false, followsYou: false });
+    });
+
     it('throws NotFoundException for an unknown username', async () => {
       repository.findByUsername.mockResolvedValue(null);
 
-      const promise = service.getProfile('nobody');
+      const promise = service.getProfile('nobody', 'viewer-1');
       await expect(promise).rejects.toBeInstanceOf(NotFoundException);
       await expect(promise).rejects.toThrow('User not found');
       expect(postsService.countByAuthor).not.toHaveBeenCalled();
+      expect(followsService.counts).not.toHaveBeenCalled();
+      expect(followsService.relation).not.toHaveBeenCalled();
     });
   });
 
@@ -347,16 +420,44 @@ describe('UsersService', () => {
         bio: 'hello there',
         createdAt: CREATED_AT,
         postCount: 4,
+        followerCount: 2,
+        followingCount: 3,
       });
       expect(postsService.countByAuthor).toHaveBeenCalledWith('user-1');
+      expect(followsService.counts).toHaveBeenCalledWith('user-1');
+      expect(followsService.relation).not.toHaveBeenCalled();
       expect(Object.keys(result).sort()).toEqual([
         'bio',
         'createdAt',
         'email',
+        'followerCount',
+        'followingCount',
         'id',
         'postCount',
         'username',
       ]);
+    });
+
+    it('reads the follow counts by user id, so a username change keeps them', async () => {
+      const result = await service.updateProfile('user-1', {
+        username: 'renamed',
+      });
+
+      expect(followsService.counts).toHaveBeenCalledWith('user-1');
+      expect(result).toMatchObject({
+        username: 'renamed',
+        followerCount: 2,
+        followingCount: 3,
+      });
+    });
+
+    it('does not read counts when the update fails', async () => {
+      repository.updateProfile.mockRejectedValue(prismaError('P2025'));
+
+      await expect(
+        service.updateProfile('gone', { bio: 'x' }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(followsService.counts).not.toHaveBeenCalled();
     });
 
     it.each([
