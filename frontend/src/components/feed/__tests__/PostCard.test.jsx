@@ -67,6 +67,17 @@ describe('PostCard', () => {
     )
   })
 
+  it('shows the author display name before the muted @username, in the same profile link', async () => {
+    await renderCard({ author: { username: 'ada', displayName: 'Ada Lovelace' } })
+
+    const link = within(card()).getByRole('link', { name: 'Ada Lovelace @ada' })
+    expect(link).toHaveAttribute('href', '/u/ada')
+    expect(within(link).getByText('Ada Lovelace')).toHaveClass('font-semibold')
+    expect(within(link).getByText('@ada')).toHaveClass('text-muted-foreground')
+    // The timestamp link keeps its accessible name.
+    expect(within(card()).getByRole('link', { name: /Open post by @ada/ })).toBeInTheDocument()
+  })
+
   it('opens the post when the card body is clicked', async () => {
     const { user } = await renderCard()
 

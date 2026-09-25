@@ -176,7 +176,22 @@
   body {
     @apply bg-background text-foreground;
     }
+  /* The document is the page's vertical scroller (AppShell's columns are sticky, not scroll
+     containers). Reserving the scrollbar gutter keeps the viewport width constant, so content
+     doesn't shift sideways between pages with and without a scrollbar. Overlay scrollbars (mobile)
+     take no space and ignore this. */
   html {
     @apply font-sans;
+    scrollbar-gutter: stable;
+    }
+  /* Radix dialogs lock scroll with react-remove-scroll-bar, which measures the scrollbar as
+     `innerWidth - documentElement.clientWidth` and compensates with `margin-right` on the body. With
+     a stable gutter that width stays reserved while locked, so the compensation would double up and
+     push content left. Zero it (and the size variable it exposes). Important declarations in a
+     layer beat the library's unlayered ones (a normal declaration here would lose to its unlayered
+     rule, hence `!important` on the variable too). */
+  html body[data-scroll-locked] {
+    margin-right: 0 !important;
+    --removed-body-scroll-bar-size: 0px !important;
     }
 }

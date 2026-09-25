@@ -53,7 +53,13 @@ describe('App (e2e)', () => {
     expect(path.basename(main.file)).toBe('e2e.db');
   });
 
-  async function createUserWithSession(): Promise<{
+  const DISPLAY_NAME = 'E2E User';
+
+  // `displayName: null` simulates an account created before display names
+  // existed (sign-up now always sets one).
+  async function createUserWithSession(
+    displayName: string | null = DISPLAY_NAME,
+  ): Promise<{
     userId: string;
     username: string;
     token: string;
@@ -63,9 +69,15 @@ describe('App (e2e)', () => {
       .create(
         `e2e-${randomUUID()}@example.test`,
         uniqueUsername(),
+        displayName ?? DISPLAY_NAME,
         'correct-horse-battery',
       );
     createdUserIds.push(user.id);
+    if (displayName === null) {
+      await app
+        .get(PrismaService)
+        .user.update({ where: { id: user.id }, data: { displayName: null } });
+    }
     const { token } = await app.get(AuthService).createSession(user.id);
     return { userId: user.id, username: user.username, token };
   }
@@ -146,8 +158,9 @@ describe('App (e2e)', () => {
       email: string,
       password = PASSWORD,
       username = uniqueUsername(),
+      displayName = DISPLAY_NAME,
     ): Promise<Response> {
-      return signUpWith({ email, username, password });
+      return signUpWith({ email, username, displayName, password });
     }
 
     function signIn(email: string, password: string): request.Test {
@@ -157,14 +170,20 @@ describe('App (e2e)', () => {
         .send({ email, password });
     }
 
-    it('POST /auth/sign-up creates the user, sets the session cookie and returns only { id, email, username }', async () => {
+    it('POST /auth/sign-up creates the user, sets the session cookie and returns only { id, email, username, displayName }', async () => {
       const email = uniqueEmail();
       const username = uniqueUsername();
       const res = await signUp(email, PASSWORD, username);
 
       expect(res.status).toBe(201);
-      expect(res.body).toEqual({ id: expect.any(String), email, username });
+      expect(res.body).toEqual({
+        id: expect.any(String),
+        email,
+        username,
+        displayName: DISPLAY_NAME,
+      });
       expect(Object.keys(res.body as object).sort()).toEqual([
+        'displayName',
         'email',
         'id',
         'username',
@@ -211,9 +230,85 @@ describe('App (e2e)', () => {
     it('POST /auth/sign-up without a username returns 400', async () => {
       const res = await signUpWith({
         email: uniqueEmail(),
+        displayName: DISPLAY_NAME,
         password: PASSWORD,
       });
       expect(res.status).toBe(400);
+    });
+
+    it('POST /auth/sign-up without a displayName returns 400 and creates no user', async () => {
+      const email = uniqueEmail();
+      const res = await signUpWith({
+        email,
+        username: uniqueUsername(),
+        password: PASSWORD,
+      });
+      expect(res.status).toBe(400);
+      await expect(
+        app.get(PrismaService).user.findUnique({ where: { email } }),
+      ).resolves.toBeNull();
+    });
+
+    it.each([
+      ['empty', ''],
+      ['whitespace-only', '   '],
+      ['too long', 'a'.repeat(51)],
+      ['multi-line', 'Ada\nLovelace'],
+      ['a number', 42],
+    ])(
+      'POST /auth/sign-up rejects a displayName that is %s with 400',
+      async (_label, displayName) => {
+        const res = await signUpWith({
+          email: uniqueEmail(),
+          username: uniqueUsername(),
+          displayName,
+          password: PASSWORD,
+        });
+        expect(res.status).toBe(400);
+      },
+    );
+
+    it('POST /auth/sign-up stores the displayName trimmed, counts code points, and GET /auth/me returns it', async () => {
+      // 50 emoji: 100 UTF-16 code units but 50 characters, so it is accepted.
+      const emojiName = '\u{1F600}'.repeat(50);
+      const emoji = await signUp(
+        uniqueEmail(),
+        PASSWORD,
+        uniqueUsername(),
+        emojiName,
+      );
+      expect(emoji.status).toBe(201);
+      expect(emoji.body.displayName).toBe(emojiName);
+
+      const res = await signUp(
+        uniqueEmail(),
+        PASSWORD,
+        uniqueUsername(),
+        '  Ada Lovelace  ',
+      );
+      expect(res.status).toBe(201);
+      expect(res.body.displayName).toBe('Ada Lovelace');
+
+      const row = await app.get(PrismaService).user.findUniqueOrThrow({
+        where: { id: (res.body as { id: string }).id },
+      });
+      expect(row.displayName).toBe('Ada Lovelace');
+
+      const me = await request(app.getHttpServer())
+        .get('/auth/me')
+        .set('Cookie', `${SESSION_COOKIE}=${sessionToken(res)}`)
+        .expect(200);
+      expect(me.body.displayName).toBe('Ada Lovelace');
+    });
+
+    it('GET /auth/me returns displayName: null for an account without one', async () => {
+      const { token } = await createUserWithSession(null);
+
+      const me = await request(app.getHttpServer())
+        .get('/auth/me')
+        .set('Cookie', `${SESSION_COOKIE}=${token}`)
+        .expect(200);
+      expect(me.body).toHaveProperty('displayName', null);
     });
 
     it.each([
@@ -276,8 +371,14 @@ describe('App (e2e)', () => {
       expect(signUpRes.status).toBe(201);
 
       const ok = await signIn(email, PASSWORD).expect(200);
-      expect(ok.body).toEqual({ id: expect.any(String), email, username });
+      expect(ok.body).toEqual({
+        id: expect.any(String),
+        email,
+        username,
+        displayName: DISPLAY_NAME,
+      });
       expect(Object.keys(ok.body as object).sort()).toEqual([
+        'displayName',
         'email',
         'id',
         'username',
@@ -306,8 +407,14 @@ describe('App (e2e)', () => {
         .get('/auth/me')
         .set('Cookie', cookie)
         .expect(200);
-      expect(me.body).toEqual({ id: expect.any(String), email, username });
+      expect(me.body).toEqual({
+        id: expect.any(String),
+        email,
+        username,
+        displayName: DISPLAY_NAME,
+      });
       expect(Object.keys(me.body as object).sort()).toEqual([
+        'displayName',
         'email',
         'id',
         'username',
@@ -342,6 +449,7 @@ describe('App (e2e)', () => {
         id: 'user-1',
         email: 'leaky@example.test',
         username: 'leaky',
+        displayName: 'Leaky',
         passwordHash: '$argon2id$secret',
         createdAt: new Date(),
       };
@@ -357,8 +465,10 @@ describe('App (e2e)', () => {
         id: 'user-1',
         email: 'leaky@example.test',
         username: 'leaky',
+        displayName: 'Leaky',
       });
       expect(Object.keys(res.body as object).sort()).toEqual([
+        'displayName',
         'email',
         'id',
         'username',
@@ -407,6 +517,7 @@ describe('App (e2e)', () => {
     const PROFILE_KEYS = [
       'bio',
       'createdAt',
+      'displayName',
       'followerCount',
       'followingCount',
       'followsYou',
@@ -442,7 +553,7 @@ describe('App (e2e)', () => {
         await getProfile(username).expect(401);
       });
 
-      it("returns another user's public profile only: { username, bio, createdAt, postCount, followerCount, followingCount, isFollowing, followsYou }", async () => {
+      it("returns another user's public profile only: { username, displayName, bio, createdAt, postCount, followerCount, followingCount, isFollowing, followsYou }", async () => {
         const viewer = await createUserWithSession();
         const target = await createUserWithSession();
 
@@ -450,6 +561,7 @@ describe('App (e2e)', () => {
         expect(Object.keys(res.body as object).sort()).toEqual(PROFILE_KEYS);
         expect(res.body).toEqual({
           username: target.username,
+          displayName: DISPLAY_NAME,
           bio: null,
           createdAt: expect.any(String),
           postCount: 0,
@@ -460,6 +572,15 @@ describe('App (e2e)', () => {
         });
         const createdAt = (res.body as { createdAt: string }).createdAt;
         expect(new Date(createdAt).toISOString()).toBe(createdAt);
+      });
+
+      it('returns displayName: null for an existing user who never set one', async () => {
+        const viewer = await createUserWithSession();
+        const target = await createUserWithSession(null);
+
+        const res = await getProfile(target.username, viewer.token).expect(200);
+        expect(Object.keys(res.body as object).sort()).toEqual(PROFILE_KEYS);
+        expect(res.body.displayName).toBeNull();
       });
 
       it('counts followers and following after follows', async () => {
@@ -589,6 +710,7 @@ describe('App (e2e)', () => {
         expect(Object.keys(res.body as object).sort()).toEqual([
           'bio',
           'createdAt',
+          'displayName',
           'email',
           'followerCount',
           'followingCount',
@@ -600,6 +722,7 @@ describe('App (e2e)', () => {
           id: me.userId,
           email: expect.any(String),
           username: me.username,
+          displayName: DISPLAY_NAME,
           bio: 'Hello there',
           createdAt: expect.any(String),
           postCount: 0,
@@ -620,6 +743,56 @@ describe('App (e2e)', () => {
         const profile = await getProfile(me.username, me.token).expect(200);
         expect(profile.body.bio).toBeNull();
       });
+
+      it('sets a display name on an account that had none; profile and /auth/me reflect it', async () => {
+        const me = await createUserWithSession(null);
+        const viewer = await createUserWithSession();
+
+        const res = await patchMe(
+          { displayName: '  Grace Hopper  ' },
+          me.token,
+        ).expect(200);
+        expect(res.body.displayName).toBe('Grace Hopper');
+
+        const profile = await getProfile(me.username, viewer.token).expect(200);
+        expect(profile.body.displayName).toBe('Grace Hopper');
+        const authMe = await request(app.getHttpServer())
+          .get('/auth/me')
+          .set('Cookie', cookieFor(me.token))
+          .expect(200);
+        expect(authMe.body.displayName).toBe('Grace Hopper');
+      });
+
+      it('changes the display name and leaves it unchanged when omitted', async () => {
+        const me = await createUserWithSession();
+
+        const changed = await patchMe(
+          { displayName: 'New Name' },
+          me.token,
+        ).expect(200);
+        expect(changed.body.displayName).toBe('New Name');
+
+        const untouched = await patchMe({ bio: 'hi' }, me.token).expect(200);
+        expect(untouched.body.displayName).toBe('New Name');
+      });
+
+      it.each([
+        ['empty', ''],
+        ['whitespace-only', '   '],
+        ['null', null],
+        ['too long', 'a'.repeat(51)],
+        ['multi-line', 'Ada\r\nLovelace'],
+        ['a number', 42],
+      ])(
+        'a displayName that is %s returns 400 and keeps the current one',
+        async (_label, displayName) => {
+          const me = await createUserWithSession();
+
+          await patchMe({ displayName }, me.token).expect(400);
+          const profile = await getProfile(me.username, me.token).expect(200);
+          expect(profile.body.displayName).toBe(DISPLAY_NAME);
+        },
+      );
 
       it('a bio over 160 characters returns 400', async () => {
         const me = await createUserWithSession();

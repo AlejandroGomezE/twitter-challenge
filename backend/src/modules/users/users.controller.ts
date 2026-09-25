@@ -35,6 +35,7 @@ export class UsersController {
     return this.usersService.updateProfile(user.id, {
       username: dto.username,
       bio: dto.bio,
+      displayName: dto.displayName,
     });
   }
 

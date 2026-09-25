@@ -37,6 +37,8 @@ export const handlers = [
         : HttpResponse.json({ message: 'User not found' }, { status: 404 }),
     ),
   ),
+  // User search (typeahead and Explore): no matches by default, whatever the query.
+  http.get(apiUrl('/search/users'), () => HttpResponse.json({ items: [], nextCursor: null })),
   // Follow / unfollow succeed with a follower count of 1 / 0 by default.
   http.put(apiUrl('/users/:username/follow'), () =>
     HttpResponse.json({ following: true, followerCount: 1 }),

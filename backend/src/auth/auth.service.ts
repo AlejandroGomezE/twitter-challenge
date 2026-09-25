@@ -52,9 +52,15 @@ export class AuthService implements OnModuleInit {
   async signUp(
     email: string,
     username: string,
+    displayName: string,
     password: string,
   ): Promise<AuthResult> {
-    const user = await this.usersService.create(email, username, password);
+    const user = await this.usersService.create(
+      email,
+      username,
+      displayName,
+      password,
+    );
     const session = await this.createSession(user.id);
     return { user, session };
   }
