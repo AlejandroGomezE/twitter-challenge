@@ -31,6 +31,8 @@ their own.
 | Stop the **frontend** | `scripts/down-fe` |
 | Run the **whole stack in Docker** (`:8080` + `:3000`) | `docker compose up --build` — see [Run with Docker](#run-with-docker) |
 | Load the **demo data** (**wipes** the dev DB first) | `cd backend && npm run db:seed` — see Backend → Seed data |
+| Run the **full test suite** | see [Run all tests](#run-all-tests) |
+| See every **environment variable** | see [Environment variables](#environment-variables) |
 
 **Try it locally:** run `scripts/be-local` and `scripts/fe-local`, open
 http://localhost:5173 — you land on `/sign-in`; sign in as `demo@example.com` / `password1234` once
@@ -62,19 +64,40 @@ and `npm install` doesn't create them because there's no `postinstall` hook.
 - **Docker** (optional, only for [Run with Docker](#run-with-docker)): Docker Engine with the Compose v2
   plugin (`docker compose`). Verified with Docker 28.
 
-Then run these once, from the repo root:
+Then run these once, in order:
 
 ```bash
+git clone https://github.com/AlejandroGomezE/twitter-challenge.git
+cd twitter-challenge
+nvm install && nvm use            # only with nvm: installs and selects the Node pinned in .nvmrc
 scripts/check-env                 # Node ^22.12 / 24, npm; it will flag the missing node_modules/.env
+
+# Backend
 cd backend
 npm install                       # also builds the native better-sqlite3 / argon2 modules
-cp .env.example .env              # DATABASE_URL=file:./dev.db is the right default
+cp .env.example .env              # the defaults work as-is; see Environment variables
 npx prisma generate               # writes the client to src/generated/prisma
 npx prisma db push                # creates prisma/dev.db with every table in the current schema
 npm run db:seed                   # loads the demo data (30 users, posts, follows, likes…)
 cd ..
-scripts/be-local                  # should boot on :3000 with no Prisma errors
+
+# Frontend
+cd frontend
+npm install
+cp .env.example .env              # optional: VITE_API_URL already defaults to http://localhost:3000
+cd ..
+
+scripts/check-env                 # should now report everything OK
 ```
+
+Then start the app in development mode, each in its own terminal, from the repo root:
+
+```bash
+scripts/be-local                  # backend on http://localhost:3000 (watch mode)
+scripts/fe-local                  # frontend on http://localhost:5173
+```
+
+Open http://localhost:5173 and sign in as `demo@example.com` / `password1234`.
 
 - No database server is needed (no Postgres). Docker is optional; see
   [Run with Docker](#run-with-docker). The Prisma CLI picks up
@@ -92,6 +115,45 @@ scripts/be-local                  # should boot on :3000 with no Prisma errors
   run `npm run db:seed` again for the demo data. (To go back to the demo data without touching
   the schema, `npm run db:seed` alone is enough — it resets the data itself.)
 - The e2e suite doesn't need any of this. It builds its own `prisma/e2e.db` on every run.
+
+---
+
+## Environment variables
+
+Local runs read `backend/.env` and `frontend/.env`, created from their `.env.example` files in
+[First-time setup](#first-time-setup-fresh-clone--new-machine). The backend validates its variables
+at boot (`backend/src/config/environment.validation.ts`) and refuses to start on a bad value.
+Docker reads the same names from the host environment instead (see [Run with Docker](#run-with-docker)).
+
+| Variable | App | Required | Default | Example | Description |
+|---|---|---|---|---|---|
+| `DATABASE_URL` | backend | **yes** | none | `file:./dev.db` | SQLite file URL, resolved relative to `backend/prisma/`, so the example is `backend/prisma/dev.db`. |
+| `PORT` | backend | no | `3000` | `3000` | Port the API listens on. Leave it set or remove the line: an empty `PORT=` fails validation. |
+| `NODE_ENV` | backend | no | `development` | `development` | `development`, `production` or `test`. `production` makes the session cookie `Secure` (HTTPS only). |
+| `FRONTEND_ORIGIN` | backend | no | `http://localhost:5173` | `http://localhost:5173` | Exact origin the frontend is served from (no path, no trailing slash). The only origin CORS allows and the auth guard's Origin check accepts. |
+| `OBSERVE_APP_KEY` | backend | no | unset | `obs_key_…` | [NestJS Observe](https://observe.nestjs.com) APM key. APM turns on only when both Observe variables are set. |
+| `OBSERVE_APP_SECRET` | backend | no | unset | `obs_secret_…` | NestJS Observe APM secret, paired with `OBSERVE_APP_KEY`. |
+| `VITE_API_URL` | frontend | no | `http://localhost:3000` | `http://localhost:3000` | Base URL of the backend API. Baked into the bundle at build time. |
+| `SEED_ON_START` | Docker only | no | `true` | `false` | `false` boots the Docker stack with an empty database instead of seeding it. |
+
+For local development the `.env.example` values work unchanged.
+
+---
+
+## Run all tests
+
+From the repo root, after [First-time setup](#first-time-setup-fresh-clone--new-machine). No
+server needs to be running, and the dev database is never touched:
+
+```bash
+(cd backend && npm run test:cov && npm run test:e2e)   # backend unit tests with coverage, then e2e
+(cd frontend && npm run test:cov)                      # frontend tests with coverage
+```
+
+- `npm run test:cov` prints a coverage summary. Use `npm test` for the same run without coverage.
+- The backend e2e suite runs the real app against its own `backend/prisma/e2e.db`, which it
+  rebuilds on every run and deletes afterwards.
+- Current results are in the README's [Testing](README.md#7-testing) section.
 
 ---
 
