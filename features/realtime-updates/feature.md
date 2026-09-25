@@ -82,7 +82,7 @@ feeds). This builds on the domain events added by `notifications`.
 - [ ] Replay of events missed during a disconnect (`Last-Event-ID`) · out of scope by decision.
 - [ ] Two backend tasks running `npm run test:e2e` at the same time conflict, because globalSetup recreates the shared `prisma/e2e.db` (seen as `SQLITE_READONLY_DBMOVED` and spurious failures). Consider a per-run DB file · process note, found during Build.
 - [ ] `tsc --noEmit` (specs included) now also reports errors in `test/notifications.e2e-spec.ts`, on top of the known ones in `users.controller.spec.ts`, `comments.controller.spec.ts` and `follows.e2e-spec.ts`. `nest build` and vitest are unaffected · carried over from `notifications`.
-- [ ] `EditProfile.test.jsx` failures (carried from `notifications`) diagnosed at Close. They're a test race, not flakiness: the profile page's `alwaysFresh` refetch (from `follow-users`) hits a static `GET /users/:username` mock that ignores the PATCH, overwriting the saved data milliseconds after it renders. The rename test may also show a real stale `ada` cache entry recreated by the still-mounted edit page. To be fixed in a separate `fix` PR, as Alejandro chose.
+- [x] `EditProfile.test.jsx` failures (carried from `notifications`) diagnosed at Close. They're a test race, not flakiness: the profile page's `alwaysFresh` refetch (from `follow-users`) hits a static `GET /users/:username` mock that ignores the PATCH, overwriting the saved data milliseconds after it renders. The rename test may also show a real stale `ada` cache entry recreated by the still-mounted edit page. To be fixed in a separate `fix` PR, as Alejandro chose. → fixed in `fix-edit-profile-tests` (PR #14).
 
 ## PRs
 - #13 · https://github.com/AlejandroGomezE/twitter-challenge/pull/13
