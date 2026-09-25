@@ -70,7 +70,7 @@ scripts/be-local                  # should boot on :3000 with no Prisma errors
 
 ## Scripts index
 
-- **`scripts/check-env`** — checks Node (>=20.11, `frontend/vite.config.js` uses
+- **`scripts/check-env`** — checks Node (>=20.11, `frontend/vite.config.ts` uses
   `import.meta.dirname`) and npm are installed, that `backend/node_modules` and
   `frontend/node_modules` are present, and that `backend/.env` exists. Read-only.
 - **`scripts/be-local`** — `npm run start:dev` in `backend/` (foreground, logs, watch
@@ -173,7 +173,7 @@ from `backend/.env` (create it from `backend/.env.example`; it's git-ignored).
     set it stays set. Accounts created before display names existed have `displayName: null` (no
     backfill) until they set one in Edit profile.
   - `src/modules/users/username.rules.ts` is authoritative (username, bio and display name); the
-    frontend copy in `frontend/src/lib/validation/profile-schemas.js` (incl. `RESERVED_USERNAMES`)
+    frontend copy in `frontend/src/lib/validation/profile-schemas.ts` (incl. `RESERVED_USERNAMES`)
     must match.
   - **After pulling this change, run `npx prisma db push --force-reset` from `backend/`.** It
     **wipes the dev DB** (the new required `username` column can't be added to existing rows) —
@@ -205,7 +205,7 @@ from `backend/.env` (create it from `backend/.env.example`; it's git-ignored).
     for both.
   - **Body** (posts and comments): trimmed, then 1–280 characters counted as Unicode code points
     (an emoji counts 1); blank is 400. `src/modules/posts/posts.rules.ts` is authoritative; the
-    frontend counter (`frontend/src/lib/text.js`) counts the same way.
+    frontend counter (`frontend/src/lib/text.ts`) counts the same way.
   - **Paging:** opaque `cursor` (pass back the previous page's `nextCursor`), page size 20 by
     default, `limit` 1–50. An empty `cursor=` is a 400 `Invalid cursor` — omit the param for the
     first page.
@@ -319,19 +319,21 @@ from `backend/.env` (create it from `backend/.env.example`; it's git-ignored).
 
 ## Frontend (`frontend/`)
 
-Plain Vite + React SPA (`npm`, not part of a workspace) — Tailwind CSS v4,
+Vite + React SPA in strict TypeScript (`npm`, not part of a workspace) — Tailwind CSS v4,
 shadcn/ui (Radix base, Nova preset), and `react-router` for client-side routing.
 
 - **Run**: `dev` (Vite dev server, what `scripts/fe-local` uses), `preview` (serves the
   production build).
-- **Build**: `build` (`vite build`).
-- **Lint**: `lint` (`eslint .`).
+- **Build**: `build` (`tsc -b && vite build` — a type error fails the build).
+- **Typecheck**: `typecheck` (`tsc -b`; `tsconfig.app.json` covers `src/`, `tsconfig.node.json`
+  covers `vite.config.ts`). API response shapes live in `src/lib/api/types.ts`.
+- **Lint**: `lint` (`eslint .`, with `typescript-eslint` recommended).
 - **Test**: `test` (`vitest run`), `test:watch`, `test:cov`. Vitest + jsdom + React
-  Testing Library, config in `vite.config.js`'s `test` block. Tests live in a
-  `__tests__/` folder next to the code they cover (`src/**/__tests__/*.test.{js,jsx}`). Shared helpers live in `src/test/`: `setup.js`
-  (jest-dom matchers, MSW lifecycle), `server.js` (MSW server + default handlers;
+  Testing Library, config in `vite.config.ts`'s `test` block. Tests live in a
+  `__tests__/` folder next to the code they cover (`src/**/__tests__/*.test.{ts,tsx}`). Shared helpers live in `src/test/`: `setup.ts`
+  (jest-dom matchers, MSW lifecycle), `server.ts` (MSW server + default handlers;
   `VITE_API_URL` is pinned to `http://api.test` in tests, build URLs with
-  `apiUrl()`), `render.jsx` (`renderWithProviders` — QueryClient from the app's
+  `apiUrl()`), `render.tsx` (`renderWithProviders` — QueryClient from the app's
   `createQueryClient` + `AuthProvider` + MemoryRouter). Unhandled requests fail the
   test. Tests render **signed in** by default (the default MSW `GET /auth/me` handler
   returns a user); override it with a 401 (`server.use(...)`) to render signed out. A default
@@ -342,61 +344,61 @@ shadcn/ui (Radix base, Nova preset), and `react-router` for client-side routing.
   /users/:username/follow` answering `followerCount` 1 / 0; `GET /search/users` returns no matches
   for any query. Tests routed through `AppRouter` render
   inside the shell, so scope queries with `within(screen.getByRole('main'))`.
-- **Structure** (`src/`): `app/` (`App.jsx`, `router.jsx`, `NavigationDepthTracker.jsx`,
-  `providers.jsx`, `query-client.js`), `components/ui/` (shadcn), `components/layout/` (app shell),
+- **Structure** (`src/`): `app/` (`App.tsx`, `router.tsx`, `NavigationDepthTracker.tsx`,
+  `providers.tsx`, `query-client.ts`), `components/ui/` (shadcn), `components/layout/` (app shell),
   `components/feed/` (`Composer`, `PostCard`, `CommentComposer`, `CommentItem`,
-  `InfiniteListFooter`, `CharacterCounter`, `PostListSkeleton`), `components/AuthLayout.jsx`,
-  `components/BrandMark.jsx`, `components/UserAvatar.jsx`, `components/UserName.jsx`,
-  `components/FollowButton.jsx`, `components/FollowListDialog.jsx`, `hooks/`,
-  `lib/api/` (HTTP client, `users.js`, `posts.js`, `search.js`, `post-cache.js`,
-  `follow-cache.js`, `error-message.js`),
-  `lib/text.js`, `lib/format.js`, `lib/composer-focus.js`, `lib/navigation-history.js`,
-  `lib/avatar-color.js`,
+  `InfiniteListFooter`, `CharacterCounter`, `PostListSkeleton`), `components/AuthLayout.tsx`,
+  `components/BrandMark.tsx`, `components/UserAvatar.tsx`, `components/UserName.tsx`,
+  `components/FollowButton.tsx`, `components/FollowListDialog.tsx`, `hooks/`,
+  `lib/api/` (HTTP client, `users.ts`, `posts.ts`, `search.ts`, `post-cache.ts`,
+  `follow-cache.ts`, `error-message.ts`),
+  `lib/text.ts`, `lib/format.ts`, `lib/composer-focus.ts`, `lib/navigation-history.ts`,
+  `lib/avatar-color.ts`,
   `lib/auth/` (`AuthProvider`, `useAuth()`), `lib/validation/` (Zod form schemas),
   `routes/` (`ProtectedRoute`, `PublicOnlyRoute`), `pages/`. `features/` isn't created
   yet — no concrete feature to hang it on.
-- **API client** (`src/lib/api/client.js`) — reads `VITE_API_URL` from
+- **API client** (`src/lib/api/client.ts`) — reads `VITE_API_URL` from
   `frontend/.env` (defaults to `http://localhost:3000`; Vite only exposes
   `VITE_`-prefixed vars to client code). Sends `credentials: 'include'` so the
   browser attaches the httpOnly session cookie; no token is ever handled in JS.
-- **Auth** — `useAuth()` (`src/lib/auth/use-auth.js`) gives `{ user, isAuthenticated,
+- **Auth** — `useAuth()` (`src/lib/auth/use-auth.ts`) gives `{ user, isAuthenticated,
   isLoading, isError, isFetching, refetch, signIn, signUp, signOut }`, backed by a
   `GET /auth/me` query. Public routes: `/sign-in`, `/sign-up` (wrapped in
   `PublicOnlyRoute` — signed-in users go back to the originally requested in-app route
-  via `src/lib/auth/redirect-target.js`, else `/`) and `/sign-out`; everything else is
+  via `src/lib/auth/redirect-target.ts`, else `/`) and `/sign-out`; everything else is
   behind `ProtectedRoute` (redirects to `/sign-in`, then back to the requested route
   after signing in). Only a 401 from `/auth/me` means signed out; any other failure
   (500, network) makes `ProtectedRoute` show a "Couldn't reach the server" alert with a
   Retry button instead of redirecting. A 401 from any other
-  query/mutation is handled centrally in `src/app/query-client.js` (user reset to
+  query/mutation is handled centrally in `src/app/query-client.ts` (user reset to
   signed out, other cached queries dropped).
 - **TanStack Query** — `QueryClientProvider` (+ `AuthProvider`) lives in
-  `src/app/providers.jsx`, wrapping `<App>` in `main.jsx`. React Query Devtools are
+  `src/app/providers.tsx`, wrapping `<App>` in `main.tsx`. React Query Devtools are
   mounted in dev only.
 - **Forms** — `react-hook-form` + `zod` (`@hookform/resolvers`), used by the sign-in,
-  sign-up and edit-profile pages; schemas in `src/lib/validation/auth-schemas.js` and
-  `profile-schemas.js` (username / bio / display-name rules, mirroring the backend).
+  sign-up and edit-profile pages; schemas in `src/lib/validation/auth-schemas.ts` and
+  `profile-schemas.ts` (username / bio / display-name rules, mirroring the backend).
 - **Brand + theme** — the app is "The Flock Twitter" (`index.html` title, feather favicon;
-  auth pages set `<page> · The Flock Twitter` via `components/AuthLayout.jsx`). Pulse palette
+  auth pages set `<page> · The Flock Twitter` via `components/AuthLayout.tsx`). Pulse palette
   tokens (light + dark), `--radius: 1rem`, Geist Sans + Geist Mono (`font-mono` for handles,
   timestamps, small-caps labels) live in `src/index.css`. Dark mode follows the OS (no toggle):
   a custom `dark` variant matches `.dark` or `prefers-color-scheme: dark`. `index.css` also sets
   `scrollbar-gutter: stable` on `html`, so content doesn't shift sideways between pages with and
   without a vertical scrollbar (with a matching override so opening a dialog doesn't shift it
   either).
-- **App shell** — every gated page renders inside `components/layout/AppShell.jsx`, a layout
-  route (`ProtectedRoute` → `AppShell` → page) in `router.jsx`: left nav rail (`lg`+, labels at
+- **App shell** — every gated page renders inside `components/layout/AppShell.tsx`, a layout
+  route (`ProtectedRoute` → `AppShell` → page) in `router.tsx`: left nav rail (`lg`+, labels at
   `xl`), the page in the center column (it renders its own sticky `PageHeader`), right rail
   (`xl`: search, your profile card, who to follow — 366px with 8px inline padding, so the search
   box's focus ring isn't clipped), and a bottom nav + compose button below `lg`. Nav items are
-  configured once in `layout/nav-items.js`; Explore is a working item (side and bottom nav).
+  configured once in `layout/nav-items.ts`; Explore is a working item (side and bottom nav).
 - **Disabled items** — features without a backend yet are shown but disabled, never with fake
   counts or users. The nav placeholders (Notifications, Messages, Bookmarks), the composer's
   attachment icons and the post cards' Repost / Bookmark / Share are wrapped in
-  `layout/ComingSoon.jsx`: `aria-disabled` (not native `disabled`, so the "Coming
+  `layout/ComingSoon.tsx`: `aria-disabled` (not native `disabled`, so the "Coming
   soon" tooltip stays reachable).
 - **Display names** — everywhere a user appears (profile header, post cards, comments, follow
-  lists, Who to follow, the rail's profile card, search results) `components/UserName.jsx` shows
+  lists, Who to follow, the rail's profile card, search results) `components/UserName.tsx` shows
   the display name in bold followed by the muted `@username`, or just `@username` when the user has
   none. Sign-up has a required **Name** field (1–50, counted like the backend); **Edit profile**
   has a Name field to set or change it — required once set (can't be cleared), may stay empty for
@@ -404,12 +406,12 @@ shadcn/ui (Radix base, Nova preset), and `react-router` for client-side routing.
 - **Search** — the right rail's search box is a typeahead: after a short pause (250ms) it shows up
   to 5 matching users (by display name or username) in a dropdown; arrow keys + Enter open a user,
   Enter on the query (or "See all results for …") goes to Explore, Escape or clicking away closes
-  it. **Explore** (`/explore?q=…`, `pages/Explore.jsx`, in the side and bottom nav — the only way
+  it. **Explore** (`/explore?q=…`, `pages/Explore.tsx`, in the side and bottom nav — the only way
   to search on phones, where there's no right rail) has its own search box and lists every match,
   ordered by username, with infinite scroll; each row links to the profile and has a Follow /
   Follow back / Following button (none on your own row). The URL follows the box as you type
   (replacing the history entry); states for no query, no results, loading and errors.
-- **Who to follow** (`layout/RightRail.jsx`) — up to 3 users you don't follow (newest accounts
+- **Who to follow** (`layout/RightRail.tsx`) — up to 3 users you don't follow (newest accounts
   first), each linking to their profile, with a Follow button; skeleton rows while loading; the card
   is hidden when there's nobody to suggest or the request fails. Following someone flips the row to
   "Following" until the suggestions refetch drops it.
@@ -435,25 +437,25 @@ shadcn/ui (Radix base, Nova preset), and `react-router` for client-side routing.
   link to the post), body as plain text, comments (→ detail), a like toggle (optimistic, rolls back on error), and on
   your own posts a "…" menu → Delete with a confirmation. Clicking the card (not its
   links/buttons) opens the post.
-- **Post detail** (`/u/:username/posts/:id`, `pages/PostDetail.jsx`) — the post, a reply box and
+- **Post detail** (`/u/:username/posts/:id`, `pages/PostDetail.tsx`) — the post, a reply box and
   its comments (oldest first, paged; delete your own with a confirmation). A wrong `:username`
   redirects to the author's; an unknown id shows "Post not found". Back returns to the previous
   in-app page, or to the author's profile when there is none (opened directly — redirects don't
   count, so Back never leaves the app); deleting the post goes to the author's profile.
-- **Profiles** — `/u/:username` (`pages/Profile.jsx`: Pulse layout — banner, avatar,
+- **Profiles** — `/u/:username` (`pages/Profile.tsx`: Pulse layout — banner, avatar,
   display name (the header title) with `@username` below it, or `@username` alone, the post count,
   bio, join date, "Edit profile" on your own, Posts tab with the
   user's posts, newest first, same paging) and
-  `/settings/profile` (`pages/EditProfile.jsx`), both inside the shell. Someone else's profile has
+  `/settings/profile` (`pages/EditProfile.tsx`), both inside the shell. Someone else's profile has
   a Follow / Follow back / Following button (reads "Unfollow" on hover and focus; one click, no
   confirm) and a "Follows you" badge when they follow you; your own has neither. Below "Joined …",
   `N Following  M Followers` — each opens a dialog on that list (tabs to switch, infinite scroll;
   rows link to the profile and carry a follow button, except your own row). Follows are optimistic:
   counts update at once and roll back on error. The nav's Profile item
   and the right rail's card link to your profile. Data via `useProfile(username)`
-  (`src/hooks/use-profile.js`, no retry on 404) keyed by `profileQueryKey(username)`
-  (`src/lib/api/users.js`, lowercased). The avatar is a placeholder only
-  (`components/UserAvatar.jsx`): the username's initial on a colour derived from the username.
+  (`src/hooks/use-profile.ts`, no retry on 404) keyed by `profileQueryKey(username)`
+  (`src/lib/api/users.ts`, lowercased). The avatar is a placeholder only
+  (`components/UserAvatar.tsx`): the username's initial on a colour derived from the username.
 
 ---
 

@@ -39,7 +39,7 @@ go through GitHub via `gh`. No other required MCP server or external service.
 
    | Item | Fix |
    |---|---|
-   | **Node** | winget: `winget install OpenJS.NodeJS.LTS`. macOS: `brew install node`. Needs ≥20.11 (`frontend/vite.config.js` uses `import.meta.dirname`). |
+   | **Node** | winget: `winget install OpenJS.NodeJS.LTS`. macOS: `brew install node`. Needs ≥20.11 (`frontend/vite.config.ts` uses `import.meta.dirname`). |
    | **npm** | Ships with Node — if Node passes and npm doesn't, reinstall Node. |
    | **backend deps** | `(cd backend && npm install)`. |
    | **frontend deps** | `(cd frontend && npm install)`. |

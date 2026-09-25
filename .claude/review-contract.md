@@ -94,7 +94,7 @@ branch history to drop it before merge, plus rotating the credential.
 
 ## §C. `frontend/` — Vite · React · TanStack Query · shadcn
 
-- **No raw `fetch` in components.** API calls go through `src/lib/api/client.js`'s `apiClient` —
+- **No raw `fetch` in components.** API calls go through `src/lib/api/client.ts`'s `apiClient` —
   bypassing it is a **Blocker** (it's how error handling and, eventually, auth stay consistent).
 - **Server state via TanStack Query**, not a `useState`+`useEffect` pair re-implementing a query
   (loading/error state included) — **Warning**. A value derivable from data already in scope, stored
@@ -108,10 +108,10 @@ branch history to drop it before merge, plus rotating the credential.
 - **Console/dead code.** `console.log` left in shipped code — **Warning** (`console.error`/`warn` on a
   real failure path is fine). An exported component/hook never referenced — **Warning**.
 - **Tests.** Vitest + React Testing Library + MSW. Tests live in a `__tests__/` folder next to
-  the code they cover (`src/pages/__tests__/Home.test.jsx`); a new test placed loose beside its
+  the code they cover (`src/pages/__tests__/Home.test.tsx`); a new test placed loose beside its
   source file is a **Warning**. A new or changed page/component/hook with no test covering the
   change is a **Warning** (same bar as a backend service without
-  a spec). A test that mocks `apiClient`/`fetch` instead of using MSW handlers (`src/test/server.js`),
+  a spec). A test that mocks `apiClient`/`fetch` instead of using MSW handlers (`src/test/server.ts`),
   or that hits a real backend, is a **Blocker**. Tests for shadcn primitives in `src/components/ui/*`
   are not expected.
 

@@ -88,19 +88,21 @@ See `knowledge/infra/frontend-architecture.md` and
 - **Auth.** Every route is behind `ProtectedRoute` except `/sign-in`, `/sign-up`, `/sign-out`. Read
   the current user with `useAuth()`; the session is an httpOnly cookie — never store or read a token
   in JS.
-- **API calls go through `src/lib/api/client.js`'s `apiClient`** — never a raw `fetch` in a
+- **API calls go through `src/lib/api/client.ts`'s `apiClient`** — never a raw `fetch` in a
   component.
 - **Server state via TanStack Query** (`useQuery`/`useMutation`), not a hand-rolled
   `useState`+`useEffect` pair.
 - **Reuse a `src/components/ui/*` shadcn primitive before writing a new component.** A genuinely new
   component still needs Alejandro's sign-off (`knowledge/decisions/shadcn-component-preference.md`) —
   say so in your output rather than treating it as auto-approved.
-- **Path alias `@/*`** resolves to `src/*` (`jsconfig.json` + `vite.config.js`).
-- **This is a plain JS project** — no TypeScript, no `.tsx`/`.ts` files.
+- **Path alias `@/*`** resolves to `src/*` (`tsconfig.app.json` + `vite.config.ts`).
+- **TypeScript, strict** — `.tsx` for anything with JSX, `.ts` otherwise; no `any`, no
+  `@ts-ignore`/`@ts-expect-error`. API response shapes come from `src/lib/api/types.ts`. `npm run
+  typecheck` must pass.
 - **Tests:** Vitest + React Testing Library + MSW (`npm test`). Tests live in a `__tests__/` folder next to
-  the code they cover (`src/pages/Home.jsx` → `src/pages/__tests__/Home.test.jsx`), never loose
-  beside the source file; render with `renderWithProviders` (`src/test/render.jsx`), fake the API with MSW
-  handlers (`src/test/server.js`) — never mock `apiClient`/`fetch`. Write/update a test when the
+  the code they cover (`src/pages/Home.tsx` → `src/pages/__tests__/Home.test.tsx`), never loose
+  beside the source file; render with `renderWithProviders` (`src/test/render.tsx`), fake the API with MSW
+  handlers (`src/test/server.ts`) — never mock `apiClient`/`fetch`. Write/update a test when the
   task asks for one or when your change breaks an existing one.
 - **Verify:** `npm run build`, `npm test` and `npm run lint`, from `frontend/`.
 
