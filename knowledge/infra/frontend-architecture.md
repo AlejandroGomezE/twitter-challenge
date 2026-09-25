@@ -144,12 +144,12 @@ that `<title>`, the feather `favicon.svg`, `<meta name="color-scheme" content="l
   as the page's `h1`), `subtitle` (small muted mono line), `leading` (e.g. a back button),
   `trailing` (e.g. an icon), `children` (full-width row below the title, e.g. tabs),
   `className`.
-- **Nav config (`nav-items.ts`)** is the single source for `SideNav` and `MobileNav`. An item
-  with a `to` builder is a working route (Home `/`, Explore `/explore`, Profile `/u/<me>` — left
-  out while there's no username, Notifications `/notifications`, Settings `/settings/profile`); an
-  item without one is a disabled placeholder (Messages, Bookmarks). A working item may name a
+- **Nav config (`nav-items.ts`)** is the single source for `SideNav` and `MobileNav`. Every item
+  is a working route (Home `/`, Explore `/explore`, Notifications `/notifications`, Profile
+  `/u/<me>` — left out while there's no username, Settings `/settings/profile`); there are no
+  "Coming soon" nav items (Messages and Bookmarks were removed). An item may name a
   `badge` count — Notifications shows the unread count (see Realtime for how it stays fresh). `mobile` picks the bottom bar's items (no
-  Bookmarks, no Settings); `desktop: false` keeps Sign out out of the rail's nav —
+  Settings); `desktop: false` keeps Sign out out of the rail's nav —
   `getSignOutItem()` hands it to `SideNav`'s footer (under the user chip), while the bottom bar
   shows it as its last icon. Sign out always links to `/sign-out`. Working items are
   `NavLink`s, so the active route is highlighted (`end` on Home).
@@ -744,8 +744,8 @@ For you feeds), `Profile` (with follows), `EditProfile`, `PostDetail`, `Explore`
 search, also the right rail's typeahead) and `Notifications`. Live updates (unread count, post
 counts, deletions, new posts) come over the realtime stream.
 
-**Pending:** repost, bookmark and share on post cards, Messages and Bookmarks
-stay "Coming soon" until their features exist. Explore only searches users (no trends / topics).
+**Pending:** repost, bookmark and share on post cards stay "Coming soon" until their features
+exist. Messages and Bookmarks are not in the nav at all. Explore only searches users (no trends / topics).
 
 **Not implemented, intentionally:** `features/` (profiles and the shell live in the flat
 `pages/` / `components/` / `hooks/` / `lib/` layout). It follows once a feature needs it —
