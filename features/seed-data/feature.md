@@ -1,8 +1,8 @@
 ---
 slug: seed-data
-status: framed
+status: verifying
 scope: backend
-next: /implement seed-data
+next: /review-feature seed-data
 ---
 # Seed data
 
@@ -52,18 +52,18 @@ in the Runbook).
   start a half-seeded app).
 
 ## Tasks
-- [ ] (T1, be) `backend/src/database/seed/`: the pure seed data module (users, posts, follow
+- [x] (T1, be) `backend/src/database/seed/`: the pure seed data module (users, posts, follow
   pairs, likes, comments, demo notifications, with relative timestamps) and `runSeed(prisma,
   { ifEmpty })` — in one transaction: wipe (Notification, Comment, Like, Follow, Post, Session,
   User), then insert; with `ifEmpty` it returns early if any user exists. Password hashed once with
   the sign-up argon2 options. Posts validated against the existing 280-char rule.
-- [ ] (T2, be, after: T1) CLI entry (parses `--if-empty`, builds a Prisma client the same way
+- [x] (T2, be, after: T1) CLI entry (parses `--if-empty`, builds a Prisma client the same way
   `PrismaService` resolves `DATABASE_URL`, logs a summary of counts, exits non-zero on failure);
   `db:seed` npm script; `migrations.seed` in `prisma7.config.ts`.
-- [ ] (T3, be, after: T2) Docker: `docker-entrypoint.sh` runs the seed with `--if-empty` after
+- [x] (T3, be, after: T2) Docker: `docker-entrypoint.sh` runs the seed with `--if-empty` after
   `prisma db push` unless `SEED_ON_START=false`; `compose.yaml` passes `SEED_ON_START` (default
   `true`). Check the runtime image contains everything the compiled seed imports.
-- [ ] (T4, be, after: T2, T3) Docs: `Runbook.md` (seed step in first-time setup, "Seed data"
+- [x] (T4, be, after: T2, T3) Docs: `Runbook.md` (seed step in first-time setup, "Seed data"
   section — what it creates, reset semantics, sample credentials table; Docker first-boot note +
   `SEED_ON_START`), `backend/README.md`, `knowledge/infra/backend-architecture.md`.
 
@@ -88,9 +88,12 @@ in the Runbook).
   `demo`.
 
 ## Follow-ups
+- [ ] The machine's default Node (v20.11.1) couldn't run the toolchain during Build; every check ran on Node v24.3.0 · Runbook/check-env say Node >= 20.11, which looks too low for Vite 8 / Vitest 4–5 — confirm the real minimum and pin it (`.nvmrc` / `engines`); separate change.
+- [ ] `npm ci` in backend/ still needs `--legacy-peer-deps` (lockfile typescript peer issue, already noted in docker-compose-stack) · an evaluator following the Runbook literally may hit it; separate change.
 - [ ] `features/docker-compose-stack/feature.md` is still `status: verifying` /
   `next: /close-feature` although PR #17 is merged · its close bookkeeping commit was never made;
   separate chore.
 
 ## Log
 - 2026-09-25 · framed
+- 2026-09-25 · built — seed module + runSeed, db:seed CLI \/ prisma db seed, Docker first-boot seeding (SEED_ON_START), Runbook seed section + sample credentials; verified against scratch DBs and a real docker compose run; BE build + lint clean, 45\/556 unit and 7\/205 e2e green
