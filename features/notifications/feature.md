@@ -2,7 +2,7 @@
 slug: notifications
 status: verifying
 scope: full-stack
-next: /review-feature notifications
+next: /close-feature notifications
 ---
 # Notifications
 
@@ -77,7 +77,9 @@ with an unread badge. Live push over SSE is out of scope: it becomes its own fea
 - [ ] Coming back to `/notifications` within the 30s `staleTime` shows the cached rows, which still say `read: false`. They're highlighted again and a harmless mark-read is sent again. Possible fix: flip the cached rows to read in `useMarkNotificationsRead`'s `onSuccess` via `setQueryData`, since `useUnreadThisVisit` already keeps the highlight for the current visit · cosmetic, T6 reviewer said it can wait.
 - [ ] `EditProfile.test.jsx` fails intermittently (1–3 tests, e.g. "sends bio \"\" when the bio is cleared"). It also fails with this feature's files removed · pre-existing, unrelated.
 - [ ] `tsc -p tsconfig.json` reports 16 type errors in `follows.controller.spec.ts` / `comments.controller.spec.ts` (`displayName` missing on `PublicUser` fixtures). `nest build` and vitest are unaffected · pre-existing, unrelated.
+- [ ] `scripts/be-local`, `scripts/fe-local` and `scripts/check-env` are committed without the executable bit (mode `100644`, while `down-be`/`down-fe` are `100755`). On a fresh clone `scripts/be-local` fails with "permission denied", which contradicts the Runbook. Fix: `git update-index --chmod=+x` · found during Verify, unrelated to this feature.
 
 ## Log
 - 2026-09-24 · framed
 - 2026-09-24 · built — T1–T6 done: events → listener → Notification rows, 3 endpoints, nav badge, /notifications page. be 41 files/494 tests, fe 46 files/539 tests, builds + lint green
+- 2026-09-24 · verified — all 5 ACs pass on the running app: 32/32 API checks (3 users) + headless Chromium at 1440/800/390px (badge, list, highlight, mark-read, empty, error+Retry); approved by Alejandro
