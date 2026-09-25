@@ -1,9 +1,12 @@
 import { InfiniteListFooter } from '@/components/feed/InfiniteListFooter';
 import { PostCard } from '@/components/feed/PostCard';
 import { PostListSkeleton } from '@/components/feed/PostListSkeleton';
+import { FollowButton } from '@/components/FollowButton';
+import { FollowListDialog } from '@/components/FollowListDialog';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { UserAvatar } from '@/components/UserAvatar';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Empty,
@@ -22,12 +25,23 @@ import { useAuth } from '@/lib/auth/use-auth';
 import { formatCount } from '@/lib/format';
 import { format } from 'date-fns';
 import { ArrowLeft, CalendarDays, Feather } from 'lucide-react';
+import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 
 export function Profile() {
   const { username } = useParams();
   const { user } = useAuth();
-  const { data: profile, error, isPending, isError, isFetching, refetch } = useProfile(username);
+  const { data: profile, error, isPending, isError, isFetching, refetch } = useProfile(username, {
+    alwaysFresh: true,
+  });
+  // The follow list open in the FollowListDialog ('following' | 'followers'), or null when closed.
+  // Profile stays mounted when only `:username` changes, so the list is closed on that change.
+  const [followListTab, setFollowListTab] = useState(null);
+  const [followListUsername, setFollowListUsername] = useState(username);
+  if (followListUsername !== username) {
+    setFollowListUsername(username);
+    setFollowListTab(null);
+  }
 
   if (isPending) {
     return (
@@ -119,10 +133,25 @@ export function Profile() {
                 <Link to="/settings/profile">Edit profile</Link>
               </Button>
             )}
+            {!isOwnProfile && (
+              <FollowButton
+                username={profile.username}
+                isFollowing={Boolean(profile.isFollowing)}
+                followsYou={Boolean(profile.followsYou)}
+                className="mt-3"
+              />
+            )}
           </div>
           {/* Name line: Pulse shows a display name here; we only have the username. Not a heading,
               so it doesn't repeat the page's h1 for screen readers. */}
-          <p className="mt-3 font-mono text-xl font-semibold break-words">@{profile.username}</p>
+          <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <p className="font-mono text-xl font-semibold break-words">@{profile.username}</p>
+            {!isOwnProfile && profile.followsYou && (
+              <Badge variant="secondary" className="rounded-md text-muted-foreground">
+                Follows you
+              </Badge>
+            )}
+          </div>
           {/* Bio is plain text: rendered as a text node (never HTML), keeping the user's line breaks. */}
           {profile.bio ? (
             <p className="mt-3 text-sm leading-relaxed whitespace-pre-wrap break-words text-foreground/85">
@@ -137,8 +166,21 @@ export function Profile() {
               Joined {format(new Date(profile.createdAt), 'MMMM yyyy')}
             </span>
           </div>
+          <FollowCounts
+            profile={profile}
+            openTab={followListTab}
+            onOpenFollowList={setFollowListTab}
+          />
         </div>
       </div>
+
+      <FollowListDialog
+        username={profile.username}
+        tab={followListTab}
+        onTabChange={setFollowListTab}
+        onClose={() => setFollowListTab(null)}
+        isOwnProfile={isOwnProfile}
+      />
 
       <ProfileTabs />
 
@@ -146,6 +188,36 @@ export function Profile() {
         <ProfilePosts username={profile.username} isOwnProfile={isOwnProfile} />
       </div>
     </>
+  );
+}
+
+// "242 Following  18 Followers" below the join date; each item opens that follow list
+// (`onOpenFollowList('following' | 'followers')`); `openTab` is the list currently open (its
+// button is marked expanded). Hidden while the counts aren't known.
+function FollowCounts({ profile, openTab, onOpenFollowList }) {
+  const { followingCount, followerCount } = profile;
+  if (typeof followingCount !== 'number' || typeof followerCount !== 'number') return null;
+
+  const items = [
+    { tab: 'following', count: followingCount, label: 'Following' },
+    { tab: 'followers', count: followerCount, label: followerCount === 1 ? 'Follower' : 'Followers' },
+  ];
+
+  return (
+    <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm">
+      {items.map(({ tab, count, label }) => (
+        <button
+          key={tab}
+          type="button"
+          aria-haspopup="dialog"
+          aria-expanded={openTab === tab}
+          onClick={() => onOpenFollowList(tab)}
+          className="rounded-sm text-muted-foreground outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
+          <span className="font-semibold text-foreground">{formatCount(count)}</span> {label}
+        </button>
+      ))}
+    </div>
   );
 }
 

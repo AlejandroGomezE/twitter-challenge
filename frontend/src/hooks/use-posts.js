@@ -16,6 +16,7 @@ import {
   createPost,
   deletePost,
   fetchFeed,
+  fetchForYouFeed,
   fetchPost,
   fetchUserPosts,
   postKeys,
@@ -25,11 +26,21 @@ import {
 // Next page's cursor, or `undefined` to tell TanStack there are no more pages.
 export const getNextPageParam = (lastPage) => lastPage.nextCursor ?? undefined;
 
-// The signed-in user's feed, newest first, paged by cursor.
+// The Following feed (the signed-in user + everyone they follow), newest first, paged by cursor.
 export function useFeed() {
   return useInfiniteQuery({
     queryKey: postKeys.feed(),
     queryFn: ({ pageParam }) => fetchFeed(pageParam),
+    initialPageParam: null,
+    getNextPageParam,
+  });
+}
+
+// The For you feed (every user's posts), newest first, paged by cursor.
+export function useForYouFeed() {
+  return useInfiniteQuery({
+    queryKey: postKeys.forYou(),
+    queryFn: ({ pageParam }) => fetchForYouFeed(pageParam),
     initialPageParam: null,
     getNextPageParam,
   });
@@ -60,7 +71,7 @@ export function usePost(id) {
 }
 
 // `mutate(body)` → the created Post. On success the post is written straight into the loaded
-// caches (top of the feed's and the author's first page, +1 on the author's profile postCount)
+// caches (top of both feeds' and the author's first page, +1 on the author's profile postCount)
 // instead of invalidating them, so it shows up at once without a refetch flash. In-flight fetches
 // of those entries are cancelled first (see post-cache.js) so a stale one can't drop the post.
 export function useCreatePost() {
@@ -76,6 +87,7 @@ export function useCreatePost() {
         () => {
           queryClient.setQueryData(postKeys.detail(post.id), post);
           prependPostToList(queryClient, postKeys.feed(), post);
+          prependPostToList(queryClient, postKeys.forYou(), post);
           prependPostToList(queryClient, postKeys.userPosts(username), post);
           bumpProfilePostCount(queryClient, username, 1);
         },

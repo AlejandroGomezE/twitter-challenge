@@ -22,12 +22,18 @@ const PROFILE = {
   bio: 'hi',
   createdAt: CREATED_AT,
   postCount: 2,
+  followerCount: 3,
+  followingCount: 1,
+  isFollowing: true,
+  followsYou: false,
 };
 const MY_PROFILE = {
   ...CALLER,
   bio: 'new bio',
   createdAt: CREATED_AT,
   postCount: 0,
+  followerCount: 0,
+  followingCount: 0,
 };
 const PAGE = { items: [], nextCursor: null };
 
@@ -67,9 +73,11 @@ describe('UsersController', () => {
   });
 
   describe('getProfile', () => {
-    it('passes the route param to the service and returns the profile', async () => {
-      await expect(controller.getProfile('Other')).resolves.toBe(PROFILE);
-      expect(usersService.getProfile).toHaveBeenCalledWith('Other');
+    it('passes the route param and the session user as viewer to the service and returns the profile', async () => {
+      await expect(controller.getProfile(CALLER, 'Other')).resolves.toBe(
+        PROFILE,
+      );
+      expect(usersService.getProfile).toHaveBeenCalledWith('Other', CALLER.id);
     });
   });
 

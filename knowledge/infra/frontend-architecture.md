@@ -1,10 +1,10 @@
 ---
 title: Frontend architecture
 type: infra
-summary: Vite + React SPA (frontend/) structure and current implementation state — TanStack Query, shadcn/ui, react-router, HTTP client, cookie-session auth (useAuth, ProtectedRoute), Pulse theme (tokens, OS dark mode), the app shell layout route with "Coming soon" disabled items, the Home feed page, user profiles (view + edit, avatar placeholder), posts (feed, profile posts, post detail + comments, likes) with infinite queries and race-safe cache updates.
+summary: Vite + React SPA (frontend/) structure and current implementation state — TanStack Query, shadcn/ui, react-router, HTTP client, cookie-session auth (useAuth, ProtectedRoute), Pulse theme (tokens, OS dark mode), the app shell layout route with "Coming soon" disabled items, the Home page with Following / For you feed tabs, user profiles (view + edit, avatar placeholder, follow counts and lists), posts (feeds, profile posts, post detail + comments, likes) and follows (follow button, follow lists, who to follow) with infinite queries and race-safe cache updates.
 status: active
 last-verified: 2026-09-24
-tags: [frontend, react, vite, architecture, tanstack-query, shadcn, auth, theme, layout, posts]
+tags: [frontend, react, vite, architecture, tanstack-query, shadcn, auth, theme, layout, posts, follows]
 ---
 
 ## Structure
@@ -29,16 +29,21 @@ frontend/src/
 │   │                   #   CharacterCounter, PostListSkeleton (see "Posts" below)
 │   ├── AuthLayout.jsx  # frame for /sign-in, /sign-up, /sign-out (brand + document.title)
 │   ├── BrandMark.jsx   # the feather logo mark (used by SideNav and AuthLayout)
-│   └── UserAvatar.jsx  # avatar placeholder (shadcn Avatar + AvatarFallback)
+│   ├── UserAvatar.jsx  # avatar placeholder (shadcn Avatar + AvatarFallback)
+│   ├── FollowButton.jsx     # Follow / Follow back / Following (→ Unfollow) toggle (see Follows)
+│   └── FollowListDialog.jsx # the profile's Following / Followers lists in a Dialog
 ├── features/           # not created yet
 ├── hooks/              # use-profile.js — useProfile(username); use-posts.js — useFeed,
-│                       #   useUserPosts, usePost, useCreatePost, useDeletePost, useToggleLike;
-│                       #   use-comments.js; use-retry-unless-not-found.js; use-open-composer.js;
+│                       #   useForYouFeed, useUserPosts, usePost, useCreatePost, useDeletePost,
+│                       #   useToggleLike; use-follows.js — useFollowers, useFollowing,
+│                       #   useSuggestions, useToggleFollow; use-comments.js;
+│                       #   use-retry-unless-not-found.js; use-open-composer.js;
 │                       #   use-post-removal-focus.js
 ├── lib/
 │   ├── api/            # client.js — apiClient, ApiError; users.js — profileQueryKey,
-│   │                   #   fetchProfile, updateMyProfile; posts.js — postKeys + post/like/comment
-│   │                   #   calls; post-cache.js — cache helpers; error-message.js —
+│   │                   #   fetchProfile, updateMyProfile, followKeys + follow calls; posts.js —
+│   │                   #   postKeys + post/like/comment calls; post-cache.js — post cache
+│   │                   #   helpers; follow-cache.js — follow cache helpers; error-message.js —
 │   │                   #   getApiErrorMessage
 │   ├── auth/           # AuthProvider.jsx, use-auth.js, auth-context.js, auth-error-message.js
 │   ├── validation/     # auth-schemas.js (sign-in / sign-up), profile-schemas.js (username, bio)
@@ -128,8 +133,8 @@ that `<title>`, the feather `favicon.svg`, `<meta name="color-scheme" content="l
   `state.focusComposer`, and Home focuses the composer once rendered, then replaces the entry
   with `state: null` so a reload or Back doesn't refocus.
 - **Disabled "Coming soon" pattern (`ComingSoon`).** Features we show but don't have yet — the
-  disabled nav items, the right rail's search box, Home's "Following" tab, the composer's
-  attachment icons and the post cards' Repost / Bookmark / Share — are wrapped in `ComingSoon`: a shadcn `Tooltip` whose `asChild` trigger
+  disabled nav items, the right rail's search box, the composer's attachment icons and the post
+  cards' Repost / Bookmark / Share — are wrapped in `ComingSoon`: a shadcn `Tooltip` whose `asChild` trigger
   marks the single child `aria-disabled="true"`, muted (`opacity-50`, `cursor-not-allowed`),
   and calls `preventDefault` on click, with a "Coming soon" tooltip on hover and keyboard
   focus. The child is a `<button type="button">` or a read-only input, never a link, and
@@ -139,9 +144,14 @@ that `<title>`, the feather `favicon.svg`, `<meta name="color-scheme" content="l
 - **Rails.** `SideNav`: `BrandMark` + "The Flock Twitter" (home link), the nav, "New post",
   then the signed-in user chip (`UserAvatar` + mono `@username`) and Sign out. `RightRail`: the
   disabled search box, a "Your profile" card (avatar, `@username`, bio or "No bio yet.", "View
-  profile" link) and a "Who to follow" card that only says "Coming soon". The profile card
+  profile" link) and a "Who to follow" card. The profile card
   reads `useProfile(user.username)`, so it shares the cache entry with `/u/<me>` and
-  EditProfile (a skeleton while loading; on an error the bio line is left out).
+  EditProfile (a skeleton while loading; on an error the bio line is left out). "Who to follow"
+  reads `useSuggestions()` (up to 3 users you don't follow): each row is a profile link (avatar,
+  `@username`, one line of bio) plus a `FollowButton`; three skeleton rows while loading; the card
+  renders nothing on an error or when there's nobody to suggest (a sidebar nicety, not worth an
+  error box). Following someone flips their row to "Following" optimistically; the suggestions
+  refetch after the follow settles, which drops them.
 
 ## HTTP client (`src/lib/api/client.js`)
 
@@ -196,7 +206,8 @@ survives a reload because the cookie does.
   signIn,           // ({ email, password }) → POST /auth/sign-in, seeds ['auth', 'me']
   signUp,           // ({ email, password, username }) → POST /auth/sign-up, seeds ['auth', 'me']
   signOut,          // () → POST /auth/sign-out, then user = null, every other query /
-                    //   mutation cleared and like bursts reset (even if the request fails)
+                    //   mutation cleared and like / follow bursts reset (even if the request
+                    //   fails)
 }
 ```
 
@@ -251,23 +262,35 @@ boundary).
 ## Profiles
 
 - **Data.** `useProfile(username)` (`src/hooks/use-profile.js`) is a `useQuery` over
-  `fetchProfile` (`GET /users/:username` → `{ username, bio, createdAt, postCount }`), keyed by
+  `fetchProfile` (`GET /users/:username` → `{ username, bio, createdAt, postCount, followerCount,
+  followingCount, isFollowing, followsYou }`), keyed by
   `profileQueryKey(username)` = `['users', username.toLowerCase(), 'profile']`
   (`src/lib/api/users.js`) — lowercased so `/u/Ada` and `/u/ada` share one entry. A 404 is
   never retried (`useRetryUnlessNotFound()`, `hooks/use-retry-unless-not-found.js` — shared with
   the post / comment queries); other failures use the QueryClient's default retry.
+  `useProfile(username, { alwaysFresh: true })` (only `Profile.jsx` opts in; the right rail card
+  and EditProfile keep the 30s default) sets `staleTime: 0` on that observer, so the profile
+  refetches on every mount and every `:username` change — even back to a profile cached seconds
+  ago — while the cached profile stays on screen (no skeleton).
 - **`/u/:username`** (`Profile.jsx`) — Pulse's profile layout: a `PageHeader` with a back
   button (→ `/`) and the mono `@username` as the `h1`, a `bg-primary/10` banner, the large
   avatar overlapping it, an "Edit profile" link (→ `/settings/profile`) only when the username
-  matches `useAuth().user.username` (case-insensitive), the mono `@username` again as the name
-  line, the bio as plain text with line breaks kept (or "No bio yet."), "Joined <Month yyyy>"
-  with a calendar icon, the header subtitle "N posts" (`postCount`, `formatCount`), and a single
+  matches `useAuth().user.username` (case-insensitive) — on anyone else's profile a
+  `FollowButton` instead — the mono `@username` again as the name line (plus a secondary shadcn
+  `Badge` "Follows you" when `followsYou`, never on your own), the bio as plain text with line
+  breaks kept (or "No bio yet."), "Joined <Month yyyy>" with a calendar icon, then the follow
+  counts row "`N` Following  `M` Followers" (`formatCount`; "1 Follower"; hidden until both counts
+  are numbers) whose two buttons (`aria-haspopup="dialog"`, `aria-expanded` while their list is
+  open) open `FollowListDialog` on that tab, the header subtitle "N posts" (`postCount`,
+  `formatCount`), and a single
   "Posts" tab (tab semantics, no switching) listing the user's posts via `useUserPosts(username)`
   — `PostCard`s, `InfiniteListFooter` ("That's all of @x's posts" at the end), skeleton / error +
   Retry states, and an empty state worded for your own profile or someone else's. The loading
   (skeleton), 404 (shadcn `Empty` "User not found" + "Back to
   home") and error (`Alert` + Retry) states keep the header, titled "Profile". Only data we
-  have is shown — no display name, location, website or follower counts.
+  have is shown — no display name, location or website. The dialog's open tab is Profile state
+  (`'following' | 'followers' | null`); since Profile stays mounted when only `:username` changes
+  (a row link in the dialog), the tab is reset to closed during render when the username changes.
 - **`/settings/profile`** (`EditProfile.jsx`) — inside the shell under a `PageHeader` "Edit
   profile" with a back button (→ your profile); loads the current bio via
   `useProfile(user.username)` (the `me` payload has no bio), then a react-hook-form + zod
@@ -276,7 +299,7 @@ boundary).
   success it seeds `profileQueryKey(<new username>)`, sets `['auth', 'me']` to
   `{ id, email, username }`, removes the old username's profile entry if it changed, and
   navigates (`replace`) to `/u/<new username>` — no stale username left in the cache. The
-  PATCH response carries `postCount` too.
+  PATCH response carries `postCount`, `followerCount` and `followingCount` too.
 - **Avatar placeholder** — no image upload. `UserAvatar` (`src/components/UserAvatar.jsx`)
   composes shadcn `Avatar` + `AvatarFallback`: the username's first character uppercased in
   `font-mono`, on one of 8 Pulse tint / text-colour pairs (see Theme) picked by a hash of the
@@ -289,14 +312,24 @@ boundary).
 
 ## Pages
 
-- **Home (`/`) is the feed.** `PageHeader` "Home" with "For you" / "Following" tabs, then the
-  `Composer` and the feed inside the `tabpanel`. The tabs are plain markup with real tab
-  semantics (`role="tablist"` / `tab` / `tabpanel`, `aria-selected`, `aria-controls`) and no
-  switching — only "For you" exists; "Following" is a `ComingSoon` placeholder. shadcn `Tabs`
-  isn't used because Radix triggers activate on focus/mousedown, which `ComingSoon` can't block
-  without making the tooltip unreachable. The feed (`useFeed()`): `PostListSkeleton` while
-  loading, an `Alert` + Retry on a first-load error, a "No posts yet" empty state, else
-  `PostCard`s newest first + `InfiniteListFooter` ("You're all caught up" at the end).
+- **Home (`/`) is the feed.** `PageHeader` "Home" with **Following** / **For you** tabs (in that
+  order), then the `Composer` and the selected feed inside one `tabpanel`.
+  - **Tab in the URL** (`useFeedTab()`): no `tab` param — or an unknown value — is Following (the
+    default), `?tab=for-you` is For you. Switching `navigate`s with `replace` (tabs aren't pages to
+    go Back through), keeping the other search params, the hash and the router state.
+  - **Tabs** are plain markup with real tab semantics (`role="tablist"` / `tab` / `tabpanel`,
+    `aria-selected`, `aria-controls`, the panel `aria-labelledby` the selected tab), roving
+    `tabindex` with Left / Right / Home / End, and **manual** activation (click / Enter / Space), so
+    arrowing across doesn't fetch a feed per keypress. shadcn `Tabs` isn't used: the selection is
+    URL state and both tabs share a single panel (composer + selected feed), which Radix's
+    one-panel-per-tab model doesn't fit.
+  - **Feeds.** `FollowingFeed` (`useFeed()`) and `ForYouFeed` (`useForYouFeed()`) are separate
+    components, so only the selected feed is fetched; both render the shared `Feed`:
+    `PostListSkeleton` while loading, an `Alert` + Retry on a first-load error, the empty state,
+    else `PostCard`s newest first + `InfiniteListFooter`. Following: empty state "Your Following
+    feed is empty" / "Follow people to see their posts here." with an "Explore For you" button
+    (switches the tab), end message "You're all caught up". For you: "No posts yet" (nobody has
+    posted), end message "You've seen every post".
 - **Profile / EditProfile** — see Profiles above.
 - **PostDetail** — see Posts below.
 - **Auth pages** (`SignIn`, `SignUp`, `SignOut`) render outside the shell inside `AuthLayout`:
@@ -310,9 +343,12 @@ boundary).
 `hooks/use-comments.js`).
 
 - **Keys.** `postKeys`: `all` `['posts']`; every list under `lists()` `['posts', 'list']` —
-  `feed()` and `userPosts(username)` (lowercased, like `profileQueryKey`); `detail(id)`;
-  `comments(id)`. One prefix reaches every list a post can be in.
-- **Queries.** `useFeed()`, `useUserPosts(username)` and `useComments(postId)` are
+  `feed()` `['posts', 'list', 'feed']` (Following), `forYou()` `['posts', 'list', 'for-you']`
+  and `userPosts(username)` (lowercased, like `profileQueryKey`); `detail(id)`; `comments(id)`.
+  One prefix reaches every list a post can be in. `feed` and `forYou` are **siblings**, not
+  nested, so invalidating the Following feed (after a follow) never refetches For you.
+- **Queries.** `useFeed()` (`GET /feed`), `useForYouFeed()` (`GET /feed/for-you`),
+  `useUserPosts(username)` and `useComments(postId)` are
   `useInfiniteQuery`s (`initialPageParam: null`, `getNextPageParam` = `nextCursor ?? undefined`);
   `usePost(id)` is a `useQuery`. The API functions only append `?cursor=` when there is one — the
   backend rejects an empty `cursor=` with 400. Lookups that can 404 use `useRetryUnlessNotFound()`.
@@ -322,7 +358,7 @@ boundary).
   `bumpProfilePostCount`, `bumpCommentCount`, `setLikeInCaches`, `findPostInCaches`. Helpers
   return the previous object when nothing changed, so unrelated observers don't re-render.
 - **Writes land in the cache, not through invalidation.** Create post → detail seeded, prepended
-  to the feed's and the author's first page, profile `postCount` +1. Delete post → removed
+  to both feeds' and the author's first page, profile `postCount` +1. Delete post → removed
   everywhere, `postCount` −1. Create comment → appended to the comments cache **only when every
   page is loaded** (oldest first — otherwise it would sit above comments a later "load more"
   brings in, then show twice), `commentCount` +1; delete comment → removed, −1.
@@ -405,6 +441,76 @@ post replaces the entry with the author's profile. Below the post: `CommentCompo
 `InfiniteListFooter`); after deleting a comment focus moves to the reply box once the comment has
 left the list.
 
+## Follows
+
+**Data layer** (`lib/api/users.js`, `lib/api/follow-cache.js`, `hooks/use-follows.js`).
+
+- **Keys.** `followKeys` (`users.js`): `all` `['follows']`; `lists()` `['follows', 'list']` —
+  `followers(username)` and `following(username)` (lowercased, like `profileQueryKey`);
+  `suggestions()` `['follows', 'suggestions']`. One prefix reaches every row a user can be listed
+  in — the same idea as `postKeys.lists()`.
+- **API.** `setFollowing(username, following)` → `PUT` or `DELETE /users/:username/follow`
+  (idempotent — send the intended final state); `fetchFollowers` / `fetchFollowing(username, cursor)`
+  (`?cursor=` only when there is one); `fetchSuggestions()` → `GET /users/me/suggestions` (the
+  server's default of 3).
+- **Queries.** `useFollowers(username, { enabled })` / `useFollowing(…)` are `useInfiniteQuery`s
+  (same `getNextPageParam` as posts; no retry on 404); `enabled` lets the dialog fetch only its
+  visible tab, and `alwaysFresh: true` (the dialog opts in) sets `staleTime: 0`, so a list
+  refetches every time it becomes visible (opened on it / switched to it) with its cached rows shown
+  meanwhile — not on a follow toggle (see "After a successful burst") and not on window focus /
+  reconnect (`refetchOnWindowFocus` / `refetchOnReconnect: false`), so an open list keeps an
+  unfollowed row. The profile page's `alwaysFresh` profile does refetch on focus.
+  `useSuggestions()` is a plain `useQuery`. Profile and list fetches pass their result through
+  `withPendingFollow` (use-follows.js): a response landing while a follow burst of that user is in
+  flight keeps the burst's optimistic `isFollowing` (`followerCount` moved by the flip), and the
+  signed-in user's own profile gets `followingCount` moved by the net optimistic delta of their
+  in-flight bursts (±1 per burst whose shown state differs from its last confirmed one). Such a
+  burst is flagged `ownCountFetched` and, when it settles, invalidates (refetches) the caller's
+  profile — the same fallback as an unknown starting state — since whether the server had already
+  applied the request can't be known.
+- **`follow-cache.js` is the single place for "change a user's follow state everywhere it's
+  cached"**: the target's profile (`isFollowing`, `followerCount`), the signed-in user's profile
+  (`followingCount`), every followers / following list row and the suggestions (`isFollowing`).
+  Helpers: `followQueryFilters(username, me)` (what to cancel / restart), `findFollowState`
+  (profile first, else any listed row), `setFollowInProfile`, `setFollowingInLists`,
+  `bumpProfileFollowingCount`. It reuses `post-cache.js`'s `profileQueryFilters` and `mapPages`
+  and follows the same rules: unchanged objects are returned as-is, and the race rules
+  (`cancelLoadedFetches` / `writeAfterServerChange`) are post-cache's.
+- **`useToggleFollow`** (`mutate({ username, following })` with the intended final state; PUT or
+  DELETE, idempotent) mirrors likes. Optimistic: cancel loaded fetches of the touched entries, then
+  flip the target's `isFollowing` (+ `followerCount` ±1), every loaded row of theirs, and the
+  caller's `followingCount` ±1. Overlapping requests for a user form a **burst** (per QueryClient,
+  a `WeakMap` → `Map` by lowercased username) tracking the last **server-confirmed** state by
+  click order; when the last request settles, the caches get it through `writeAfterServerChange`
+  — with the server's `followerCount` — so failures roll back and out-of-order responses end
+  matching the server. The caller's own count is moved relative to what the burst last wrote, and
+  is invalidated instead when the starting state wasn't cached; if nothing was cached and nothing
+  succeeded, the target's profile and `followKeys.all` are invalidated.
+- **After a successful burst**: the Following feed (`postKeys.feed()`, exact — For you untouched)
+  and the suggestions are refetched; the target's followers list and the caller's following list
+  are only marked **stale** (`refetchType: 'none'`), so an open list keeps its rows (an unfollowed
+  user stays, now showing "Follow", like Twitter) and refreshes on its next mount.
+- **Sign-out.** `resetFollowBursts(queryClient)` runs next to `resetLikeBursts` in
+  `AuthProvider`, so a follow still in flight can't write into the next user's cache.
+
+**`FollowButton`** (`components/`) — label and behaviour in [[UI component inventory]]. It calls
+`useToggleFollow()` and stays clickable while a request is in flight (the burst handles rapid
+clicks); `preventDefault` + `stopPropagation` on click so it can sit inside rows that link to a
+profile.
+
+**`FollowListDialog`** (`components/`) — controlled by Profile: `tab` (`'following' |
+'followers'`, or `null` = closed), `onTabChange`, `onClose`, `isOwnProfile` (words the empty
+states). A shadcn `Dialog` with `@username` as the title and shadcn `Tabs` (`line` variant) —
+fine here, unlike Home, because each tab has its own panel. The last tab stays shown while the
+dialog animates closed. Each list: skeleton rows, `Alert` + Retry, an empty state, or rows + an
+`InfiniteListFooter` inside the dialog's scrollable body. A row's `@username` link is stretched
+over the row (`after:absolute after:inset-0`; a button can't live inside an `<a>`) and closes the
+dialog on click (Profile may stay mounted across `/u/:username`); the `FollowButton` sits above it
+(`z-10`) and is left out on your own row. **Focus restore:** Radix only returns focus to a
+`DialogTrigger`, and this dialog is opened from Profile's count buttons outside it, so
+`onOpenAutoFocus` records `document.activeElement` and `onCloseAutoFocus` prevents the default
+and refocuses that element if it's still connected.
+
 ## Tests
 
 Vitest + jsdom + React Testing Library + MSW (`npm test`; config in `vite.config.js`'s
@@ -428,9 +534,14 @@ Shell-related gotchas:
 - The right rail fetches the signed-in user's profile, so `server.js` has a default
   `GET /users/:username` handler: `ada` (any case) → `{ username: 'ada', bio: null,
   createdAt }`, anything else → 404 `User not found`. Override it per test as usual.
-- Home and the profile page load posts, so `server.js` also has default `GET /feed` (empty page
-  `{ items: [], nextCursor: null }`) and `GET /users/:username/posts` (`ada` → empty page,
-  others → 404) handlers.
+- Home and the profile page load posts, so `server.js` also has default `GET /feed` and
+  `GET /feed/for-you` (empty page `{ items: [], nextCursor: null }`) and
+  `GET /users/:username/posts` (`ada` → empty page, others → 404) handlers.
+- The right rail loads suggestions and profiles can open follow lists, so there are follow
+  defaults too: `GET /users/me/suggestions` → `{ items: [] }` (the "Who to follow" card renders
+  nothing), `GET /users/:username/followers|following` (`ada` → empty page, others → 404), and
+  `PUT` / `DELETE /users/:username/follow` → `{ following: true, followerCount: 1 }` /
+  `{ following: false, followerCount: 0 }`.
 - jsdom has no `IntersectionObserver`, so `InfiniteListFooter` skips auto-loading there and tests
   use "Load more". To test the observer, `vi.stubGlobal('IntersectionObserver', …)` with a small
   fake class (always in view, or controllable) and `vi.unstubAllGlobals()` in `afterEach` — see
@@ -451,18 +562,18 @@ Shell-related gotchas:
 `NavigationDepthTracker.jsx`, `providers.jsx`, `query-client.js`), the Pulse theme (`index.css`, `index.html`),
 `components/ui/` (shadcn, see [[UI component inventory]]), `components/layout/` (the app
 shell), `components/feed/` (posts, comments, composers, infinite lists),
-`components/AuthLayout.jsx`, `components/BrandMark.jsx`, `components/UserAvatar.jsx`, `hooks/`,
-`lib/api/` (`client.js`, `users.js`, `posts.js`, `post-cache.js`, `error-message.js`),
+`components/AuthLayout.jsx`, `components/BrandMark.jsx`, `components/UserAvatar.jsx`,
+`components/FollowButton.jsx`, `components/FollowListDialog.jsx`, `hooks/`,
+`lib/api/` (`client.js`, `users.js`, `posts.js`, `post-cache.js`, `follow-cache.js`,
+`error-message.js`),
 `lib/auth/`, `lib/validation/`, `lib/text.js`, `lib/format.js`, `lib/composer-focus.js`,
 `lib/navigation-history.js`,
 `lib/avatar-color.js`, `lib/utils.js`, `routes/` (`ProtectedRoute`, `PublicOnlyRoute`), `test/`
-(Vitest + RTL + MSW helpers), and `pages/` — `SignIn`, `SignUp`, `SignOut`, `Home` (the feed),
-`Profile`, `EditProfile` and `PostDetail`.
+(Vitest + RTL + MSW helpers), and `pages/` — `SignIn`, `SignUp`, `SignOut`, `Home` (Following /
+For you feeds), `Profile` (with follows), `EditProfile` and `PostDetail`.
 
-**Pending:** follows (next feature) — add followed users to the feed's author set (backend),
-enable the Following tab and "Who to follow". Repost, bookmark and share on post cards,
-Explore/search, Notifications, Messages and Bookmarks stay "Coming soon" until their features
-exist.
+**Pending:** repost, bookmark and share on post cards, Explore/search, Notifications, Messages
+and Bookmarks stay "Coming soon" until their features exist.
 
 **Not implemented, intentionally:** `features/` (profiles and the shell live in the flat
 `pages/` / `components/` / `hooks/` / `lib/` layout). It follows once a feature needs it —

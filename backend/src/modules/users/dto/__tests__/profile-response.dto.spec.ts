@@ -1,17 +1,49 @@
-import { instanceToPlain, plainToInstance } from 'class-transformer';
+import {
+  type CallHandler,
+  type ExecutionContext,
+  SerializeOptions,
+} from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { Test } from '@nestjs/testing';
+import { lastValueFrom, of } from 'rxjs';
+import { ResponseSerializerInterceptor } from '../../../../common/interceptors/response-serializer.interceptor.js';
 import { MyProfileResponseDto } from '../my-profile-response.dto.js';
 import { ProfileResponseDto } from '../profile-response.dto.js';
 
-// Same transform path the global ResponseSerializerInterceptor uses, followed
-// by the JSON encoding Express applies to the body.
-const options = { excludeExtraneousValues: true };
+class TestController {
+  @SerializeOptions({ type: ProfileResponseDto })
+  profile(): void {}
 
-function toWire(type: new () => object, row: object): unknown {
-  const plain = instanceToPlain(plainToInstance(type, row, options), options);
-  return JSON.parse(JSON.stringify(plain));
+  @SerializeOptions({ type: MyProfileResponseDto })
+  myProfile(): void {}
+}
+
+type HandlerName = 'profile' | 'myProfile';
+
+// Runs a body through the global fail-closed serializer
+// (excludeExtraneousValues) and then JSON, like the HTTP response.
+async function serialize(
+  handlerName: HandlerName,
+  body: unknown,
+): Promise<unknown> {
+  const context = {
+    getHandler: () => TestController.prototype[handlerName],
+    getClass: () => TestController,
+  } as unknown as ExecutionContext;
+  const moduleRef = await Test.createTestingModule({
+    providers: [ResponseSerializerInterceptor, Reflector],
+  }).compile();
+  const interceptor = moduleRef.get(ResponseSerializerInterceptor);
+  const handler: CallHandler = { handle: () => of(body) };
+  const result = await lastValueFrom(
+    await interceptor.intercept(context, handler),
+  );
+  return JSON.parse(JSON.stringify(result)) as unknown;
 }
 
 const CREATED_AT = new Date('2026-01-02T03:04:05.678Z');
+// A row carrying fields that must never leave the API next to the profile
+// fields.
 const ROW = {
   id: 'user-1',
   email: 'user@example.test',
@@ -21,37 +53,60 @@ const ROW = {
   createdAt: CREATED_AT,
   updatedAt: CREATED_AT,
   postCount: 12,
+  followerCount: 5,
+  followingCount: 7,
+  isFollowing: true,
+  followsYou: false,
+  followerId: 'user-2',
+  followingId: 'user-1',
 };
 
 describe('ProfileResponseDto', () => {
-  it('emits only { username, bio, createdAt, postCount } with createdAt as an ISO string', () => {
-    expect(toWire(ProfileResponseDto, ROW)).toEqual({
+  it('emits only { username, bio, createdAt, postCount, followerCount, followingCount, isFollowing, followsYou } with createdAt as an ISO string', async () => {
+    await expect(serialize('profile', ROW)).resolves.toEqual({
       username: 'someone',
       bio: 'hello',
       createdAt: '2026-01-02T03:04:05.678Z',
       postCount: 12,
+      followerCount: 5,
+      followingCount: 7,
+      isFollowing: true,
+      followsYou: false,
     });
   });
 
-  it('keeps a null bio as null', () => {
-    expect(toWire(ProfileResponseDto, { ...ROW, bio: null })).toEqual({
+  it('keeps a null bio as null and false booleans as false', async () => {
+    await expect(
+      serialize('profile', {
+        ...ROW,
+        bio: null,
+        isFollowing: false,
+        followsYou: false,
+      }),
+    ).resolves.toEqual({
       username: 'someone',
       bio: null,
       createdAt: '2026-01-02T03:04:05.678Z',
       postCount: 12,
+      followerCount: 5,
+      followingCount: 7,
+      isFollowing: false,
+      followsYou: false,
     });
   });
 });
 
 describe('MyProfileResponseDto', () => {
-  it('emits only { id, email, username, bio, createdAt, postCount } with createdAt as an ISO string', () => {
-    expect(toWire(MyProfileResponseDto, ROW)).toEqual({
+  it('emits only { id, email, username, bio, createdAt, postCount, followerCount, followingCount } with createdAt as an ISO string', async () => {
+    await expect(serialize('myProfile', ROW)).resolves.toEqual({
       id: 'user-1',
       email: 'user@example.test',
       username: 'someone',
       bio: 'hello',
       createdAt: '2026-01-02T03:04:05.678Z',
       postCount: 12,
+      followerCount: 5,
+      followingCount: 7,
     });
   });
 });

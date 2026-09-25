@@ -15,11 +15,13 @@ const PAGE = { items: [], nextCursor: null };
 describe('FeedController', () => {
   let controller: FeedController;
 
-  const postsService = { feed: vi.fn() };
+  const postsService = { feed: vi.fn(), forYou: vi.fn() };
 
   beforeEach(async () => {
     postsService.feed.mockReset();
     postsService.feed.mockResolvedValue(PAGE);
+    postsService.forYou.mockReset();
+    postsService.forYou.mockResolvedValue(PAGE);
     const moduleRef = await Test.createTestingModule({
       controllers: [FeedController],
       providers: [{ provide: PostsService, useValue: postsService }],
@@ -37,24 +39,46 @@ describe('FeedController', () => {
     });
   });
 
-  describe('declared metadata', () => {
-    const reflector = new Reflector();
-    const handler = (
-      FeedController.prototype as unknown as Record<
-        'feed',
-        (...args: unknown[]) => unknown
-      >
-    ).feed;
-
-    it('serializes through PostPageResponseDto', () => {
-      expect(
-        reflector.get<{ type?: unknown }>(SERIALIZE_OPTIONS_KEY, handler),
-      ).toEqual({ type: PostPageResponseDto });
+  it("returns the session user's for-you page with the query's cursor and limit", async () => {
+    await expect(
+      controller.forYou(CALLER, { cursor: 'abc', limit: 5 }),
+    ).resolves.toBe(PAGE);
+    expect(postsService.forYou).toHaveBeenCalledWith(CALLER.id, {
+      cursor: 'abc',
+      limit: 5,
     });
-
-    it('is not @Public()', () => {
-      expect(reflector.get(IS_PUBLIC_KEY, handler)).toBeUndefined();
-      expect(reflector.get(IS_PUBLIC_KEY, FeedController)).toBeUndefined();
-    });
+    expect(postsService.feed).not.toHaveBeenCalled();
   });
+
+  it('serves the for-you feed at GET /feed/for-you', () => {
+    const reflector = new Reflector();
+    expect(reflector.get<string>('path', FeedController)).toBe('feed');
+    expect(reflector.get<string>('path', FeedController.prototype.forYou)).toBe(
+      'for-you',
+    );
+  });
+
+  describe.each(['feed', 'forYou'] as const)(
+    'declared metadata of %s',
+    (name) => {
+      const reflector = new Reflector();
+      const handler = (
+        FeedController.prototype as unknown as Record<
+          typeof name,
+          (...args: unknown[]) => unknown
+        >
+      )[name];
+
+      it('serializes through PostPageResponseDto', () => {
+        expect(
+          reflector.get<{ type?: unknown }>(SERIALIZE_OPTIONS_KEY, handler),
+        ).toEqual({ type: PostPageResponseDto });
+      });
+
+      it('is not @Public()', () => {
+        expect(reflector.get(IS_PUBLIC_KEY, handler)).toBeUndefined();
+        expect(reflector.get(IS_PUBLIC_KEY, FeedController)).toBeUndefined();
+      });
+    },
+  );
 });
