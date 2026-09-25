@@ -19,6 +19,7 @@ their own.
 
 | I want to… | Command (from repo root) |
 |---|---|
+| Set up a fresh clone (deps, `.env`, Prisma DB) | see [First-time setup](#first-time-setup-fresh-clone--new-machine) |
 | Check the whole environment | `scripts/check-env` |
 | Run the **backend** locally (`:3000`) | `scripts/be-local` |
 | Run the **frontend** locally (`:5173`) | `scripts/fe-local` |
@@ -32,6 +33,37 @@ after pulling the profile change, run `npx prisma db push --force-reset` instead
 Profiles — it wipes the dev DB); after pulling the posts, the follows or the user-search
 (display names) change, a plain `npx prisma db push` is enough (additive — see Backend → Posts /
 Follows / Search).
+
+---
+
+## First-time setup (fresh clone / new machine)
+
+The database is a local SQLite file (`backend/prisma/dev.db`), and both the file and the generated
+Prisma client (`backend/src/generated/prisma`) are git-ignored. On a fresh clone neither exists yet,
+and `npm install` doesn't create them because there's no `postinstall` hook. Run these once, from the repo root:
+
+```bash
+scripts/check-env                 # Node >= 20.11, npm; it will flag the missing node_modules/.env
+cd backend
+npm install                       # also builds the native better-sqlite3 / argon2 modules
+cp .env.example .env              # DATABASE_URL=file:./dev.db is the right default
+npx prisma generate               # writes the client to src/generated/prisma
+npx prisma db push                # creates prisma/dev.db with every table in the current schema
+cd ..
+scripts/be-local                  # should boot on :3000 with no Prisma errors
+```
+
+- No database server is needed (no Docker, no Postgres). The Prisma CLI picks up
+  `prisma7.config.ts` on its own, so you don't need a `--config` flag.
+- This schema has no migrations folder. `db push` syncs the schema into the database directly.
+- The "after pulling the X change, run `db push`…" notes further down are for existing
+  databases. A fresh `db push` already creates the latest schema, so you can skip them,
+  including the `--force-reset` one.
+- The DB starts empty. Create an account through `/sign-up` in the frontend.
+- To check it worked, run `npx prisma studio` from `backend/`. It opens a browser UI that lists the tables.
+- To start over, delete `backend/prisma/dev.db*` and run `npx prisma db push` again.
+  `npx prisma db push --force-reset` does the same thing.
+- The e2e suite doesn't need any of this. It builds its own `prisma/e2e.db` on every run.
 
 ---
 
