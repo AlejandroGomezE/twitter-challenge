@@ -35,7 +35,9 @@ feeds). This builds on the domain events added by `notifications`.
   1. While B is on Home, a post by someone B follows shows a "1 new post" pill on Following and
      For you. A post by someone B doesn't follow shows it on For you only. B's own posts never
      count. Clicking the pill loads the new posts at the top, scrolls to the top and clears the
-     pill. The list never shifts on its own.
+     pill. When the pill first appears, a row opens with an animation between the composer and
+     the feed to hold it, and it collapses when the pill clears. More arriving posts only update
+     the count; the list never shifts in any other way.
   2. When a notification for B is created or retracted, B's badge updates within a second with no
      polling. If B is on `/notifications`, the new row appears at the top, and the read rows from
      the visit keep their highlight.
@@ -72,6 +74,7 @@ feeds). This builds on the domain events added by `notifications`.
 - 2026-09-24 · framed · The actor is excluded from `post.counts` and the author from `post.created`/`post.deleted`, because their own client already applied the change optimistically. This avoids fights with `useToggleLike`'s reconciliation.
 - 2026-09-24 · framed · Notifications removed by an FK cascade (a post, comment or user deleted) emit no `notification.changed`, because the rows are gone before any listener runs. The badge corrects itself on the next focus refetch or reconnect. Accepted for v1.
 - 2026-09-25 · building · The new-posts pill sits at the start of the feed list, below the composer, in a zero-height sticky wrapper. It no longer sits under the page header, where it covered the composer. It still takes no layout space, so the list never shifts, and it docks under the header when scrolled (Alejandro).
+- 2026-09-25 · building · Supersedes the zero-height pill: the pill now gets its own row between the composer and the feed. The row expands from 0 to its height with an animation, and the pill fades and slides in; both collapse and fade out when it clears. The list shifts once, when the row opens, and never on later increments. The pill stays sticky, so it still docks under the header when scrolled. `prefers-reduced-motion` turns the animation off (Alejandro).
 
 ## Follow-ups
 - [ ] Multi-instance fan-out (Redis pub/sub or similar) · out of scope, single instance.
@@ -83,3 +86,4 @@ feeds). This builds on the domain events added by `notifications`.
 ## Log
 - 2026-09-24 · framed
 - 2026-09-25 · built — T1–T6 done: domain events → RealtimeHub + GET /events SSE (session-checked heartbeat) → listeners; frontend RealtimeProvider, live badge, live counts/deletions, new-posts pill (moved into the feed list per Alejandro). be 44 files/553 unit + 7 files/205 e2e, fe 51 files/590 tests, builds + lint green
+- 2026-09-25 · built — T6 reworked per Alejandro: the new-posts pill now opens its own animated row (grid 0fr→1fr, fade/slide, reduced-motion aware) and still docks under the header. fe 51 files/591 tests, 590 pass + 1 known EditProfile flake; build + lint green (backend unchanged since the last full pass)
