@@ -125,6 +125,9 @@ duplicate or contradict it.
 ## Follow-ups
 - [ ] The README recommends Node 22+ (Node 20.11.1 was seen failing the frontend build), but `Runbook.md` and `scripts/check-env` still say Node >= 20.11 · the README flags the mismatch openly; fixing the Runbook/check-env minimum and pinning it is the separate Node-version change, and the README note should be updated to match when that lands.
 
+## PRs
+- #19 — https://github.com/AlejandroGomezE/twitter-challenge/pull/19
+
 ## Log
 - 2026-09-25 · framed
 - 2026-09-25 · built — root README.md (507 lines; §1–10 per outline, with claims checked against the code, the SQLite rationale from Alejandro, and a known setup gotchas section), plus cross-links from Runbook.md, backend/README.md and frontend/README.md; 65/65 relative links resolve; BE 47/609 and FE 52/606 green, builds + lint clean
