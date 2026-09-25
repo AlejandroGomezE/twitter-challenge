@@ -1,7 +1,7 @@
 ---
 title: UI component inventory
 type: infra
-summary: Inventory of frontend/src/components/ui — all stock shadcn/ui, installed via `shadcn add --all` — plus the app compositions built on them (UserAvatar, BrandMark, AuthLayout, the app shell in components/layout, the feed Composer). Grounds the shadcn-first convention in knowledge/decisions/shadcn-component-preference.md.
+summary: Inventory of frontend/src/components/ui — all stock shadcn/ui, installed via `shadcn add --all` — plus the app compositions built on them (UserAvatar, BrandMark, AuthLayout, the app shell in components/layout, the feed components — Composer, PostCard, comments, InfiniteListFooter, CharacterCounter, PostListSkeleton). Grounds the shadcn-first convention in knowledge/decisions/shadcn-component-preference.md.
 status: active
 last-verified: 2026-09-24
 tags: [frontend, shadcn, ui, design-system]
@@ -54,8 +54,9 @@ No new primitive. App-level compositions of stock primitives live in
   `document.title` = `<title> · The Flock Twitter` while mounted. No shadcn primitive (the pages
   put a `Card` inside it). Signed off by Alejandro (2026-09-24).
 
-The Pulse ports below (`components/layout/`, `components/feed/`) were migrated at Alejandro's
-request, which is the sign-off [[Shadcn component preference]] asks for:
+The Pulse ports below (`components/layout/`, `feed/Composer.jsx`) were migrated at Alejandro's
+request, which is the sign-off [[Shadcn component preference]] asks for (the posts compositions
+after them note their own status):
 
 - `layout/AppShell.jsx` — the layout route for every gated page: three columns (`SideNav`,
   the page via `<Outlet />`, `RightRail`), `MobileNav` + a floating compose button below `lg`,
@@ -74,8 +75,37 @@ request, which is the sign-off [[Shadcn component preference]] asks for:
   primitive.
 - `layout/nav-items.js` — not a component: the nav config (`getNavItems`, `getSignOutItem`)
   shared by `SideNav` and `MobileNav`.
-- `feed/Composer.jsx` — the post composer, visual only and disabled until posts exist
-  ("Posting is coming soon"). Uses `Textarea`, `Button` (+ `UserAvatar`).
+- `feed/Composer.jsx` — the Home post composer, now enabled: auto-growing textarea
+  (`id="composer"` for "New post"), `N/280` counter, Post (spinner while sending), server error
+  below, Cmd/Ctrl+Enter; attachment icons stay `ComingSoon`. Uses `Textarea`, `Button`,
+  `Spinner` (+ `UserAvatar`, `CharacterCounter`, `ComingSoon`).
+
+Posts compositions (`components/feed/`, twitter-posts feature). `PostCard` is the Pulse port
+(styling already migrated at Alejandro's request); `CommentComposer`, `CommentItem` and
+`InfiniteListFooter` were listed in the feature plan Alejandro framed. Behaviour is in
+[[Frontend architecture]] → Posts.
+
+- `feed/PostCard.jsx` — `PostCard({ post, variant = 'card' | 'detail', onDeleted, className })`:
+  avatar, `@username` (→ profile), relative time as the "open post" link, plain-text body, action
+  row (comments link, like toggle, Repost / Bookmark / Share `ComingSoon`); the whole card is a
+  mouse shortcut to the detail page; own posts get a "…" menu → Delete with confirmation. Uses
+  `DropdownMenu`, `AlertDialog`, `Button`, `Spinner` (+ `UserAvatar`, `ComingSoon`).
+- `feed/CommentComposer.jsx` — `CommentComposer({ postId, textareaRef })`, the reply box on the
+  detail page; same rules as `Composer` ("Reply"). Uses `Textarea`, `Button`, `Spinner`
+  (+ `UserAvatar`, `CharacterCounter`).
+- `feed/CommentItem.jsx` — `CommentItem({ comment, postId, onDeleted })`: avatar, `@username`,
+  relative time, plain-text body; own comments get a "More options" menu → Delete with
+  confirmation. Uses `DropdownMenu`, `AlertDialog`, `Button`, `Spinner` (+ `UserAvatar`).
+- `feed/InfiniteListFooter.jsx` — `InfiniteListFooter({ query, endMessage, loadMoreLabel,
+  errorMessage })`, the footer of a cursor-paged list (feed, profile posts, comments):
+  IntersectionObserver auto-load + "Load more" / Loading / Retry button, error, end message. Uses
+  `Button`, `Spinner`, `Alert`.
+- `feed/CharacterCounter.jsx` — `CharacterCounter({ id, length, remaining })`, the mono
+  `length/280` counter shared by both composers (destructive over the limit) plus a polite sr-only
+  live region near / over the limit. No shadcn primitive. **Signed off by Alejandro (2026-09-24).**
+- `feed/PostListSkeleton.jsx` — `PostListSkeleton({ label, count })`, the loading placeholder for
+  post-shaped lists (feed, profile posts, comments): `count` card skeletons + an sr-only status.
+  Uses `Skeleton`, `Spinner`. **Signed off by Alejandro (2026-09-24).**
 
 Home's feed tabs and the profile's Posts tab are plain markup with tab semantics, not shadcn
 `Tabs` (Radix triggers activate on focus/mousedown, which `ComingSoon` can't block) — see
@@ -89,3 +119,9 @@ Home's feed tabs and the profile's Posts tab are plain markup with tab semantics
   introduced locally. Leave it as shadcn ships it rather than hand-patching vendor
   code; re-check on the next `shadcn add --overwrite` if it matters.
 - `lib/utils.js` — `cn()`, the stock shadcn `clsx` + `tailwind-merge` helper.
+- `lib/text.js` — composer body helpers (`POST_MAX_LENGTH`, `measureBody`, `limitAnnouncement`,
+  `isSubmitShortcut`); `lib/format.js` — `formatCount`, `formatRelativeShort`, `formatFullDate`
+  (date-fns); `lib/composer-focus.js` — focusing the Home composer from "New post".
+- `lib/navigation-history.js` — `useCanGoBackInApp()`, whether `navigate(-1)` stays inside the
+  app (used by PostDetail's Back); fed by `app/NavigationDepthTracker.jsx`, a provider at the
+  top of `AppRouter` that renders nothing of its own. Not UI.

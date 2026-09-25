@@ -55,8 +55,10 @@ describe('Strict request validation (e2e)', () => {
     return { username: user.username, cookie: `${SESSION_COOKIE}=${token}` };
   }
 
-  async function userCount(): Promise<number> {
-    return app.get(PrismaService).user.count();
+  async function usersMatching(email: string, username: string): Promise<number> {
+    return app
+      .get(PrismaService)
+      .user.count({ where: { OR: [{ email }, { username }] } });
   }
 
   describe('POST /auth/sign-up', () => {
@@ -66,16 +68,18 @@ describe('Strict request validation (e2e)', () => {
       ['a numeric password', { password: 123456789012 }],
       ['a numeric email', { email: 42 }],
     ])('rejects %s with 400 and creates nothing', async (_label, override) => {
-      const before = await userCount();
+      const email = uniqueEmail();
+      const username = uniqueUsername();
 
       const res = await request(app.getHttpServer())
         .post('/auth/sign-up')
         .set('Origin', FRONTEND_ORIGIN)
-        .send({ email: uniqueEmail(), password: PASSWORD, username: uniqueUsername(), ...override })
+        .send({ email, password: PASSWORD, username, ...override })
         .expect(400);
 
       expect(res.body.statusCode).toBe(400);
-      expect(await userCount()).toBe(before);
+      // Scoped to this request's identifiers: other e2e files create users in parallel.
+      expect(await usersMatching(email, username)).toBe(0);
     });
 
     it('still accepts a well-typed body', async () => {

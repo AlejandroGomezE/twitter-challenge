@@ -1,3 +1,6 @@
+import { InfiniteListFooter } from '@/components/feed/InfiniteListFooter';
+import { PostCard } from '@/components/feed/PostCard';
+import { PostListSkeleton } from '@/components/feed/PostListSkeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { UserAvatar } from '@/components/UserAvatar';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -11,9 +14,12 @@ import {
 } from '@/components/ui/empty';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
+import { usePostRemovalFocus } from '@/hooks/use-post-removal-focus';
+import { useUserPosts } from '@/hooks/use-posts';
 import { useProfile } from '@/hooks/use-profile';
 import { ApiError } from '@/lib/api/client';
 import { useAuth } from '@/lib/auth/use-auth';
+import { formatCount } from '@/lib/format';
 import { format } from 'date-fns';
 import { ArrowLeft, CalendarDays, Feather } from 'lucide-react';
 import { Link, useParams } from 'react-router';
@@ -90,7 +96,10 @@ export function Profile() {
 
   return (
     <>
-      <ProfileHeader title={<span className="font-mono">@{profile.username}</span>} />
+      <ProfileHeader
+        title={<span className="font-mono">@{profile.username}</span>}
+        subtitle={postCountLabel(profile.postCount)}
+      />
 
       <div className="border-b border-border">
         <div className="h-32 bg-primary/10 sm:h-40" />
@@ -133,27 +142,86 @@ export function Profile() {
 
       <ProfileTabs />
 
-      <div
-        id="profile-posts-panel"
-        role="tabpanel"
-        aria-labelledby="profile-tab-posts"
-        className="grid place-items-center gap-2 px-6 py-16 text-center"
-      >
-        <Feather className="size-6 text-muted-foreground" aria-hidden="true" />
-        <h2 className="font-semibold">No posts yet</h2>
-        <p className="text-sm text-balance text-muted-foreground">
-          When posting arrives, @{profile.username}&apos;s posts will show up here.
-        </p>
+      <div id="profile-posts-panel" role="tabpanel" aria-labelledby="profile-tab-posts">
+        <ProfilePosts username={profile.username} isOwnProfile={isOwnProfile} />
       </div>
     </>
   );
 }
 
+// "1 post" / "12 posts" / "1.2K posts"; nothing while the count isn't known.
+function postCountLabel(postCount) {
+  if (typeof postCount !== 'number') return undefined;
+  return `${formatCount(postCount)} ${postCount === 1 ? 'post' : 'posts'}`;
+}
+
+// The Posts tab's content: that user's posts, newest first, with infinite scroll + "Load more",
+// loading skeletons, an error with Retry, and an empty state worded for your own profile or
+// someone else's.
+function ProfilePosts({ username, isOwnProfile }) {
+  const posts = useUserPosts(username);
+  const items = posts.data?.pages.flatMap((page) => page.items);
+  const handleDeleted = usePostRemovalFocus(items);
+
+  if (posts.isPending) return <PostListSkeleton />;
+
+  if (posts.isError && !posts.data) {
+    return (
+      <div className="flex flex-col gap-4 px-5 py-6 sm:px-6">
+        <Alert variant="destructive">
+          <AlertDescription>
+            Couldn&apos;t load posts. Check your connection and try again.
+          </AlertDescription>
+        </Alert>
+        <Button
+          onClick={() => posts.refetch()}
+          disabled={posts.isFetching}
+          className="self-start rounded-full px-5 font-semibold"
+        >
+          {posts.isFetching && <Spinner aria-hidden="true" />}
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <div className="grid place-items-center gap-2 px-6 py-16 text-center">
+        <Feather className="size-6 text-muted-foreground" aria-hidden="true" />
+        <h2 className="font-semibold">
+          {isOwnProfile ? "You haven't posted yet" : `@${username} hasn't posted yet`}
+        </h2>
+        <p className="text-sm text-balance text-muted-foreground">
+          {isOwnProfile
+            ? 'Your posts will show up here.'
+            : `When @${username} posts, it will show up here.`}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <h2 className="sr-only">Posts</h2>
+      {items.map((post) => (
+        <PostCard key={post.id} post={post} onDeleted={() => handleDeleted(post.id)} />
+      ))}
+      <InfiniteListFooter
+        query={posts}
+        endMessage={`That's all of @${username}'s posts`}
+        errorMessage="Couldn't load more posts. Check your connection and try again."
+      />
+    </>
+  );
+}
+
 // Sticky header with a back button to Home; `title` becomes the page's h1.
-function ProfileHeader({ title }) {
+function ProfileHeader({ title, subtitle }) {
   return (
     <PageHeader
       title={title}
+      subtitle={subtitle}
       leading={
         <Button asChild variant="ghost" size="icon-lg" className="rounded-full">
           <Link to="/" aria-label="Back to home">

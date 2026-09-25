@@ -13,6 +13,12 @@ describe('getApiErrorMessage', () => {
     expect(getApiErrorMessage(error)).toBe('Too many attempts. Try again in a minute.')
   })
 
+  it('uses the caller\'s rateLimitMessage for 429 when given', () => {
+    const error = new ApiError(429, 'ThrottlerException: Too Many Requests', null)
+
+    expect(getApiErrorMessage(error, { rateLimitMessage: 'Too many posts.' })).toBe('Too many posts.')
+  })
+
   it("joins a validation error's message array with '. '", () => {
     const messages = ['username must be a string', 'bio must be shorter']
     const error = new ApiError(400, messages.join(','), { message: messages })

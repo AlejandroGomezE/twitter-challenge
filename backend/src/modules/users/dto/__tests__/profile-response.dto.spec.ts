@@ -20,14 +20,16 @@ const ROW = {
   passwordHash: '$argon2id$secret',
   createdAt: CREATED_AT,
   updatedAt: CREATED_AT,
+  postCount: 12,
 };
 
 describe('ProfileResponseDto', () => {
-  it('emits only { username, bio, createdAt } with createdAt as an ISO string', () => {
+  it('emits only { username, bio, createdAt, postCount } with createdAt as an ISO string', () => {
     expect(toWire(ProfileResponseDto, ROW)).toEqual({
       username: 'someone',
       bio: 'hello',
       createdAt: '2026-01-02T03:04:05.678Z',
+      postCount: 12,
     });
   });
 
@@ -36,18 +38,20 @@ describe('ProfileResponseDto', () => {
       username: 'someone',
       bio: null,
       createdAt: '2026-01-02T03:04:05.678Z',
+      postCount: 12,
     });
   });
 });
 
 describe('MyProfileResponseDto', () => {
-  it('emits only { id, email, username, bio, createdAt } with createdAt as an ISO string', () => {
+  it('emits only { id, email, username, bio, createdAt, postCount } with createdAt as an ISO string', () => {
     expect(toWire(MyProfileResponseDto, ROW)).toEqual({
       id: 'user-1',
       email: 'user@example.test',
       username: 'someone',
       bio: 'hello',
       createdAt: '2026-01-02T03:04:05.678Z',
+      postCount: 12,
     });
   });
 });

@@ -19,4 +19,8 @@ export class MyProfileResponseDto {
   // the JSON body carries an ISO-8601 string.
   @Expose()
   createdAt: Date;
+
+  // Number of posts the user has written.
+  @Expose()
+  postCount: number;
 }
