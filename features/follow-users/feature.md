@@ -40,8 +40,8 @@ on profiles, a working "Following" feed tab, and the "Who to follow" card.
   2. Below "Joined …" a profile shows `N Following  M Followers`; clicking either opens a modal on
      that list (tabs to switch), infinite-scrolling, each row linking to that profile with a
      Follow / Follow back / Following button (none on your own row).
-  3. Home has two working tabs: **For you** (everyone's posts, default) and **Following** (you +
-     people you follow, with an empty state nudging you to follow someone).
+  3. Home has two working tabs: **Following** (you + people you follow, the default, with an empty
+     state nudging you to follow someone) and **For you** (everyone's posts).
   4. The right rail's "Who to follow" lists up to 3 users you don't follow, each with a Follow
      button; following one updates the list and your counts.
 - Must not break: existing feed paging/likes/comments caches, profile Posts tab, profile edit
@@ -72,7 +72,7 @@ on profiles, a working "Following" feed tab, and the "Who to follow" card.
   avatar, username, bio, profile link (closes the dialog) and `FollowButton`; loading/empty/error
   states.
 - [ ] (T8, fe, after: T5) Home: real For you / Following tabs (accessible tablist, selection kept in
-  the URL `?tab=following`), For you default, Following empty state.
+  the URL `?tab=for-you`), Following default, Following empty state.
 - [ ] (T9, fe, after: T5, T6) RightRail "Who to follow": up to 3 suggestions with `FollowButton`,
   skeleton while loading, hidden when there are none.
 - [ ] (T10, fe, after: T2, T3, T4, T6, T7, T8, T9) Docs: Runbook endpoints, backend + frontend
@@ -82,8 +82,8 @@ on profiles, a working "Following" feed tab, and the "Who to follow" card.
 - 2026-09-24 · framed · Profiles are already viewable at `/u/:username` and post cards link there;
   "see a user's profile" means a follow button on profiles and profile links from every user row
   (Alejandro).
-- 2026-09-24 · framed · **For you** = everyone's posts, newest first (the default tab);
-  **Following** = the caller + followed users, like Twitter (Alejandro). `GET /feed` keeps the
+- 2026-09-24 · framed · **For you** = everyone's posts, newest first;
+  **Following** = the caller + followed users, like Twitter, and is the **default tab** (Alejandro). `GET /feed` keeps the
   Following meaning because `feedAuthorIds` was built as its extension point; For you gets a new
   route.
 - 2026-09-24 · framed · "Who to follow" is in scope: 3 non-followed users, newest accounts first — no
