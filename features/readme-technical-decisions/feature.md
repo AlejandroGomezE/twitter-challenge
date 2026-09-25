@@ -122,6 +122,8 @@ duplicate or contradict it.
 
 - 2026-09-25 · building · Postgres → SQLite rationale, which the repo never recorded (Alejandro): zero setup for evaluators (no database server; clone + `db push` just works, so the Runbook is simpler and harder to break); fast, isolated tests (e2e gets its own file DB, `e2e.db`, and never touches dev data; no container needed); a simpler Docker stack (no DB container, just a file on a named volume). The README states these as the reasons.
 
+- 2026-09-25 · closing · The PR #19 review pass found README.md:489 "Of the 131 commits, 19 are merges" off by one (main: 130 commits, 19 merges) and bound to go stale. Alejandro chose to drop the exact commit numbers and keep the history description qualitative; fixed via implement, then back to close.
+
 ## Follow-ups
 - [ ] The README recommends Node 22+ (Node 20.11.1 was seen failing the frontend build), but `Runbook.md` and `scripts/check-env` still say Node >= 20.11 · the README flags the mismatch openly; fixing the Runbook/check-env minimum and pinning it is the separate Node-version change, and the README note should be updated to match when that lands.
 
