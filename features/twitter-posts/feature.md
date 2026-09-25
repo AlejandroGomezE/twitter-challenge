@@ -2,7 +2,7 @@
 slug: twitter-posts
 status: verifying
 scope: full-stack
-next: /review-feature twitter-posts
+next: /close-feature twitter-posts
 ---
 # Posts: create, delete, feed, profile posts, likes, post detail + comments
 
@@ -172,3 +172,4 @@ next: /review-feature twitter-posts
   pagination, infinite scroll), profile posts + postCount, likes (idempotent, optimistic, race-safe),
   post detail + flat comments; per-user rate limits; docs. BE 24 suites / 254 unit + 92 e2e,
   FE 30 suites / 315, build/lint/tsc green.
+- 2026-09-24 · verified — all 8 ACs driven in headless Chrome + API (create/delete, feed paging to end, profile count, likes persist, detail/back/canonical/not-found, comments, New post focus); sign-out and mobile width intact
