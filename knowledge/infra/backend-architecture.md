@@ -274,6 +274,12 @@ exists.
 `Origin` header), `OBSERVE_APP_KEY` / `OBSERVE_APP_SECRET` (optional). An invalid or
 missing required var throws at boot instead of failing later, deeper in the app.
 
+Besides the local run (`scripts/be-local`, env from `backend/.env`), the backend also runs in
+Docker via the root `compose.yaml` (`docker compose up --build`). There, compose supplies the env:
+`DATABASE_URL=file:/data/app.db` on a named volume, `FRONTEND_ORIGIN=http://localhost:8080` and
+`NODE_ENV=development`. The entrypoint runs `prisma db push` before `node dist/main`. See Runbook →
+Run with Docker.
+
 `ObserveModule.forRoot(...)` is still wired directly off `process.env` in
 `app.module.ts` rather than through `ConfigService` — dynamic module options are
 resolved at class-definition time, before Nest's DI container exists, so there's no

@@ -1,0 +1,64 @@
+# Whole stack in containers: `docker compose up --build`, then open
+# http://localhost:8080 (API on http://localhost:3000).
+# Production-like (built images, no hot reload) — for development with hot
+# reload use scripts/be-local and scripts/fe-local instead.
+# Reset the database with `docker compose down -v`.
+
+# Fixed project name, so the volume is `twitter-clone_db-data` whatever the
+# checkout directory is called.
+name: twitter-clone
+
+services:
+  backend:
+    build: ./backend
+    environment:
+      # Only controls the session cookie's Secure flag. The stack is served
+      # over plain http://localhost, where some browsers (Safari) drop Secure
+      # cookies and sign-in silently fails; set NODE_ENV=production only when
+      # the stack sits behind HTTPS.
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 3000
+      # Must be exactly the origin the browser loads the frontend from (CORS
+      # and the Origin check compare it verbatim) — change it together with
+      # the frontend's published port / host.
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:8080}
+      # SQLite file on the db-data volume mounted below.
+      DATABASE_URL: file:/data/app.db
+      # Optional: passed through from the host only when set there.
+      OBSERVE_APP_KEY:
+      OBSERVE_APP_SECRET:
+    volumes:
+      - db-data:/data
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    healthcheck:
+      # Any non-5xx answer (401 without a session) means the API is serving.
+      # The slim runtime has no curl/wget; node's built-in fetch does the job.
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/auth/me').then(r=>process.exit(r.status<500?0:1),()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      # Covers `prisma db push` + Nest boot on first start.
+      start_period: 15s
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Baked into the bundle at build time: the URL the *browser* uses to
+        # reach the API. Changing it requires `docker compose up --build`.
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  db-data: {}
