@@ -479,15 +479,15 @@ source for the steps themselves.
   before writing code. [`.claude/CONVENTIONS.md`](.claude/CONVENTIONS.md) covers commit format,
   when to stop and ask, and leaving no dev servers running.
 
-**How it shows in the history.** There are 18 pull requests, all merged:
+**How it shows in the history.** Every change landed as its own pull request, all merged:
 
-- 12 features went through the full flow, each with its own `features/<slug>/`.
-- 6 smaller PRs were refactors, fixes and UI changes (for example the move to strict TypeScript,
-  #15).
+- Features went through the full flow, each with its own [`features/<slug>/`](features/).
+- Smaller refactors, fixes and UI changes went in as standalone PRs (for example the move to strict
+  TypeScript, #15).
 - #1 was squash-merged. From #2 on, PRs land as **merge commits** (the rule in `WORKFLOW.md`), so
   each feature branch's frame / build / verify / fix commits stay visible on `main`.
-- Commits follow conventional-commit style. Of the 131 commits, 19 are merges. The rest are mostly
-  `chore` (feature-state bookkeeping such as `chore(<slug>): frame feature` / `closed`), then
+- Commits follow conventional-commit style. Apart from the merge commits, most are `chore`
+  (feature-state bookkeeping such as `chore(<slug>): frame feature` / `closed`), followed by
   `feat`, `test`, `refactor`, `fix` and `docs`.
 
 **Delegated vs checked by hand.**
